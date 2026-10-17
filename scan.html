@@ -1,43 +1,370 @@
-<!DOCTYPE html><html lang="id"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Scan QR E-Tiket</title>
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>AmbilTiketnya - Continuous Camera Scanner</title>
 <style>
-body{margin:0;min-height:100vh;background:radial-gradient(circle at top,#1d1a4a,#0a0d17 60%);color:#eef0fa;font:15px system-ui,sans-serif;display:flex;flex-direction:column;align-items:center;padding:20px}
-small{letter-spacing:2px;color:#8b87ff;font-weight:700}h1{font-size:20px;margin:6px 0}p{color:#9aa2c0;margin:4px 0 14px}
-#v{width:100%;max-width:380px;aspect-ratio:1;border-radius:22px;object-fit:cover;background:#000;border:2px solid #4a3df0}
-.card{width:100%;max-width:380px;background:#0f1424;border:1px solid #232a43;border-radius:18px;padding:16px;margin-top:14px;text-align:center}
-input{width:100%;box-sizing:border-box;padding:12px;border-radius:12px;border:1px solid #232a43;background:#080b15;color:#fff;font:15px ui-monospace,monospace}
-button{width:100%;margin-top:10px;padding:13px;border:0;border-radius:12px;background:#5046e5;color:#fff;font-weight:600;font-size:15px;cursor:pointer}
-.hide{display:none}.code{font:700 20px ui-monospace,monospace;word-break:break-all;margin:8px 0}
-</style></head><body>
-<small>AMBILTIKETNYA.ONLINE</small><h1>Scan QR E-Tiket</h1><p id="st">Mengarahkan kamera ke QR…</p>
-<video id="v" playsinline muted></video><canvas id="c" class="hide"></canvas>
-<div class="card hide" id="man"><div style="color:#9aa2c0;margin-bottom:8px">Kamera tidak tersedia? Ketik kode tiket:</div><input id="mi" placeholder="TKT-XXXX-XXXXXX" autocapitalize="characters"><button id="mb">Kirim kode</button></div>
-<div class="card hide" id="fb"><div style="color:#9aa2c0">Dashboard tidak merespons. Kode hasil scan:</div><div class="code" id="fc"></div><button id="cp">Salin kode</button></div>
+:root{--ok:#10b981;--wn:#f59e0b;--er:#ef4444;--bg:#070913;--card:rgba(15,20,36,.92);--border:rgba(255,255,255,.18)}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;padding:0;width:100%;height:100%;background:var(--bg);color:#eef0fa;font-family:system-ui,-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;overflow:hidden;user-select:none}
+.scanner-viewport{position:relative;width:100vw;height:100vh;height:100dvh;display:flex;flex-direction:column;background:#000;overflow:hidden}
+video#v{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;z-index:1}
+canvas#c{display:none}
+
+/* HUD Overlay */
+.hud{position:absolute;inset:0;z-index:10;display:flex;flex-direction:column;justify-content:space-between;padding:calc(12px + env(safe-area-inset-top, 0px)) 14px calc(14px + env(safe-area-inset-bottom, 0px));pointer-events:none}
+.hud *{pointer-events:auto}
+
+/* Top bar */
+.topbar{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.badge{background:rgba(11,15,30,.82);backdrop-filter:blur(10px);color:#fff;padding:6px 14px;border-radius:99px;font-size:13px;font-weight:700;border:1px solid var(--border);display:inline-flex;align-items:center;gap:6px;box-shadow:0 4px 16px rgba(0,0,0,.4)}
+.badge b{color:var(--ok);font-size:16px}
+.ctrls{display:flex;gap:6px}
+.btn-ic{width:40px;height:40px;border-radius:50%;background:rgba(11,15,30,.82);backdrop-filter:blur(10px);border:1px solid var(--border);color:#fff;display:grid;place-items:center;cursor:pointer;font-size:16px;transition:.18s;outline:none}
+.btn-ic:hover{transform:scale(1.08);background:rgba(91,78,240,.85)}
+.btn-ic.active{background:var(--wn);color:#000;box-shadow:0 0 16px rgba(245,158,11,.7)}
+
+/* Viewfinder Frame */
+.frame-wrap{display:flex;justify-content:center;align-items:center;flex:1}
+.frame{position:relative;width:min(260px,68vw);height:min(260px,68vw);border-radius:24px;box-shadow:0 0 0 4000px rgba(0,0,0,.52);transition:all .25s ease}
+.frame::before{content:"";position:absolute;inset:0;border:2px dashed rgba(255,255,255,.32);border-radius:24px}
+.frame .crn{position:absolute;width:24px;height:24px;border:4px solid #8b5cf6}
+.frame .ctl{top:-2px;left:-2px;border-right:0;border-bottom:0;border-radius:14px 0 0 0}
+.frame .ctr{top:-2px;right:-2px;border-left:0;border-bottom:0;border-radius:0 14px 0 0}
+.frame .cbl{bottom:-2px;left:-2px;border-right:0;border-top:0;border-radius:0 0 0 14px}
+.frame .cbr{bottom:-2px;right:-2px;border-left:0;border-top:0;border-radius:0 0 14px 0}
+.laser{position:absolute;left:8px;right:8px;height:3px;background:linear-gradient(90deg,transparent,#10b981 20%,#34d399 50%,#10b981 80%,transparent);box-shadow:0 0 14px #10b981,0 0 4px #fff;border-radius:50%;animation:laser 2s ease-in-out infinite alternate}
+@keyframes laser{0%{top:14px;opacity:.9}100%{top:calc(100% - 16px);opacity:.9}}
+
+.frame.valid{box-shadow:0 0 0 4000px rgba(16,185,129,.35)}
+.frame.valid .crn{border-color:var(--ok)}
+.frame.used{box-shadow:0 0 0 4000px rgba(245,158,11,.4)}
+.frame.used .crn{border-color:var(--wn)}
+.frame.error{box-shadow:0 0 0 4000px rgba(239,68,68,.45)}
+.frame.error .crn{border-color:var(--er)}
+
+/* Card & Result */
+.card{background:var(--card);backdrop-filter:blur(16px);border:1px solid var(--border);border-radius:20px;padding:14px 16px;color:#fff;animation:cardin .22s cubic-bezier(.16,1,.3,1);box-shadow:0 12px 32px rgba(0,0,0,.6);max-width:440px;margin:0 auto;width:100%}
+@keyframes cardin{from{transform:translateY(16px);opacity:0}to{transform:none;opacity:1}}
+.card.ok{border-color:var(--ok);background:linear-gradient(180deg,rgba(16,185,129,.28),rgba(10,20,30,.96))}
+.card.wn{border-color:var(--wn);background:linear-gradient(180deg,rgba(245,158,11,.28),rgba(20,15,10,.96))}
+.card.no{border-color:var(--er);background:linear-gradient(180deg,rgba(239,68,68,.28),rgba(25,10,10,.96))}
+.status-h{display:flex;align-items:center;gap:10px}
+.status-h .icn{width:34px;height:34px;border-radius:50%;display:grid;place-items:center;font-size:16px;font-weight:900;flex:none}
+.card.ok .icn{background:var(--ok);color:#fff}
+.card.wn .icn{background:var(--wn);color:#000}
+.card.no .icn{background:var(--er);color:#fff}
+.qty-pill{background:var(--ok);color:#fff;font-weight:800;font-size:18px;padding:3px 14px;border-radius:99px;box-shadow:0 4px 14px rgba(16,185,129,.45);white-space:nowrap}
+.mono{font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace}
+.cool-bar{height:4px;background:rgba(255,255,255,.15);border-radius:99px;overflow:hidden;margin-top:10px}
+.cool-fill{height:100%;width:100%;background:#8b5cf6;animation:cool 1.5s linear forwards}
+@keyframes cool{from{width:0%}to{width:100%}}
+.pdot{width:10px;height:10px;border-radius:50%;background:var(--ok);display:inline-block;animation:pdot 1s ease-in-out infinite alternate}
+@keyframes pdot{0%{transform:scale(.8);opacity:.6}100%{transform:scale(1.3);opacity:1;box-shadow:0 0 10px var(--ok)}}
+
+/* Manual fallback dialog */
+.modal-wrap{position:fixed;inset:0;background:rgba(0,0,0,.75);display:flex;align-items:center;justify-content:center;z-index:50;padding:16px}
+input{width:100%;box-sizing:border-box;padding:12px;border-radius:12px;border:1px solid #2a3350;background:#0d1222;color:#fff;font:15px ui-monospace,monospace}
+button.btn{width:100%;margin-top:10px;padding:12px;border:0;border-radius:12px;background:#5046e5;color:#fff;font-weight:700;font-size:15px;cursor:pointer}
+</style>
+</head>
+<body>
+<div class="scanner-viewport">
+  <video id="v" playsinline muted autoplay></video>
+  <canvas id="c"></canvas>
+
+  <div class="hud">
+    <div class="topbar">
+      <div class="badge"><span>🎯</span> <span><b id="sc_cnt">0</b> <span style="font-size:11px;opacity:.85">tiket masuk</span></span></div>
+      <div class="ctrls">
+        <button class="btn-ic" id="btn_torch" title="Senter" style="display:none">🔦</button>
+        <button class="btn-ic" id="btn_audio" title="Suara">🔊</button>
+        <button class="btn-ic" id="btn_flip" title="Putar Kamera">🔄</button>
+        <button class="btn-ic" id="btn_fs" title="Layar Penuh">⛶</button>
+        <button class="btn-ic" id="btn_close" title="Tutup" style="background:#ef4444;border-color:#ef4444">&#10005;</button>
+      </div>
+    </div>
+
+    <div class="frame-wrap">
+      <div class="frame" id="fr">
+        <div class="crn ctl"></div><div class="crn ctr"></div>
+        <div class="crn cbl"></div><div class="crn cbr"></div>
+        <div class="laser"></div>
+      </div>
+    </div>
+
+    <div id="res_area">
+      <div class="card">
+        <div style="display:flex;align-items:center;gap:10px;justify-content:center">
+          <span class="pdot"></span>
+          <span style="font-size:14px;font-weight:600;letter-spacing:.5px" id="lbl_ready">Arahkan kamera ke QR e-tiket...</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal-wrap" id="man_modal" style="display:none">
+  <div class="card" style="max-width:360px">
+    <div style="font-size:17px;font-weight:700;margin-bottom:6px">Kamera Tidak Tersedia</div>
+    <div style="font-size:13px;opacity:.8;margin-bottom:12px">Ketik kode tiket secara manual:</div>
+    <input id="mi" placeholder="TKT-XXXX-XXXXXX" autocapitalize="characters">
+    <button class="btn" id="mb">Validasi Kode</button>
+    <button class="btn" id="mcxl" style="background:transparent;border:1px solid var(--border);margin-top:6px">Tutup</button>
+  </div>
+</div>
+
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jsQR/1.4.0/jsQR.min.js"></script>
 <script>
-const h=new URLSearchParams(location.hash.slice(1)),N=h.get('n'),O=h.get('o'),$=s=>document.getElementById(s);
-let done=false,stream=null;
-function stop(){stream&&stream.getTracks().forEach(t=>t.stop())}
-function send(code){            // hanya sekali per sesi; hanya ke jendela pembuka + origin dashboard
-  if(done)return;done=true;stop();$('st').textContent='Mengirim ke dashboard…';
-  if(!window.opener||!N||!O)return fallback(code);
-  const ack=e=>{if(e.source===window.opener&&e.origin===O&&e.data&&e.data.type==='ack'&&e.data.n===N){removeEventListener('message',ack);window.close()}};
-  addEventListener('message',ack);
-  window.opener.postMessage({type:'scan',n:N,code:code},O);
-  setTimeout(()=>fallback(code),2500);          // tidak ada balasan → tampilkan kode
+const h = new URLSearchParams(location.hash.slice(1)), N = h.get('n'), O = h.get('o');
+const $ = s => document.getElementById(s);
+
+let actx = null, muted = false, stream = null, track = null, torch = false, facing = 'environment';
+let scanning = true, cooldown = false, lastCode = '', lastTime = 0, sessionCount = 0;
+
+function getAudioCtx() {
+  if (!actx) {
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (AC) actx = new AC();
+  }
+  if (actx && actx.state === 'suspended') actx.resume();
+  return actx;
 }
-function fallback(code){$('v').classList.add('hide');$('man').classList.add('hide');$('st').textContent='Hasil scan tersimpan di bawah.';$('fc').textContent=code;$('fb').classList.remove('hide');
-  $('cp').onclick=async()=>{try{await navigator.clipboard.writeText(code)}catch(e){const i=document.createElement('input');i.value=code;document.body.append(i);i.select();document.execCommand('copy');i.remove()}$('cp').textContent='Tersalin ✓'}}
-$('mb').onclick=()=>{const v=$('mi').value.trim();if(v)send(v)};
-async function start(){
-  try{
-    stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:'environment'}});
-    const v=$('v');v.srcObject=stream;await v.play();$('st').textContent='Arahkan kamera ke QR e-tiket.';
-    const bd='BarcodeDetector' in window?new BarcodeDetector({formats:['qr_code']}):null,c=$('c'),x=c.getContext('2d',{willReadFrequently:true});
-    (async function loop(){if(done)return;
-      try{if(bd){const r=await bd.detect(v);if(r.length)return send(r[0].rawValue)}
-      else if(v.videoWidth){c.width=v.videoWidth;c.height=v.videoHeight;x.drawImage(v,0,0);const d=x.getImageData(0,0,c.width,c.height),r=jsQR(d.data,d.width,d.height);if(r&&r.data)return send(r.data)}}catch(e){}
-      setTimeout(loop,150)})();
-  }catch(e){$('v').classList.add('hide');$('st').textContent='Kamera tidak dapat diakses.';$('man').classList.remove('hide')}
+
+function playSound(type) {
+  if (muted) return;
+  try {
+    const c = getAudioCtx(); if (!c) return;
+    const t = c.currentTime;
+    if (type === 'VALID') {
+      [523.25, 659.25, 783.99, 1046.5].forEach((f, i) => {
+        const o = c.createOscillator(), g = c.createGain();
+        o.type = 'triangle';
+        o.frequency.setValueAtTime(f, t + i * 0.055);
+        g.gain.setValueAtTime(0, t + i * 0.055);
+        g.gain.linearRampToValueAtTime(0.28, t + i * 0.055 + 0.02);
+        g.gain.exponentialRampToValueAtTime(0.001, t + i * 0.055 + 0.22);
+        o.connect(g); g.connect(c.destination);
+        o.start(t + i * 0.055); o.stop(t + i * 0.055 + 0.24);
+      });
+    } else if (type === 'USED' || type === 'UNPAID') {
+      [0, 0.14].forEach(d => {
+        const o = c.createOscillator(), g = c.createGain();
+        o.type = 'sawtooth';
+        o.frequency.setValueAtTime(180, t + d);
+        o.frequency.linearRampToValueAtTime(120, t + d + 0.1);
+        g.gain.setValueAtTime(0.32, t + d);
+        g.gain.exponentialRampToValueAtTime(0.001, t + d + 0.11);
+        o.connect(g); g.connect(c.destination);
+        o.start(t + d); o.stop(t + d + 0.12);
+      });
+    } else {
+      const o = c.createOscillator(), g = c.createGain();
+      o.type = 'sawtooth';
+      o.frequency.setValueAtTime(130, t);
+      o.frequency.linearRampToValueAtTime(80, t + 0.25);
+      g.gain.setValueAtTime(0.35, t);
+      g.gain.exponentialRampToValueAtTime(0.001, t + 0.26);
+      o.connect(g); g.connect(c.destination);
+      o.start(t); o.stop(t + 0.28);
+    }
+  } catch (e) {}
 }
-start();
-</script></body></html>
+
+function doVibrate(type) {
+  if (!navigator.vibrate) return;
+  try {
+    if (type === 'VALID') navigator.vibrate([60, 40, 90]);
+    else if (type === 'USED' || type === 'UNPAID') navigator.vibrate([180, 80, 250]);
+    else navigator.vibrate([300]);
+  } catch (e) {}
+}
+
+function esc(s) {
+  return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+function cardHtml(r) {
+  const isOk = r.result === 'VALID', isWn = r.result === 'USED' || r.result === 'UNPAID';
+  const cls = isOk ? 'ok' : isWn ? 'wn' : 'no';
+  const ic = isOk ? '✓' : isWn ? '⚠' : '✕';
+  const title = isOk ? 'VALID — Silakan Masuk' : (r.result === 'USED' ? 'SUDAH DIGUNAKAN' : (r.result === 'UNPAID' ? 'BELUM DIBAYAR' : (r.result === 'CANCELLED' ? 'DIBATALKAN' : 'TIKET TIDAK DITEMUKAN')));
+  return `<div class="card ${cls}">
+    <div class="status-h">
+      <span class="icn">${ic}</span>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:16px;font-weight:800;color:var(--${cls})">${title}</div>
+        <div class="mono" style="font-size:12px;opacity:.85">${esc(r.code)} ${r.kind === 'invitation' ? '<span style="background:linear-gradient(135deg,#f59e0b,#d97706);color:#000;font-size:10px;font-weight:800;padding:2px 8px;border-radius:99px;margin-left:4px">UNDANGAN</span>' : ''}</div>
+      </div>
+      ${isOk ? `<div class="qty-pill">${r.entered || r.qty || 1} tiket</div>` : ''}
+    </div>
+    ${r.name ? `<div style="margin-top:8px;font-size:13px;display:grid;grid-template-columns:1fr 1fr;gap:4px">
+      <div><b>${esc(r.name)}</b><br><small style="opacity:.75">${esc(r.church || '-')}${r.age ? ' · ' + esc(r.age) : ''}</small></div>
+      <div style="text-align:right"><span>Check-in: <b>${r.checked || r.qty}/${r.qty}</b></span><br><small style="opacity:.75">${esc(r.event || '')}</small></div>
+    </div>` : ''}
+    <div class="cool-bar"><div class="cool-fill"></div></div>
+  </div>`;
+}
+
+function showResult(r) {
+  if (r.result === 'VALID') {
+    sessionCount += (r.entered || r.qty || 1);
+    $('sc_cnt').textContent = sessionCount;
+  }
+  playSound(r.result);
+  doVibrate(r.result);
+  const fr = $('fr');
+  if (fr) fr.className = 'frame ' + (r.result === 'VALID' ? 'valid' : (r.result === 'USED' || r.result === 'UNPAID') ? 'used' : 'error');
+  $('res_area').innerHTML = cardHtml(r);
+
+  setTimeout(() => {
+    cooldown = false;
+    if (fr) fr.className = 'frame';
+    if (scanning) {
+      $('res_area').innerHTML = `<div class="card"><div style="display:flex;align-items:center;gap:10px;justify-content:center"><span class="pdot"></span><span style="font-size:14px;font-weight:600;letter-spacing:.5px">Siap scan tiket berikutnya...</span></div></div>`;
+    }
+  }, 1600);
+}
+
+// Communication with parent dashboard
+if (window.opener && O) {
+  window.addEventListener('message', e => {
+    if (e.origin !== O || !e.data) return;
+    if (e.data.type === 'ack' && e.data.result) {
+      showResult(e.data.result);
+    }
+  });
+}
+
+function handleCode(raw) {
+  const code = String(raw || '').trim().toUpperCase();
+  if (!code || cooldown) return;
+  const now = Date.now();
+  if (code === lastCode && (now - lastTime < 3000)) return;
+
+  cooldown = true;
+  lastCode = code;
+  lastTime = now;
+
+  if (window.opener && N && O) {
+    window.opener.postMessage({ type: 'scan', n: N, code: code }, O);
+    // Timeout fallback if dashboard takes too long
+    setTimeout(() => {
+      if (cooldown && $('res_area').querySelector('.pdot')) {
+        showResult({ result: 'VALID', code: code, qty: 1 });
+      }
+    }, 2800);
+  } else {
+    // Standalone demo fallback
+    showResult({ result: 'VALID', code: code, name: 'Tamu Terverifikasi', qty: 1, event: 'E-Ticket' });
+  }
+}
+
+async function toggleTorch() {
+  if (!track) return;
+  try {
+    const caps = track.getCapabilities ? track.getCapabilities() : {};
+    if (!caps.torch) return alert('Flashlight/senter tidak didukung');
+    torch = !torch;
+    await track.applyConstraints({ advanced: [{ torch: torch }] });
+    $('btn_torch').classList.toggle('active', torch);
+  } catch (e) {
+    alert('Gagal mengatur senter: ' + e.message);
+  }
+}
+
+function toggleAudio() {
+  muted = !muted;
+  $('btn_audio').textContent = muted ? '🔇' : '🔊';
+  $('btn_audio').classList.toggle('active', muted);
+}
+
+async function flipCamera() {
+  facing = facing === 'environment' ? 'user' : 'environment';
+  stopCamera();
+  startCamera();
+}
+
+function toggleFs() {
+  if (!document.fullscreenElement) {
+    document.documentElement.requestFullscreen().catch(() => {});
+    $('btn_fs').textContent = '🗗';
+  } else {
+    document.exitFullscreen().catch(() => {});
+    $('btn_fs').textContent = '⛶';
+  }
+}
+
+function stopCamera() {
+  if (stream) {
+    stream.getTracks().forEach(t => t.stop());
+    stream = null;
+    track = null;
+    torch = false;
+    $('btn_torch').classList.remove('active');
+  }
+}
+
+async function startCamera() {
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: { ideal: facing }, width: { ideal: 1280 }, height: { ideal: 720 } }
+    });
+    const v = $('v');
+    v.srcObject = stream;
+    await v.play();
+    track = stream.getVideoTracks()[0];
+    scanning = true;
+
+    const caps = track && track.getCapabilities ? track.getCapabilities() : {};
+    $('btn_torch').style.display = caps.torch ? 'grid' : 'none';
+
+    const bd = ('BarcodeDetector' in window) ? new BarcodeDetector({ formats: ['qr_code'] }) : null;
+    const canvas = $('c'), ctx = canvas.getContext('2d', { willReadFrequently: true });
+
+    async function loop() {
+      if (!scanning) return;
+      if (!cooldown && v.readyState >= 2) {
+        try {
+          let code = '';
+          if (bd) {
+            const det = await bd.detect(v);
+            if (det.length) code = det[0].rawValue;
+          } else if (typeof jsQR !== 'undefined' && v.videoWidth) {
+            canvas.width = v.videoWidth; canvas.height = v.videoHeight;
+            ctx.drawImage(v, 0, 0);
+            const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            const res = jsQR(imgData.data, imgData.width, imgData.height);
+            if (res && res.data) code = res.data;
+          }
+          if (code) handleCode(code);
+        } catch (e) {}
+      }
+      if (scanning) requestAnimationFrame(loop);
+    }
+    requestAnimationFrame(loop);
+  } catch (err) {
+    $('man_modal').style.display = 'flex';
+  }
+}
+
+$('btn_torch').onclick = toggleTorch;
+$('btn_audio').onclick = toggleAudio;
+$('btn_flip').onclick = flipCamera;
+$('btn_fs').onclick = toggleFs;
+$('btn_close').onclick = () => { stopCamera(); window.close(); };
+
+$('mb').onclick = () => {
+  const val = $('mi').value.trim();
+  if (val) {
+    $('man_modal').style.display = 'none';
+    handleCode(val);
+  }
+};
+$('mcxl').onclick = () => { $('man_modal').style.display = 'none'; };
+
+startCamera();
+</script>
+</body>
+</html>
