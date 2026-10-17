@@ -150,7 +150,7 @@ let S={token:'',user:null,mode:'user',tab:'catalog',view:'dash',hist:[],res:null
 function applyTheme(){const d=TH==='system'?(matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light'):TH;document.documentElement.dataset.theme=d}
 matchMedia('(prefers-color-scheme:dark)').addEventListener('change',applyTheme);
 /* loading */
-let nb=0,no=0;function bz(d,m){nb+=d;$('#bar').classList.toggle('on',nb>0);if(m){no+=d;$('#busy').classList.toggle('on',no>0);if(d>0)$('#bm').textContent=m}}
+let nb=0,no=0;function bz(d,m){nb=Math.max(0,nb+d);$('#bar').classList.toggle('on',nb>0);if(m){no=Math.max(0,no+d);$('#busy').classList.toggle('on',no>0);if(d>0)$('#bm').textContent=m}}
 function api(a,p,m){return new Promise((ok,bad)=>{bz(1,m);rpc('api',[S.token,a,p||{}]).then(r=>{bz(-1,m);if(r&&r.ok)ok(r.data);else if(r&&r.error==='AUTH'){toast(t('e_AUTH'),1);logout(1)}else bad(new Error(r?r.error:'E_GENERIC'))},()=>{bz(-1,m);bad(new Error('E_GENERIC'))})})}
 const toast=(m,e)=>{const d=document.createElement('div');d.className='toast'+(e?' e':'');d.textContent=m;$('#toasts').append(d);setTimeout(()=>d.remove(),3800)};
 const fail=e=>toast(t('e_'+e.message)!=='e_'+e.message?t('e_'+e.message):t('e_E_GENERIC'),1);
@@ -229,9 +229,9 @@ function renderGoogleBtn(){
 }
 async function handleGoogleLogin(resp){
  if(!resp||!resp.credential)return;
- bz(1);
- try{const r=await pub('loginGoogle',{credential:resp.credential});await enter(r.session)}
- catch(err){bz(-1);amsg(errMsg(err))}
+ try{
+  const r=await pub('loginGoogle',{credential:resp.credential},t('loading'));await enter(r.session);
+ }catch(err){amsg(errMsg(err))}
 }
 window.handleGoogleLogin=handleGoogleLogin;
 function gateModal(m,ok){modal('<button class="btn sm x" data-act="cm">&#10005;</button><div style="text-align:left;padding:8px">'+logo.replace('class="logo"','class="logo" style="justify-content:center"')+authFormHtml(m,ok)+'</div>',1);
