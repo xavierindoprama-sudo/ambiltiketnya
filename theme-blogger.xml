@@ -1,0 +1,832 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE html>
+<html b:version='2' class='v2' expr:dir='data:blog.languageDirection' xmlns='http://www.w3.org/1999/xhtml' xmlns:b='http://www.google.com/2005/gml/b' xmlns:data='http://www.google.com/2005/gml/data' xmlns:expr='http://www.google.com/2005/gml/expr'>
+<head>
+  <meta content='width=device-width, initial-scale=1' name='viewport'/>
+  <title><data:blog.pageTitle/></title>
+  <b:include data='blog' name='all-head-content'/>
+  <link href='https://fonts.googleapis.com' rel='preconnect'/>
+  <link href='https://fonts.gstatic.com' rel='preconnect'/>
+  <link href='https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,800&amp;family=Instrument+Sans:wght@400;600&amp;display=swap' rel='stylesheet'/>
+
+  <!-- Di halaman beranda/arsip tampilkan galeri, di halaman posting tampilkan isi posting -->
+  <b:if cond='data:blog.pageType == &quot;index&quot;'>
+    <style>#main-posts{display:none}</style>
+  <b:else/>
+    <style>#galeri-wrap{display:none}</style>
+  </b:if>
+
+  <b:skin><![CDATA[
+/* ===== Galeri Drive - Blogger Template ===== */
+:root{
+  color-scheme:light dark;
+  --bg:#E8EBEE; --ink:#18222E; --mute:#5B6773; --line:#C9D0D6;
+  --accent:#0E6B68; --accent-hover:#0A5654; --accent-ink:#FFFFFF;
+  --link:#0E6B68; --card:#FFFFFF; --ph:#CBD2D8; --err:#9B2C2C;
+}
+/* Mode gelap otomatis mengikuti pengaturan perangkat */
+@media (prefers-color-scheme:dark){
+  :root{
+    --bg:#10161C; --ink:#E6EBEF; --mute:#93A0AB; --line:#2B3641;
+    --accent:#1B7F7B; --accent-hover:#16706C; --accent-ink:#FFFFFF;
+    --link:#5CC9C3; --card:#1A232C; --ph:#222C36; --err:#F28B82;
+  }
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:var(--bg);color:var(--ink);font:400 16px/1.6 'Instrument Sans',system-ui,sans-serif}
+a{color:var(--link)}
+.wrap{max-width:1240px;margin:0 auto;padding:0 20px}
+
+/* Header */
+.site-head{padding:56px 0 28px}
+.site-head h1{margin:0;font:800 clamp(2.4rem,7vw,5rem)/.95 'Bricolage Grotesque',sans-serif;letter-spacing:-.03em}
+.site-head h1 a{color:inherit;text-decoration:none}
+.site-head p{margin:14px 0 0;max-width:52ch;color:var(--mute)}
+
+/* Tab album */
+.tabs{display:flex;flex-wrap:wrap;gap:6px 22px;border-bottom:1px solid var(--line);margin:8px 0 24px}
+.tabs button{background:none;border:0;border-bottom:3px solid transparent;padding:10px 0;margin-bottom:-1px;font:600 1rem 'Instrument Sans',sans-serif;color:var(--mute);cursor:pointer}
+.tabs button:hover{color:var(--ink)}
+.tabs button[aria-selected=true]{color:var(--ink);border-bottom-color:var(--accent)}
+.count{margin:0 0 18px;color:var(--mute);font-size:.9rem}
+
+/* Grid foto */
+/* Masonry: lebar kolom sama, tinggi mengikuti rasio asli foto */
+.grid{column-width:250px;column-gap:14px}
+.card{position:relative;background:var(--ph);overflow:hidden;border-radius:4px;break-inside:avoid;margin:0 0 14px}
+.card>button.open{display:block;width:100%;padding:0;border:0;background:none;cursor:zoom-in}
+.card img{width:100%;height:auto;display:block;transition:transform .35s ease}
+.card:hover img{transform:scale(1.04)}
+.card .bar{position:absolute;left:0;right:0;bottom:0;display:flex;align-items:center;justify-content:space-between;gap:8px;padding:28px 10px 10px;background:linear-gradient(transparent,rgba(10,18,26,.72));color:#fff;font-size:.82rem;pointer-events:none}
+.card .bar span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.btn-dl{pointer-events:auto;flex:none;display:inline-flex;align-items:center;gap:6px;background:var(--accent);color:var(--accent-ink);text-decoration:none;font:600 .82rem 'Instrument Sans',sans-serif;padding:7px 12px;border-radius:3px}
+.btn-dl:hover{background:var(--accent-hover)}
+.card .btn-dl{margin-left:auto}
+.btn-dl.busy{opacity:.6;pointer-events:none}
+.btn-dl svg{width:15px;height:15px}
+.status{padding:60px 0;text-align:center;color:var(--mute)}
+.status.err{color:var(--err)}
+
+/* Lightbox */
+.lb{position:fixed;inset:0;z-index:99;background:rgba(8,14,20,.94);display:none;flex-direction:column}
+.lb.on{display:flex}
+.lb-top{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 16px;color:#fff}
+.lb-top .nm{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:.9rem}
+.lb-top .act{display:flex;gap:10px;align-items:center}
+.lb-x{background:none;border:1px solid rgba(255,255,255,.4);color:#fff;border-radius:3px;padding:7px 12px;font:600 .82rem 'Instrument Sans',sans-serif;cursor:pointer}
+.lb-main{touch-action:pan-y pinch-zoom;flex:1;min-height:0;display:flex;align-items:center;justify-content:center;position:relative;padding:0 56px 16px}
+.lb-main img{max-width:100%;max-height:100%;object-fit:contain}
+.lb-main iframe{display:none;width:100%;height:100%;border:0;background:#000}
+.lb.vid .lb-main iframe{display:block}
+.lb.vid .lb-main img{display:none}
+.play{position:absolute;left:50%;top:50%;width:56px;height:56px;margin:-28px 0 0 -28px;border-radius:50%;background:rgba(10,18,26,.62);border:2px solid rgba(255,255,255,.9);pointer-events:none;display:flex;align-items:center;justify-content:center}
+.play svg{width:24px;height:24px;margin-left:3px;fill:#fff}
+.dur{position:absolute;top:8px;left:8px;background:rgba(10,18,26,.72);color:#fff;font-size:.75rem;font-weight:600;padding:2px 7px;border-radius:3px;pointer-events:none}
+.lb-nav{position:absolute;top:50%;transform:translateY(-50%);width:44px;height:64px;background:rgba(255,255,255,.1);border:0;color:#fff;font-size:1.6rem;cursor:pointer;border-radius:3px}
+.lb-nav:hover{background:rgba(255,255,255,.22)}
+.lb-prev{left:6px}.lb-next{right:6px}
+button:focus-visible,a:focus-visible{outline:3px solid #7FD6D1;outline-offset:2px}
+
+/* Halaman posting biasa */
+#main-posts article{background:var(--card);padding:28px;margin:0 0 20px;border-radius:4px}
+#main-posts h2{font-family:'Bricolage Grotesque',sans-serif;margin-top:0}
+.site-foot{padding:40px 0;color:var(--mute);font-size:.85rem}
+@media(max-width:600px){.grid{column-width:auto;column-count:2;column-gap:8px}.card{margin-bottom:8px}.card .bar>span{display:none}.btn-dl{padding:9px}.btn-dl svg{width:18px;height:18px}.btn-dl .t{display:none}.lb-main{padding:0 8px 16px}.lb-nav{width:36px}.lb.vid .lb-nav{display:none}}
+@media(prefers-reduced-motion:reduce){.card img{transition:none}html{scroll-behavior:auto}}
+  ]]></b:skin>
+</head>
+
+<body>
+  <header class='site-head'>
+    <div class='wrap'>
+      <h1><a expr:href='data:blog.homepageUrl'><data:blog.title/></a></h1>
+      <p><data:blog.metaDescription/></p>
+    </div>
+  </header>
+
+  <div class='wrap'>
+    <!-- GALERI -->
+    <section id='galeri-wrap'>
+      <div class='tabs' id='tabs' role='tablist'/>
+      <p class='count' id='count'/>
+      <div class='grid' id='grid'/>
+      <div class='status' id='status'>Memuat foto...</div>
+    </section>
+
+    <!-- POSTINGAN (hanya tampil di halaman posting / halaman statis) -->
+    <div id='main-posts'>
+      <b:section class='main' id='main' showaddelement='no'>
+        <b:widget id='Blog1' locked='true' title='Postingan Blog' type='Blog' version='2' visible='true'>
+          <b:widget-settings>
+            <b:widget-setting name='showDateHeader'>false</b:widget-setting>
+            <b:widget-setting name='showShareButtons'>true</b:widget-setting>
+            <b:widget-setting name='showCommentLink'>true</b:widget-setting>
+            <b:widget-setting name='showAuthor'>false</b:widget-setting>
+            <b:widget-setting name='style.unittype'>TextAndImage</b:widget-setting>
+            <b:widget-setting name='timestampLabel'/>
+            <b:widget-setting name='reactionsLabel'/>
+            <b:widget-setting name='showAuthorProfile'>false</b:widget-setting>
+            <b:widget-setting name='style.layout'>1x1</b:widget-setting>
+            <b:widget-setting name='showLabels'>true</b:widget-setting>
+            <b:widget-setting name='showLocation'>true</b:widget-setting>
+            <b:widget-setting name='postLabelsLabel'/>
+            <b:widget-setting name='showTimestamp'>true</b:widget-setting>
+            <b:widget-setting name='postsPerAd'>3</b:widget-setting>
+            <b:widget-setting name='showBacklinks'>false</b:widget-setting>
+            <b:widget-setting name='showInlineAds'>true</b:widget-setting>
+            <b:widget-setting name='showReactions'>false</b:widget-setting>
+          </b:widget-settings>
+          <b:includable id='main' var='top'>
+            <b:loop values='data:posts' var='post'>
+              <article>
+                <h2><data:post.title/></h2>
+                <div><data:post.body/></div>
+              </article>
+            </b:loop>
+          </b:includable>
+          <b:includable id='aboutPostAuthor'>
+  <div class='author-name'>
+    <a class='g-profile' expr:href='data:post.author.profileUrl' rel='author' title='author profile'>
+      <span>
+        <data:post.author.name/>
+      </span>
+    </a>
+  </div>
+  <div>
+    <span class='author-desc'>
+      <data:post.author.aboutMe/>
+    </span>
+  </div>
+</b:includable>
+          <b:includable id='addComments'>
+  <a expr:href='data:post.commentsUrl' expr:onclick='data:post.commentsUrlOnclick'>
+    <b:message name='messages.postAComment'/>
+  </a>
+</b:includable>
+          <b:includable id='commentAuthorAvatar'>
+  <div class='avatar-image-container'>
+    <img class='author-avatar' expr:src='data:comment.authorAvatarSrc' height='35' width='35'/>
+  </div>
+</b:includable>
+          <b:includable id='commentDeleteIcon' var='comment'>
+  <span expr:class='&quot;item-control &quot; + data:comment.adminClass'>
+    <b:if cond='data:showCmtPopup'>
+      <div class='goog-toggle-button'>
+        <div class='goog-inline-block comment-action-icon'/>
+      </div>
+    <b:else/>
+      <a class='comment-delete' expr:href='data:comment.deleteUrl' expr:title='data:messages.deleteComment'>
+        <img src='https://resources.blogblog.com/img/icon_delete13.gif'/>
+      </a>
+    </b:if>
+  </span>
+</b:includable>
+          <b:includable id='commentForm' var='post'>
+  <div class='comment-form'>
+    <a name='comment-form'/>
+    <h4 id='comment-post-message'><data:messages.postAComment/></h4>
+    <b:if cond='data:this.messages.blogComment != &quot;&quot;'>
+      <p><data:this.messages.blogComment/></p>
+    </b:if>
+    <b:include data='post' name='commentFormIframeSrc'/>
+    <iframe allowtransparency='allowtransparency' class='blogger-iframe-colorize blogger-comment-from-post' expr:height='data:cmtIframeInitialHeight ?: &quot;90px&quot;' frameborder='0' id='comment-editor' name='comment-editor' src='' width='100%'/>
+    <data:post.cmtfpIframe/>
+    <script type='text/javascript'>
+      BLOG_CMT_createIframe(&#39;<data:post.appRpcRelayPath/>&#39;);
+    </script>
+  </div>
+</b:includable>
+          <b:includable id='commentFormIframeSrc' var='post'>
+  <a expr:href='data:post.commentFormIframeSrc' id='comment-editor-src'/>
+</b:includable>
+          <b:includable id='commentItem' var='comment'>
+  <div class='comment' expr:id='&quot;c&quot; + data:comment.id'>
+    <b:include cond='data:blog.enabledCommentProfileImages' name='commentAuthorAvatar'/>
+
+    <div class='comment-block'>
+      <div class='comment-author'>
+        <b:if cond='data:comment.authorUrl'>
+          <b:message name='messages.authorSaidWithLink'>
+            <b:param expr:value='data:comment.author' name='authorName'/>
+            <b:param expr:value='data:comment.authorUrl' name='authorUrl'/>
+          </b:message>
+        <b:else/>
+          <b:message name='messages.authorSaid'>
+            <b:param expr:value='data:comment.author' name='authorName'/>
+          </b:message>
+        </b:if>
+      </div>
+      <div expr:class='&quot;comment-body&quot; + (data:comment.isDeleted ? &quot; deleted&quot; : &quot;&quot;)'>
+        <data:comment.body/>
+      </div>
+      <div class='comment-footer'>
+        <span class='comment-timestamp'>
+          <a expr:href='data:comment.url' title='comment permalink'>
+            <data:comment.timestamp/>
+          </a>
+          <b:include data='comment' name='commentDeleteIcon'/>
+        </span>
+      </div>
+    </div>
+  </div>
+</b:includable>
+          <b:includable id='commentList' var='comments'>
+  <div id='comments-block'>
+    <b:loop values='data:comments' var='comment'>
+      <b:include data='comment' name='commentItem'/>
+    </b:loop>
+  </div>
+</b:includable>
+          <b:includable id='commentPicker' var='post'>
+  <b:if cond='data:post.showThreadedComments'>
+    <b:include data='post' name='threadedComments'/>
+  <b:else/>
+    <b:include data='post' name='comments'/>
+  </b:if>
+</b:includable>
+          <b:includable id='comments' var='post'>
+  <section expr:class='&quot;comments&quot; + (data:post.embedCommentForm ? &quot; embed&quot; : &quot;&quot;)' expr:data-num-comments='data:post.numberOfComments' id='comments'>
+    <a name='comments'/>
+    <b:if cond='data:post.allowComments'>
+
+      <b:include name='commentsTitle'/>
+
+      <div expr:id='data:widget.instanceId + &quot;_comments-block-wrapper&quot;'>
+        <b:include cond='data:post.comments' data='post.comments' name='commentList'/>
+      </div>
+
+      <b:if cond='data:post.commentPagingRequired'>
+        <div class='paging-control-container'>
+          <b:if cond='data:post.hasOlderLinks'>
+            <a expr:class='data:post.oldLinkClass' expr:href='data:post.oldestLinkUrl'>
+              <data:messages.oldest/>
+            </a>
+            <a expr:class='data:post.oldLinkClass' expr:href='data:post.olderLinkUrl'>
+              <data:messages.older/>
+            </a>
+          </b:if>
+
+          <span class='comment-range-text'>
+            <data:post.commentRangeText/>
+          </span>
+
+          <b:if cond='data:post.hasNewerLinks'>
+            <a expr:class='data:post.newLinkClass' expr:href='data:post.newerLinkUrl'>
+              <data:messages.newer/>
+            </a>
+            <a expr:class='data:post.newLinkClass' expr:href='data:post.newestLinkUrl'>
+              <data:messages.newest/>
+            </a>
+          </b:if>
+        </div>
+      </b:if>
+
+      <div class='footer'>
+        <b:if cond='data:post.embedCommentForm'>
+          <b:if cond='data:post.allowNewComments'>
+            <b:include data='post' name='commentForm'/>
+          <b:else/>
+            <data:post.noNewCommentsText/>
+          </b:if>
+        <b:else/>
+          <b:if cond='data:post.allowComments'>
+            <b:include data='post' name='addComments'/>
+          </b:if>
+        </b:if>
+      </div>
+    </b:if>
+    <b:if cond='data:showCmtPopup'>
+      <div id='comment-popup'>
+        <iframe allowtransparency='allowtransparency' frameborder='0' id='comment-actions' name='comment-actions' scrolling='no'>
+        </iframe>
+      </div>
+    </b:if>
+  </section>
+</b:includable>
+          <b:includable id='commentsTitle'>
+  <h3 class='title'><data:messages.comments/></h3>
+</b:includable>
+          <b:includable id='feedLinks'>
+  <b:if cond='!data:view.isPost'> <!-- Blog feed links -->
+    <b:if cond='data:feedLinks'>
+      <div class='blog-feeds'>
+        <b:include data='feedLinks' name='feedLinksBody'/>
+      </div>
+    </b:if>
+  <b:else/> <!--Post feed links -->
+    <div class='post-feeds'>
+      <b:loop values='data:posts' var='post'>
+        <b:if cond='data:post.allowComments and data:post.feedLinks'>
+          <b:include data='post.feedLinks' name='feedLinksBody'/>
+        </b:if>
+      </b:loop>
+    </div>
+  </b:if>
+</b:includable>
+          <b:includable id='feedLinksBody' var='links'>
+  <div class='feed-links'>
+  <data:messages.subscribeTo/>
+  <b:loop values='data:links' var='f'>
+     <a class='feed-link' expr:href='data:f.url' expr:type='data:f.mimeType' target='_blank'><data:f.name/> (<data:f.feedType/>)</a>
+  </b:loop>
+  </div>
+</b:includable>
+          <b:includable id='homePageLink'>
+  <a class='home-link' expr:href='data:blog.homepageUrl'>
+    <data:messages.home/>
+  </a>
+</b:includable>
+          <b:includable id='iframeComments' var='post'>
+  <!-- G+ comments, no longer available. The includable is retained for backwards-compatibility. -->
+</b:includable>
+          <b:includable id='inlineAd' var='post'>
+  <b:if cond='!data:view.isPreview'>
+    <b:if cond='data:this.adCode or data:this.adClientId or data:blog.adsenseClientId'>
+      <!-- Ad -->
+      <div class='inline-ad'>
+        <b:if cond='data:this.adCode != &quot;&quot;'>
+          <data:this.adCode/>
+        <b:else/>
+          <b:include cond='data:this.adClientId or data:blog.adsenseClientId' name='defaultAdUnit'/>
+        </b:if>
+      </div>
+    </b:if>
+  <b:else/>
+    <div class='inline-ad'>
+      <div class='inline-ad-placeholder'>
+        <span><b:message name='messages.adsGoHere'/></span>
+      </div>
+    </div>
+  </b:if>
+</b:includable>
+          <b:includable id='nextPageLink'>
+  <a class='blog-pager-older-link' expr:href='data:olderPageUrl' expr:id='data:widget.instanceId + &quot;_blog-pager-older-link&quot;' expr:title='data:messages.olderPosts'>
+    <data:messages.olderPosts/>
+  </a>
+</b:includable>
+          <b:includable id='post' var='post'>
+  <div class='post'>
+    <b:include data='post' name='postMeta'/>
+    <b:include data='post' name='postTitle'/>
+    <b:include name='headerByline'/>
+    <b:if cond='data:view.isSingleItem'>
+      <b:include data='post' name='postBody'/>
+    <b:else/>
+      <b:include data='post' name='postBodySnippet'/>
+      <b:include data='post' name='postJumpLink'/>
+    </b:if>
+    <b:include data='post' name='postFooter'/>
+  </div>
+</b:includable>
+          <b:includable id='postBody' var='post'>
+  <!-- If metaDescription is empty, use the post body as the schema.org description too, for G+/FB snippeting. -->
+  <div class='post-body entry-content float-container' expr:id='&quot;post-body-&quot; + data:post.id'>
+    <data:post.body/>
+  </div>
+</b:includable>
+          <b:includable id='postBodySnippet' var='post'>
+  <b:include data='post' name='postBody'/>
+</b:includable>
+          <b:includable id='postCommentsAndAd' var='post'>
+  <article class='post-outer-container'>
+    <!-- Post title and body -->
+    <div class='post-outer'>
+      <b:include data='post' name='post'/>
+    </div>
+
+    <!-- Comments -->
+    <b:include cond='data:view.isSingleItem' data='post' name='commentPicker'/>
+
+    <!-- Show ad inside post container, after comments, if single item. -->
+    <b:include cond='data:view.isSingleItem and data:post.includeAd' data='post' name='inlineAd'/>
+  </article>
+
+  <!-- Show ad outside post container (between posts) for feed pages. -->
+  <b:include cond='data:view.isMultipleItems and data:post.includeAd' data='post' name='inlineAd'/>
+</b:includable>
+          <b:includable id='postCommentsLink'>
+  <b:if cond='data:view.isMultipleItems'>
+    <span class='byline post-comment-link container'>
+      <b:include cond='data:post.commentSource != 1' name='commentsLink'/>
+    </span>
+  </b:if>
+</b:includable>
+          <b:includable id='postFooter' var='post'>
+  <div class='post-footer'>
+    <b:include name='footerBylines'/>
+    <b:include data='post' name='postFooterAuthorProfile'/>
+  </div>
+</b:includable>
+          <b:includable id='postFooterAuthorProfile' var='post'>
+  <b:if cond='data:post.author.aboutMe and data:view.isPost'>
+    <div class='author-profile'>
+      <b:if cond='data:post.author.authorPhoto.url'>
+        <img class='author-image' expr:src='data:post.author.authorPhoto.url' width='50px'/>
+        <div class='author-about'>
+          <b:include data='post' name='aboutPostAuthor'/>
+        </div>
+      <b:else/>
+        <b:include data='post' name='aboutPostAuthor'/>
+      </b:if>
+    </div>
+  </b:if>
+</b:includable>
+          <b:includable id='postHeader' var='post'>
+  <b:include name='headerByline'/>
+</b:includable>
+          <b:includable id='postMeta' var='post'>
+  <b:include data='post' name='postMetadataJSON'/>
+</b:includable>
+          <b:includable id='postPagination'>
+  <div class='blog-pager container' id='blog-pager'>
+    <b:include cond='data:newerPageUrl' name='previousPageLink'/>
+    <b:include cond='data:olderPageUrl' name='nextPageLink'/>
+    <b:include cond='data:view.url != data:blog.homepageUrl' name='homePageLink'/>
+  </div>
+</b:includable>
+          <b:includable id='postTitle' var='post'>
+  <a expr:name='data:post.id'/>
+  <b:if cond='data:post.title != &quot;&quot;'>
+    <h3 class='post-title entry-title'>
+      <b:if cond='data:post.link or (data:post.url and data:view.url != data:post.url)'>
+        <a expr:href='data:post.link ?: data:post.url'><data:post.title/></a>
+      <b:else/>
+        <data:post.title/>
+      </b:if>
+    </h3>
+  </b:if>
+</b:includable>
+          <b:includable id='previousPageLink'>
+  <a class='blog-pager-newer-link' expr:href='data:newerPageUrl' expr:id='data:widget.instanceId + &quot;_blog-pager-newer-link&quot;' expr:title='data:messages.newerPosts'>
+    <data:messages.newerPosts/>
+  </a>
+</b:includable>
+          <b:includable id='threadedCommentForm' var='post'>
+  <div class='comment-form'>
+    <a name='comment-form'/>
+    <h4 id='comment-post-message'><data:messages.postAComment/></h4>
+    <b:if cond='data:this.messages.blogComment != &quot;&quot;'>
+      <p><data:this.messages.blogComment/></p>
+    </b:if>
+    <b:include data='post' name='commentFormIframeSrc'/>
+    <iframe allowtransparency='allowtransparency' class='blogger-iframe-colorize blogger-comment-from-post' expr:height='data:cmtIframeInitialHeight ?: &quot;90px&quot;' frameborder='0' id='comment-editor' name='comment-editor' src='' width='100%'/>
+    <data:post.cmtfpIframe/>
+    <script type='text/javascript'>
+      BLOG_CMT_createIframe(&#39;<data:post.appRpcRelayPath/>&#39;);
+    </script>
+  </div>
+</b:includable>
+          <b:includable id='threadedCommentJs' var='post'>
+  <script async='async' expr:src='data:post.commentSrc' type='text/javascript'/>
+  <b:template-script inline='true' name='threaded_comments'/>
+  <script type='text/javascript'>
+    blogger.widgets.blog.initThreadedComments(
+        <data:post.commentJso/>,
+        <data:post.commentMsgs/>,
+        <data:post.commentConfig/>);
+  </script>
+</b:includable>
+          <b:includable id='threadedComments' var='post'>
+  <section class='comments threaded' expr:data-embed='data:post.embedCommentForm' expr:data-num-comments='data:post.numberOfComments' id='comments'>
+    <a name='comments'/>
+
+    <b:include name='commentsTitle'/>
+
+    <div class='comments-content'>
+      <b:if cond='data:post.embedCommentForm'>
+        <b:include data='post' name='threadedCommentJs'/>
+      </b:if>
+      <div id='comment-holder'>
+         <data:post.commentHtml/>
+      </div>
+    </div>
+
+    <p class='comment-footer'>
+      <b:if cond='data:post.allowNewComments'>
+        <b:include data='post' name='threadedCommentForm'/>
+      <b:else/>
+        <data:post.noNewCommentsText/>
+      </b:if>
+      <b:if cond='data:post.showManageComments'>
+        <b:include data='post' name='manageComments'/>
+      </b:if>
+    </p>
+
+    <b:if cond='data:showCmtPopup'>
+      <div id='comment-popup'>
+        <iframe allowtransparency='allowtransparency' frameborder='0' id='comment-actions' name='comment-actions' scrolling='no'>
+        </iframe>
+      </div>
+    </b:if>
+  </section>
+</b:includable>
+          <b:includable id='tooltipCss'>
+  <!-- LINT.IfChange -->
+  <style>
+    .post-body a.b-tooltip-container {
+      position: relative;
+      display: inline-block;
+    }
+
+    .post-body a.b-tooltip-container .b-tooltip {
+      display: block !important;
+      position: absolute;
+      top: 100%;
+      left: 50%;
+      transform: translate(-20%, 1px);
+      visibility: hidden;
+      opacity: 0;
+      z-index: 1;
+      transition: opacity 0.2s ease-in-out;
+    }
+
+    .post-body a.b-tooltip-container .b-tooltip iframe {
+      width: 200px;
+      height: 198px;
+      max-width: none;
+      border: none;
+      border-radius: 20px;
+      box-shadow: 1px 1px 3px 1px rgba(0, 0, 0, 0.2);
+    }
+
+    @media (hover: hover) {
+      .post-body a.b-tooltip-container:hover .b-tooltip {
+        visibility: visible;
+        opacity: 1;
+      }
+    }
+  </style>
+  <!-- LINT.ThenChange(//depot/google3/java/com/google/blogger/b2/layouts/widgets/v2-style.css) -->
+</b:includable>
+        </b:widget>
+      </b:section>
+    </div>
+  </div>
+
+  <footer class='site-foot'>
+    <div class='wrap'>
+      <b:section class='footer' id='footer' maxwidgets='1' showaddelement='no'>
+        <b:widget id='Attribution1' locked='true' title='' type='Attribution'>
+          <b:widget-settings>
+            <b:widget-setting name='copyright'/>
+          </b:widget-settings>
+          <b:includable id='main'>
+    <div class='widget-content' style='text-align: center;'>
+      <b:if cond='data:attribution != &quot;&quot;'>
+       <data:attribution/>
+      </b:if>
+    </div>
+
+    <b:include name='quickedit'/>
+  </b:includable>
+        </b:widget>
+      </b:section>
+    </div>
+  </footer>
+
+  <!-- Lightbox -->
+  <div aria-modal='true' class='lb' id='lb' role='dialog'>
+    <div class='lb-top'>
+      <span class='nm' id='lb-nm'/>
+      <span class='act'>
+        <a aria-label='Unduh' class='btn-dl' id='lb-dl' rel='noopener' target='_blank'/>
+        <button class='lb-x' id='lb-x' type='button'>Tutup</button>
+      </span>
+    </div>
+    <div class='lb-main'>
+      <button aria-label='Sebelumnya' class='lb-nav lb-prev' id='lb-prev' type='button'>&#8249;</button>
+      <img alt='' id='lb-img'/>
+      <iframe allow='autoplay; fullscreen' allowfullscreen='true' id='lb-vid' title='Video'/>
+      <button aria-label='Berikutnya' class='lb-nav lb-next' id='lb-next' type='button'>&#8250;</button>
+    </div>
+  </div>
+
+  <script>
+//<![CDATA[
+/* =====================================================================
+   PENGATURAN - EDIT BAGIAN INI SAJA
+   ---------------------------------------------------------------------
+   1. Folder Google Drive harus dibagikan: "Siapa saja yang memiliki link".
+   2. folderId = bagian akhir URL folder:
+      https://drive.google.com/drive/folders/INI_FOLDER_ID
+   3. apiKey   = API key Google Cloud (aktifkan "Google Drive API").
+      Wajib hanya jika memakai folderId.
+   4. Tanpa API key: pakai daftar "files" berisi ID file satu per satu.
+      ID file ada di link foto: drive.google.com/file/d/INI_FILE_ID/view
+      Untuk video di mode ini tulis: { id: 'FILE_ID', type: 'video' }
+   ===================================================================== */
+var CONFIG = {
+  apiKey: 'AIzaSyD1CjhtmNkqCXXCsylDhQtqiVzkAsvOHvk',
+  albums: [
+    { title: 'Album Utama', folderId: '1VyN1ZryMDFv7NV1ZmJuFgN-ca8fGAJJA' }
+    /* Untuk menambah album lain, tambahkan baris baru:
+       { title: 'Album Kedua', folderId: 'ID_FOLDER_LAIN' } */
+  ]
+};
+/* ===================================================================== */
+
+var photos = [], cur = 0;
+var $ = function (id) { return document.getElementById(id); };
+var thumb = function (id, w) { return 'https://lh3.googleusercontent.com/d/' + id + '=w' + w; };
+var dlUrl = function (id) { return 'https://drive.google.com/uc?export=download&id=' + id; };
+var isVid = function (p) { return !!(p.video || (p.mimeType && p.mimeType.indexOf('video/') === 0)); };
+var fmtDur = function (ms) { var t = Math.round(ms / 1000), h = Math.floor(t / 3600), m = Math.floor(t % 3600 / 60), s = t % 60;
+  return (h ? h + ':' + (m < 10 ? '0' : '') : '') + m + ':' + (s < 10 ? '0' : '') + s; };
+var PLAY = '<svg viewBox="0 0 24 24"><path d="M6 4l14 8-14 8z"/></svg>';
+var esc = function (s) { return String(s).replace(/[&<>"']/g, function (c) { return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); };
+var ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12m0 0l-5-5m5 5l5-5M4 21h16"/></svg>';
+
+async function listFolder(fid) {
+  var out = [], tok = '';
+  do {
+    var q = "'" + fid + "' in parents and (mimeType contains 'image/' or mimeType contains 'video/') and trashed=false";
+    var u = 'https://www.googleapis.com/drive/v3/files?q=' + encodeURIComponent(q) +
+      '&fields=nextPageToken,files(id,name,mimeType,size,imageMediaMetadata(width,height,rotation),videoMediaMetadata(width,height,durationMillis))&orderBy=name&pageSize=200&key=' + CONFIG.apiKey +
+      (tok ? '&pageToken=' + tok : '');
+    var r = await fetch(u);
+    if (!r.ok) throw new Error('Google Drive API error ' + r.status + '. Periksa API key dan izin folder.');
+    var j = await r.json();
+    out = out.concat(j.files || []);
+    tok = j.nextPageToken || '';
+  } while (tok);
+  return out;
+}
+
+async function loadAlbum(i) {
+  var a = CONFIG.albums[i];
+  var st = $('status'), grid = $('grid');
+  grid.innerHTML = ''; $('count').textContent = '';
+  st.className = 'status'; st.textContent = 'Memuat foto...'; st.style.display = '';
+  try {
+    if (a.files && a.files.length) {
+      photos = a.files.map(function (f, n) {
+        if (typeof f === 'string') return { id: f, name: 'Foto ' + (n + 1) };
+        return { id: f.id, name: f.name || ((f.type === 'video' ? 'Video ' : 'Foto ') + (n + 1)), video: f.type === 'video' };
+      });
+    } else if (a.folderId) {
+      photos = await listFolder(a.folderId);
+    } else { photos = []; }
+  } catch (e) {
+    st.className = 'status err'; st.textContent = e.message; return;
+  }
+  if (!photos.length) { st.textContent = 'Belum ada foto atau video di album ini.'; return; }
+  st.style.display = 'none';
+  var nv = photos.filter(isVid).length;
+  $('count').textContent = (photos.length - nv) + ' foto' + (nv ? ', ' + nv + ' video' : '');
+  var html = '';
+  photos.forEach(function (p, n) {
+    var nm = esc(p.name.replace(/\.[^.]+$/, ''));
+    var v = isVid(p), m = p.imageMediaMetadata || p.videoMediaMetadata, ar = '';
+    if (m && m.width && m.height) {
+      var odd = (m.rotation === 1 || m.rotation === 3);
+      ar = ' style="aspect-ratio:' + (odd ? m.height + '/' + m.width : m.width + '/' + m.height) + '"';
+    } else if (v) { ar = ' style="aspect-ratio:16/9"'; }
+    var badge = '';
+    if (v) {
+      var d = p.videoMediaMetadata && p.videoMediaMetadata.durationMillis;
+      badge = '<span class="play">' + PLAY + '</span>' + (d ? '<span class="dur">' + fmtDur(+d) + '</span>' : '');
+    }
+    html += '<figure class="card">' +
+      '<button class="open" type="button" data-i="' + n + '" aria-label="' + (v ? 'Putar ' : 'Buka ') + nm + '">' +
+      '<img loading="lazy"' + ar + ' alt="' + nm + '" src="' + thumb(p.id, 600) + '" ' +
+      'onerror="this.onerror=null;this.src=\'https://drive.google.com/thumbnail?id=' + p.id + '&amp;sz=w600\'"/>' + badge + '</button>' +
+      '<div class="bar"><span>' + nm + '</span>' +
+      '<a class="btn-dl" data-i="' + n + '" href="' + dlUrl(p.id) + '" target="_blank" rel="noopener" aria-label="Unduh ' + nm + '">' + ICON + '<span class="t">Unduh</span></a></div></figure>';
+  });
+  grid.innerHTML = html;
+}
+
+function renderTabs() {
+  var t = $('tabs'), h = '';
+  CONFIG.albums.forEach(function (a, i) {
+    h += '<button type="button" role="tab" aria-selected="' + (i === 0) + '" data-a="' + i + '">' + esc(a.title) + '</button>';
+  });
+  t.innerHTML = h;
+  if (CONFIG.albums.length < 2) t.style.display = 'none';
+  t.addEventListener('click', function (e) {
+    var b = e.target.closest('button'); if (!b) return;
+    [].forEach.call(t.children, function (x) { x.setAttribute('aria-selected', x === b); });
+    loadAlbum(+b.dataset.a);
+  });
+}
+
+/* Unduh langsung dari website (tanpa membuka Google Drive / pilih akun) */
+var BIG = 150 * 1024 * 1024; /* file lebih besar dari ini dialihkan ke unduhan langsung browser */
+async function downloadPhoto(p, el) {
+  var label = el.querySelector('.t'), old = label ? label.textContent : '';
+  var hasKey = CONFIG.apiKey && CONFIG.apiKey.indexOf('ISI_') !== 0;
+  var apiUrl = hasKey ? 'https://www.googleapis.com/drive/v3/files/' + p.id + '?alt=media&key=' + CONFIG.apiKey : '';
+  if (apiUrl && p.size && +p.size > BIG) { window.open(apiUrl, '_blank'); return; }
+  el.classList.add('busy');
+  if (label) label.textContent = 'Mengunduh...';
+  try {
+    var urls = [];
+    if (apiUrl) urls.push(apiUrl);
+    if (!isVid(p)) urls.push('https://lh3.googleusercontent.com/d/' + p.id + '=s0');
+    var blob = null;
+    for (var k = 0; k < urls.length && !blob; k++) {
+      try {
+        var r = await fetch(urls[k]);
+        if (!r.ok) continue;
+        var total = +p.size || +r.headers.get('content-length') || 0;
+        if (r.body && r.body.getReader && total) {
+          var rd = r.body.getReader(), parts = [], got = 0;
+          for (;;) {
+            var c = await rd.read();
+            if (c.done) break;
+            parts.push(c.value); got += c.value.length;
+            if (label) label.textContent = Math.min(99, Math.round(got / total * 100)) + '%';
+          }
+          blob = new Blob(parts, { type: r.headers.get('content-type') || '' });
+        } else { blob = await r.blob(); }
+      } catch (err) { /* coba sumber berikutnya */ }
+    }
+    if (!blob) throw new Error('gagal');
+    var name = p.name;
+    if (!/\.[A-Za-z0-9]{2,5}$/.test(name)) {
+      var ext = (blob.type.split('/')[1] || (isVid(p) ? 'mp4' : 'jpg')).replace('jpeg', 'jpg');
+      name += '.' + ext;
+    }
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = name;
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 4000);
+  } catch (e) {
+    window.open(dlUrl(p.id), '_blank'); /* cadangan: unduh lewat Google Drive */
+  } finally {
+    el.classList.remove('busy');
+    if (label) label.textContent = old;
+  }
+}
+
+/* Lightbox */
+function show(i) {
+  cur = (i + photos.length) % photos.length;
+  var p = photos[cur];
+  var v = isVid(p);
+  $('lb').classList.toggle('vid', v);
+  $('lb-vid').src = v ? 'https://drive.google.com/file/d/' + p.id + '/preview' : '';
+  $('lb-img').src = v ? '' : thumb(p.id, 1800);
+  $('lb-img').alt = p.name;
+  $('lb-nm').textContent = p.name + '  (' + (cur + 1) + '/' + photos.length + ')';
+  $('lb-dl').href = dlUrl(p.id);
+  $('lb').classList.add('on');
+  document.body.style.overflow = 'hidden';
+}
+function closeLb() { $('lb').classList.remove('on', 'vid'); $('lb-img').src = ''; $('lb-vid').src = ''; document.body.style.overflow = ''; }
+
+$('grid').addEventListener('click', function (e) {
+  var d = e.target.closest('a.btn-dl');
+  if (d) { e.preventDefault(); downloadPhoto(photos[+d.dataset.i], d); return; }
+  var b = e.target.closest('button.open');
+  if (b) show(+b.dataset.i);
+});
+$('lb-dl').addEventListener('click', function (e) {
+  e.preventDefault(); downloadPhoto(photos[cur], this);
+});
+$('lb-x').onclick = closeLb;
+$('lb-prev').onclick = function () { show(cur - 1); };
+$('lb-next').onclick = function () { show(cur + 1); };
+$('lb').addEventListener('click', function (e) { if (e.target.classList.contains('lb-main')) closeLb(); });
+
+/* Geser kiri/kanan di tampilan besar */
+(function () {
+  var box = document.querySelector('.lb-main'), img = $('lb-img');
+  var sx = 0, sy = 0, on = false;
+  box.addEventListener('touchstart', function (e) {
+    if (e.touches.length !== 1) { on = false; return; }
+    sx = e.touches[0].clientX; sy = e.touches[0].clientY; on = true;
+    img.style.transition = 'none';
+  }, { passive: true });
+  box.addEventListener('touchmove', function (e) {
+    if (!on) return;
+    var dx = e.touches[0].clientX - sx, dy = e.touches[0].clientY - sy;
+    if (Math.abs(dx) > Math.abs(dy)) img.style.transform = 'translateX(' + dx + 'px)';
+  }, { passive: true });
+  box.addEventListener('touchend', function (e) {
+    if (!on) return;
+    on = false;
+    var dx = e.changedTouches[0].clientX - sx, dy = e.changedTouches[0].clientY - sy;
+    img.style.transition = 'transform .2s ease';
+    img.style.transform = '';
+    if (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy) * 1.5) show(cur + (dx < 0 ? 1 : -1));
+  }, { passive: true });
+  box.addEventListener('touchcancel', function () { on = false; img.style.transform = ''; }, { passive: true });
+})();
+document.addEventListener('keydown', function (e) {
+  if (!$('lb').classList.contains('on')) return;
+  if (e.key === 'Escape') closeLb();
+  if (e.key === 'ArrowLeft') show(cur - 1);
+  if (e.key === 'ArrowRight') show(cur + 1);
+});
+
+$('lb-dl').innerHTML = ICON + '<span class="t">Unduh</span>';
+renderTabs();
+loadAlbum(0);
+//]]>
+  </script>
+</body>
+</html>

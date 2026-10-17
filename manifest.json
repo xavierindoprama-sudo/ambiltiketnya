@@ -1,0 +1,28 @@
+{
+  "name": "AmbilTiketnya",
+  "short_name": "AmbilTiket",
+  "description": "Sistem pemesanan tiket acara gereja dan komunitas",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f3f4fb",
+  "theme_color": "#5b4ef0",
+  "lang": "id",
+  "orientation": "portrait-primary",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ],
+  "screenshots": [
+    { "src": "icons/screenshot-mobile.png", "sizes": "390x844", "type": "image/png", "form_factor": "narrow" }
+  ],
+  "categories": ["utilities", "productivity"],
+  "shortcuts": [
+    {
+      "name": "Tiket Saya",
+      "short_name": "Tiket",
+      "description": "Lihat tiket yang sudah dipesan",
+      "url": "/?tab=tickets",
+      "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }]
+    }
+  ]
+}

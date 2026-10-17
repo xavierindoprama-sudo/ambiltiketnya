@@ -1,0 +1,13 @@
+# File kompresi & backup lokal
+*.zip
+*.tar.gz
+*.bak
+
+# File konfigurasi lokal & editor
+.vscode/
+.idea/
+*.swp
+*~
+
+# Temporary logs
+*.log

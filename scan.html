@@ -1,0 +1,43 @@
+<!DOCTYPE html><html lang="id"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Scan QR E-Tiket</title>
+<style>
+body{margin:0;min-height:100vh;background:radial-gradient(circle at top,#1d1a4a,#0a0d17 60%);color:#eef0fa;font:15px system-ui,sans-serif;display:flex;flex-direction:column;align-items:center;padding:20px}
+small{letter-spacing:2px;color:#8b87ff;font-weight:700}h1{font-size:20px;margin:6px 0}p{color:#9aa2c0;margin:4px 0 14px}
+#v{width:100%;max-width:380px;aspect-ratio:1;border-radius:22px;object-fit:cover;background:#000;border:2px solid #4a3df0}
+.card{width:100%;max-width:380px;background:#0f1424;border:1px solid #232a43;border-radius:18px;padding:16px;margin-top:14px;text-align:center}
+input{width:100%;box-sizing:border-box;padding:12px;border-radius:12px;border:1px solid #232a43;background:#080b15;color:#fff;font:15px ui-monospace,monospace}
+button{width:100%;margin-top:10px;padding:13px;border:0;border-radius:12px;background:#5046e5;color:#fff;font-weight:600;font-size:15px;cursor:pointer}
+.hide{display:none}.code{font:700 20px ui-monospace,monospace;word-break:break-all;margin:8px 0}
+</style></head><body>
+<small>AMBILTIKETNYA.ONLINE</small><h1>Scan QR E-Tiket</h1><p id="st">Mengarahkan kamera ke QR…</p>
+<video id="v" playsinline muted></video><canvas id="c" class="hide"></canvas>
+<div class="card hide" id="man"><div style="color:#9aa2c0;margin-bottom:8px">Kamera tidak tersedia? Ketik kode tiket:</div><input id="mi" placeholder="TKT-XXXX-XXXXXX" autocapitalize="characters"><button id="mb">Kirim kode</button></div>
+<div class="card hide" id="fb"><div style="color:#9aa2c0">Dashboard tidak merespons. Kode hasil scan:</div><div class="code" id="fc"></div><button id="cp">Salin kode</button></div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jsQR/1.4.0/jsQR.min.js"></script>
+<script>
+const h=new URLSearchParams(location.hash.slice(1)),N=h.get('n'),O=h.get('o'),$=s=>document.getElementById(s);
+let done=false,stream=null;
+function stop(){stream&&stream.getTracks().forEach(t=>t.stop())}
+function send(code){            // hanya sekali per sesi; hanya ke jendela pembuka + origin dashboard
+  if(done)return;done=true;stop();$('st').textContent='Mengirim ke dashboard…';
+  if(!window.opener||!N||!O)return fallback(code);
+  const ack=e=>{if(e.source===window.opener&&e.origin===O&&e.data&&e.data.type==='ack'&&e.data.n===N){removeEventListener('message',ack);window.close()}};
+  addEventListener('message',ack);
+  window.opener.postMessage({type:'scan',n:N,code:code},O);
+  setTimeout(()=>fallback(code),2500);          // tidak ada balasan → tampilkan kode
+}
+function fallback(code){$('v').classList.add('hide');$('man').classList.add('hide');$('st').textContent='Hasil scan tersimpan di bawah.';$('fc').textContent=code;$('fb').classList.remove('hide');
+  $('cp').onclick=async()=>{try{await navigator.clipboard.writeText(code)}catch(e){const i=document.createElement('input');i.value=code;document.body.append(i);i.select();document.execCommand('copy');i.remove()}$('cp').textContent='Tersalin ✓'}}
+$('mb').onclick=()=>{const v=$('mi').value.trim();if(v)send(v)};
+async function start(){
+  try{
+    stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:'environment'}});
+    const v=$('v');v.srcObject=stream;await v.play();$('st').textContent='Arahkan kamera ke QR e-tiket.';
+    const bd='BarcodeDetector' in window?new BarcodeDetector({formats:['qr_code']}):null,c=$('c'),x=c.getContext('2d',{willReadFrequently:true});
+    (async function loop(){if(done)return;
+      try{if(bd){const r=await bd.detect(v);if(r.length)return send(r[0].rawValue)}
+      else if(v.videoWidth){c.width=v.videoWidth;c.height=v.videoHeight;x.drawImage(v,0,0);const d=x.getImageData(0,0,c.width,c.height),r=jsQR(d.data,d.width,d.height);if(r&&r.data)return send(r.data)}}catch(e){}
+      setTimeout(loop,150)})();
+  }catch(e){$('v').classList.add('hide');$('st').textContent='Kamera tidak dapat diakses.';$('man').classList.remove('hide')}
+}
+start();
+</script></body></html>
