@@ -467,7 +467,7 @@ const ACTIONS = {
   offlineManifest:   { min: 1, fn: offlineManifest },
   syncOfflineCheckins:{ min: 1, fn: syncOfflineCheckins },
   gateLink:          { min: 2, fn: gateLink },
-  adminEvents: { min: 2, fn: () => q(`SELECT e.*, coalesce((SELECT sum(qty) FROM orders o WHERE o.event_id=e.id AND o.status<>'cancelled'),0)::int AS sold FROM events e ORDER BY e.event_date DESC, e.start_time`) },
+  adminEvents: { min: 1, fn: () => q(`SELECT e.*, coalesce((SELECT sum(qty) FROM orders o WHERE o.event_id=e.id AND o.status<>'cancelled'),0)::int AS sold FROM events e ORDER BY e.event_date DESC, e.start_time`) },
   orders:      { min: 2, fn: adminOrders },
   users:       { min: 3, fn: () => q(`SELECT id,name,email,whatsapp,age,church,role,coalesce(picture,'') AS picture,created_at FROM users ORDER BY created_at DESC LIMIT 1000`) },
   migrateOauth:{ min: 3, fn: () => migrateOauth() },
@@ -671,12 +671,16 @@ function gateLoginImpl(p) {
   if (key !== expected) throw new Error('INVALID_KEY');
   const ev = q(`SELECT id, name, is_active FROM events WHERE id=$1::uuid`, [evId])[0];
   if (!ev) throw new Error('EVENT_NOT_FOUND');
-  let vol = q(`SELECT id, name, role FROM users WHERE email='gate_volunteer@ambiltiketnya.online'`)[0];
+  let vol = q(`SELECT id, name, role, email FROM users WHERE lower(email)='gate_volunteer@ambiltiketnya.online'`)[0];
   if (!vol) {
-    vol = q(`INSERT INTO users(name,email,role,password) VALUES('Petugas Gerbang','gate_volunteer@ambiltiketnya.online','gate_staff','!') RETURNING id,name,role`)[0];
+    vol = q(`INSERT INTO users(name,email,whatsapp,age,church,password_hash,role)
+      VALUES('Petugas Gerbang','gate_volunteer@ambiltiketnya.online','628000000000',25,'Panitia Gerbang','!','gate_staff')
+      ON CONFLICT (email) DO UPDATE SET role='gate_staff'
+      RETURNING id,name,role,email`)[0];
   }
   const token = newSession(vol.id);
-  return { session: token, role: 'gate_staff', name: 'Petugas Gerbang', eventId: ev.id, eventName: ev.name };
+  const user = { id: vol.id, name: vol.name, role: vol.role, email: vol.email || 'gate_volunteer@ambiltiketnya.online' };
+  return { session: token, user: user, role: vol.role, name: vol.name, eventId: ev.id, eventName: ev.name };
 }
 
 
