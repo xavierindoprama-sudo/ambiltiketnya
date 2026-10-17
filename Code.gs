@@ -30,7 +30,7 @@ function doGet(e) {
 /* ---------- API JSON untuk tampilan yang dihosting di luar Apps Script (mis. GitHub Pages) ----------
  * Klien memanggil POST ke alamat /exec dengan isi {"fn":"nama","args":[...]} (Content-Type: text/plain agar tanpa preflight CORS).
  * Hanya fungsi pada daftar putih di bawah yang bisa dipanggil; semuanya sama dengan yang dipakai google.script.run. */
-const API_FNS = { init: init, register: register, loginPw: loginPw, forgotRequest: forgotRequest, forgotReset: forgotReset, legalPublic: legalPublic, ticketPublic: ticketPublic, api: api };
+const API_FNS = { init: init, register: register, loginPw: loginPw, forgotRequest: forgotRequest, forgotReset: forgotReset, legalPublic: legalPublic, ticketPublic: ticketPublic, eventsPublic: eventsPublic, api: api };
 function jsonOut(o) { return ContentService.createTextOutput(JSON.stringify(o === undefined ? null : o)).setMimeType(ContentService.MimeType.JSON); }
 function doPost(e) {
   let out;
@@ -371,16 +371,26 @@ function auth(token) {
   cache.put(key, JSON.stringify(u), 120);
   return u;
 }
+function publicEventsList() {
+  return q(`SELECT e.id,e.name,e.category,e.banner_url,e.description,e.event_date,e.start_time,e.end_time,e.location,e.quota,e.is_paid,e.price,e.max_per_order,e.one_order_per_account,e.terms,
+    (e.quota - coalesce((SELECT sum(qty) FROM orders o WHERE o.event_id=e.id AND o.status<>'cancelled'),0))::int AS remaining,
+    false AS has_order, null AS my_order, null AS my_status
+    FROM events e WHERE e.is_active ORDER BY e.event_date, e.start_time`);
+}
+function eventsPublic() { return pubRun(publicEventsList); }
 // satu panggilan untuk membuka aplikasi: konfigurasi + pengguna + katalog (cache miss = 1 permintaan HTTP ke Neon berisi 2 query)
 function init(token) {
   const out = { cfg: { scanUrl: P.getProperty('SCAN_URL') || '', appUrl: P.getProperty('APP_URL') || '', siteUrl: P.getProperty('SITE_URL') || 'https://www.ambiltiketnya.online' } };
-  if (!token) return out;
+  if (!token) {
+    try { out.events = publicEventsList(); } catch (e) { out.events = []; }
+    return out;
+  }
   try {
     const h = sha(token), key = 's' + h.slice(0, 40), cache = CacheService.getScriptCache(), hit = cache.get(key);
     if (hit) { const u = JSON.parse(hit); out.user = Object.assign({}, u, { needProfile: !u.whatsapp }); out.events = userEvents(u); return out; }
     const res = neon([{ query: wrap(AUTH_SQL), params: [h] }, { query: wrap(eventsSql(UID_SESSION)), params: [h] }]);
     const u = rowsOf(res[0])[0];
-    if (!u) { out.authError = 'AUTH'; return out; }
+    if (!u) { out.authError = 'AUTH'; try { out.events = publicEventsList(); } catch (x) {} return out; }
     cache.put(key, JSON.stringify(u), 120);
     out.user = Object.assign({}, u, { needProfile: !u.whatsapp });
     out.events = rowsOf(res[1]);
