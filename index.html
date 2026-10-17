@@ -1,6 +1,6 @@
-<!DOCTYPE html><html lang="id"><head><meta charset="utf-8">
+﻿<!DOCTYPE html><html lang="id"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>AmbilTiketnya — Pesan Tiket Acara</title>
+<title>AmbilTiketnya â€” Pesan Tiket Acara</title>
 <meta name="description" content="Platform pemesanan tiket acara gereja dan komunitas. Dapatkan e-tiket QR instan dan konfirmasi email otomatis.">
 <meta name="theme-color" content="#5b4ef0">
 <!-- PWA -->
@@ -13,17 +13,18 @@
 <!-- Open Graph / WhatsApp / Telegram preview -->
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="AmbilTiketnya">
-<meta property="og:title" content="AmbilTiketnya — Pesan Tiket Acara">
+<meta property="og:title" content="AmbilTiketnya â€” Pesan Tiket Acara">
 <meta property="og:description" content="Platform pemesanan tiket acara gereja dan komunitas. Dapatkan e-tiket QR instan dan konfirmasi email otomatis.">
 <meta property="og:url" content="https://www.ambiltiketnya.online/">
 <meta property="og:image" content="https://www.ambiltiketnya.online/icons/icon-512.png">
 <!-- Twitter Card -->
 <meta name="twitter:card" content="summary">
-<meta name="twitter:title" content="AmbilTiketnya — Pesan Tiket Acara">
+<meta name="twitter:title" content="AmbilTiketnya â€” Pesan Tiket Acara">
 <meta name="twitter:description" content="Pesan tiket acara gereja dan komunitas, dapatkan e-tiket QR instan.">
 <meta name="twitter:image" content="https://www.ambiltiketnya.online/icons/icon-512.png">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Outfit:wght@600;700&family=Plus+Jakarta+Sans:wght@400;600;700&display=swap" onload="this.onload=null;this.rel='stylesheet'">
+<script src="https://accounts.google.com/gsi/client" async defer></script>
 <style>
 :root{--bg:#f3f4fb;--card:#fff;--tx:#0f1222;--mu:#667090;--bd:#e3e6f3;--ac:#5b4ef0;--ac2:#8b5cf6;--ok:#10b981;--wn:#f59e0b;--er:#ef4444;--in:#f5f6fc;--sh:0 8px 28px rgba(50,50,110,.09)}
 :root[data-theme=dark]{--bg:#090c16;--card:#111627;--tx:#eef0fa;--mu:#9aa2c0;--bd:#232a43;--in:#0b0f1e;--sh:0 8px 28px rgba(0,0,0,.45)}
@@ -136,6 +137,8 @@ e_BAD_ORG:['Instansi wajib diisi.','Organization is required.'],e_BAD_QTY:['Juml
 pw_hint:['Minimal 8 karakter','At least 8 characters'],reset_pw:['Reset password','Reset password'],temp_pw:['Password sementara (tampil sekali, berikan ke pengguna):','Temporary password (shown once, give it to the user):'],ask_rpw:['Buat password sementara untuk pengguna ini? Semua sesinya akan keluar.','Create a temporary password for this user? All its sessions will be signed out.'],
 e_BAD_NAME:['Nama minimal 2 karakter.','Name must be at least 2 characters.'],e_BAD_EMAIL:['Format email tidak valid.','Invalid email format.'],e_WEAK_PW:['Password minimal 8 karakter.','Password must be at least 8 characters.'],e_PW_MISMATCH:['Konfirmasi password tidak sama.','Passwords do not match.'],e_EMAIL_TAKEN:['Email sudah terdaftar. Silakan masuk.','Email already registered. Please sign in.'],e_BAD_LOGIN:['Email atau password salah.','Wrong email or password.'],e_LOCKED:['Terlalu banyak percobaan. Coba lagi dalam 10 menit.','Too many attempts. Try again in 10 minutes.'],e_BAD_OTP:['Kode OTP salah atau kedaluwarsa.','OTP is wrong or expired.'],
 e_AUTH:['Sesi berakhir, silakan masuk lagi.','Session expired, please sign in again.'],e_FORBIDDEN:['Akses ditolak.','Access denied.'],e_BAD_PHONE:['Nomor WhatsApp tidak valid (contoh 0813xxxxxxx).','Invalid WhatsApp number (e.g. 0813xxxxxxx).'],e_BAD_AGE:['Usia tidak valid.','Invalid age.'],e_BAD_CHURCH:['Gereja wajib diisi.','Church is required.'],
+e_BAD_GOOGLE_TOKEN:['Token Google tidak valid.','Invalid Google token.'],e_BAD_GOOGLE_AUD:['Client ID Google tidak sesuai.','Google Client ID mismatch.'],e_BAD_GOOGLE_EMAIL:['Email Google belum diverifikasi.','Google email is not verified.'],
+or:['atau','or'],google_btn:['Lanjutkan dengan Google','Continue with Google'],
 e_SOLDOUT:['Kuota tidak mencukupi.','Not enough seats left.'],e_MAX:['Melebihi batas tiket per transaksi.','Exceeds the per-order limit.'],e_ALREADY:['Anda sudah memiliki pesanan aktif untuk acara ini.','You already have an active order for this event.'],e_INACTIVE:['Acara tidak aktif.','Event is not active.'],e_BAD_EVENT:['Data acara belum lengkap.','Event data incomplete.'],e_NOT_CONFIRMED:['Pesanan belum terkonfirmasi.','Order not confirmed.'],e_SELF:['Tidak bisa mengubah peran sendiri.','You cannot change your own role.'],e_E_GENERIC:['Terjadi kesalahan, coba lagi.','Something went wrong, please retry.']};
 let L=ls.g('lang')||((navigator.language||'id').startsWith('id')?'id':'en'),TH=ls.g('theme')||'system';
 const t=k=>D[k]?D[k][L==='id'?0:1]:k;
@@ -201,23 +204,49 @@ function authFormHtml(m,ok){const a=S.auth||(S.auth={mode:'login'}),md=a.mode;
  const f=(id,l,ty,ex)=>'<label>'+t(l)+'</label><input id="'+id+'" type="'+(ty||'text')+'" '+(ex||'')+'>';
  const bt=(act,l)=>'<button class="btn pri" style="width:100%;margin-top:16px" data-act="'+act+'">'+t(l)+'</button>';
  const lk=(v,l)=>'<button class="lnk" data-act="amode" data-v="'+v+'">'+t(l)+'</button>',ct='<p style="text-align:center">',mu='<p class="muted" style="text-align:center">';
+ const gBtn=(md==='login'||md==='signup')?'<div id="g_btn_wrap" style="display:flex;justify-content:center;margin:12px 0 10px;min-height:44px"></div><div style="display:flex;align-items:center;margin:14px 0 12px;color:var(--mu);font-size:12px"><span style="flex:1;border-bottom:1px solid var(--bd)"></span><span style="padding:0 10px;text-transform:uppercase;letter-spacing:1px;font-weight:600">'+t('or')+'</span><span style="flex:1;border-bottom:1px solid var(--bd)"></span></div>':'';
  let h='';
- if(md==='login')h=f('a_em','f_email','email','autocomplete="username"')+f('a_pw','f_pwd','password','autocomplete="current-password"')+bt('doLogin','login')+ct+lk('forgot1','forgot_q')+'</p>'+mu+t('no_acc')+' '+lk('signup','signup')+'</p>';
- else if(md==='signup')h=f('a_nm','f_fname','text','autocomplete="name"')+f('a_em','f_email','email','autocomplete="username"')+f('a_wa','wa_l','tel','placeholder="0813xxxxxxx" autocomplete="tel"')+'<small class="muted mono" id="pv"></small><div style="display:grid;grid-template-columns:1fr 2fr;gap:10px"><div>'+f('a_ag','age_l','number','min="1" max="120"')+'</div><div>'+f('a_ch','ch_l')+'</div></div>'+f('a_pw','f_pwd','password','autocomplete="new-password"')+'<small class="muted">'+t('pw_hint')+'</small>'+f('a_p2','f_pwd2','password','autocomplete="new-password"')+bt('doSignup','signup')+mu+t('have_acc')+' '+lk('login','login')+'</p>';
+ if(md==='login')h=gBtn+f('a_em','f_email','email','autocomplete="username"')+f('a_pw','f_pwd','password','autocomplete="current-password"')+bt('doLogin','login')+ct+lk('forgot1','forgot_q')+'</p>'+mu+t('no_acc')+' '+lk('signup','signup')+'</p>';
+ else if(md==='signup')h=gBtn+f('a_nm','f_fname','text','autocomplete="name"')+f('a_em','f_email','email','autocomplete="username"')+f('a_wa','wa_l','tel','placeholder="0813xxxxxxx" autocomplete="tel"')+'<small class="muted mono" id="pv"></small><div style="display:grid;grid-template-columns:1fr 2fr;gap:10px"><div>'+f('a_ag','age_l','number','min="1" max="120"')+'</div><div>'+f('a_ch','ch_l')+'</div></div>'+f('a_pw','f_pwd','password','autocomplete="new-password"')+'<small class="muted">'+t('pw_hint')+'</small>'+f('a_p2','f_pwd2','password','autocomplete="new-password"')+bt('doSignup','signup')+mu+t('have_acc')+' '+lk('login','login')+'</p>';
  else if(md==='forgot1')h=f('a_em','f_email','email','')+bt('doForgot1','send_otp')+ct+lk('login','back')+'</p>';
  else h=f('a_em','f_email','email','value="'+esc(a.email||'')+'"')+f('a_ot','otp_l','text','inputmode="numeric" maxlength="6"')+f('a_pw','newpw','password','autocomplete="new-password"')+f('a_p2','f_pwd2','password','autocomplete="new-password"')+bt('doForgot2','save')+ct+lk('login','back')+'</p>';
  return '<h2 style="text-align:center;margin:14px 0 2px">'+t(md==='signup'?'signup':md==='login'?'login':'forgot')+'</h2><p id="am" style="text-align:center;min-height:22px;margin:4px 0;color:var(--'+(ok?'ok':'er')+')">'+esc(m||'')+'</p>'+h+(md==='login'||md==='signup'?legalSentence():'')+'<div style="margin-top:16px;text-align:center">'+ctl()+'</div>';
 }
+function renderGoogleBtn(){
+ const el=$('#g_btn_wrap');if(!el)return;
+ const cid=window.GOOGLE_CLIENT_ID||(B&&B.googleClientId)||'866753632616-opg57movh0h0th1av7b927d7fvrg3n6e.apps.googleusercontent.com';
+ const run=()=>{
+  try{
+   google.accounts.id.initialize({client_id:cid,callback:handleGoogleLogin,auto_select:false,cancel_on_tap_outside:true});
+   el.innerHTML='';
+   const dark=(TH==='dark')||(TH==='system'&&window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches);
+   const w=Math.min(360,el.parentElement?Math.max(260,el.parentElement.offsetWidth-16):300);
+   google.accounts.id.renderButton(el,{type:'standard',shape:'rectangular',theme:dark?'filled_black':'outline',text:S.auth&&S.auth.mode==='signup'?'signup_with':'signin_with',size:'large',logo_alignment:'left',width:w});
+  }catch(err){console.error('Google button init:',err)}
+ };
+ if(typeof google!=='undefined'&&google.accounts&&google.accounts.id)run();
+ else{let t=0;const it=setInterval(()=>{t++;if(typeof google!=='undefined'&&google.accounts&&google.accounts.id){clearInterval(it);run()}else if(t>25){clearInterval(it)}},200)}
+}
+async function handleGoogleLogin(resp){
+ if(!resp||!resp.credential)return;
+ bz(1);
+ try{const r=await pub('loginGoogle',{credential:resp.credential});await enter(r.session)}
+ catch(err){bz(-1);amsg(errMsg(err))}
+}
+window.handleGoogleLogin=handleGoogleLogin;
 function gateModal(m,ok){modal('<button class="btn sm x" data-act="cm">&#10005;</button><div style="text-align:left;padding:8px">'+logo.replace('class="logo"','class="logo" style="justify-content:center"')+authFormHtml(m,ok)+'</div>',1);
- if($('#a_wa'))$('#a_wa').oninput=e=>{const n=normPhone(e.target.value);$('#pv').textContent=n?'+'+n:''}}
+ if($('#a_wa'))$('#a_wa').oninput=e=>{const n=normPhone(e.target.value);$('#pv').textContent=n?'+'+n:''};
+ renderGoogleBtn()}
 function gate(m,ok){$('#app').innerHTML='<div class="gate"><div class="card" style="text-align:left;width:min(440px,100%)">'+logo.replace('class="logo"','class="logo" style="justify-content:center"')+authFormHtml(m,ok)+'</div></div>';
- if($('#a_wa'))$('#a_wa').oninput=e=>{const n=normPhone(e.target.value);$('#pv').textContent=n?'+'+n:''}}
+ if($('#a_wa'))$('#a_wa').oninput=e=>{const n=normPhone(e.target.value);$('#pv').textContent=n?'+'+n:''};
+ renderGoogleBtn()}
 function logout(q){if(!q)api('logout',{},'...').catch(()=>{});ls.s('tk','');S.token='';S.user=null;S.auth={mode:'login'};cm();renderGuest()}
 function renderGuest(){S.mode='user';S.tab='catalog';$('#app').innerHTML=hdrGuest()+`<main class="wrap"><div class="hero"><h1>${t('title')}</h1><p>${t('sub')}</p></div><div id="uc">${skel(3)}</div>${legalFooter()}</main>`;userTab()}
 const hdrGuest=()=>`<div class="top">${logo}<div class="tr">${ctl()}<button class="btn sm pri" data-act="loginModal">${t('login')}</button></div></div>`;
 function go(){if(S.user.needProfile){S.mode='user';renderUser();return profileModal()}
  if(window.__initTabOverride){S.tab=window.__initTabOverride;window.__initTabOverride=null}
- S.mode=ls.g('mode')==='admin'&&rk()>=1?'admin':'user';render()}
+ S.mode=ls.g('mode')==='admin'&&rk()>=1?'admin':'user';render();
+ if(S.pendingEventId){const pe=find(S.ev,S.pendingEventId);S.pendingEventId=null;if(pe)evModal(pe);}}
 const render=()=>S.mode==='admin'?renderAdmin():renderUser();
 function profileModal(){modal(`<h2>${t('p_title')}</h2><p class="muted">${t('p_sub')}</p><label>${t('wa_l')}</label><input id="pw" inputmode="tel" placeholder="0813xxxxxxx"><small class="muted mono" id="pv"></small><label>${t('age_l')}</label><input id="pa" type="number" min="1" max="120"><label>${t('ch_l')}</label><input id="pch"><div class="acts"><button class="btn pri" data-act="saveProfile">${t('save')}</button></div>`,1);
  $('#pw').oninput=e=>{const n=normPhone(e.target.value);$('#pv').textContent=n?'&#8594; +'+n:''}}
@@ -374,7 +403,7 @@ const NL=String.fromCharCode(10),find=(a,id)=>a.find(x=>x.id===id),A={
  mode(el){S.mode=el.dataset.v;ls.s('mode',S.mode);render()},view(el){S.view=el.dataset.v;renderAdmin()},tab(el){S.tab=el.dataset.v;renderUser()},logout(){logout()},cm,bg(el,e){if(e.target===el)cm()},
  open(el){const x=find(S.ev,el.dataset.id);x&&evModal(x)},
  async saveProfile(){try{await api('saveProfile',{whatsapp:$('#pw').value,age:$('#pa').value,church:$('#pch').value},t('loading'));S.user=await api('me');cm();renderUser()}catch(e){fail(e)}},
- async book(el){if(!S.user){gateModal();return;}const q=$('#bq')?+$('#bq').value:1,ev=S.ev&&find(S.ev,el.dataset.id),auto=!!(ev&&!ev.is_paid),w=auto?openWait():null;   // acara gratis: buka tab WhatsApp sekarang (saat klik)
+ async book(el){if(!S.user){S.pendingEventId=el.dataset.id;gateModal();return;}const q=$('#bq')?+$('#bq').value:1,ev=S.ev&&find(S.ev,el.dataset.id),auto=!!(ev&&!ev.is_paid),w=auto?openWait():null;   // acara gratis: buka tab WhatsApp sekarang (saat klik)
   try{const r=await api('book',{eventId:el.dataset.id,qty:q},t('booking'));S.tix=await api('myTickets');const o=find(S.tix,r.id);S.preT=S.tix;S.tab='tickets';renderUser();
    const wa=auto&&r.status==='confirmed';
    passModal(o,r.status==='confirmed'?t('ok')+' '+(r.emailed?t('emailed'):'')+(wa?' '+t('wa_auto'):''):t('okp'));
