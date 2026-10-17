@@ -30,7 +30,7 @@ function doGet(e) {
 /* ---------- API JSON untuk tampilan yang dihosting di luar Apps Script (mis. GitHub Pages) ----------
  * Klien memanggil POST ke alamat /exec dengan isi {"fn":"nama","args":[...]} (Content-Type: text/plain agar tanpa preflight CORS).
  * Hanya fungsi pada daftar putih di bawah yang bisa dipanggil; semuanya sama dengan yang dipakai google.script.run. */
-const API_FNS = { init: init, register: register, loginPw: loginPw, forgotRequest: forgotRequest, forgotReset: forgotReset, legalPublic: legalPublic, ticketPublic: ticketPublic, eventsPublic: eventsPublic, api: api };
+const API_FNS = { init: init, register: register, loginPw: loginPw, loginGoogle: loginGoogle, forgotRequest: forgotRequest, forgotReset: forgotReset, legalPublic: legalPublic, ticketPublic: ticketPublic, eventsPublic: eventsPublic, api: api, migrateOauth: migrateOauth };
 function jsonOut(o) { return ContentService.createTextOutput(JSON.stringify(o === undefined ? null : o)).setMimeType(ContentService.MimeType.JSON); }
 function doPost(e) {
   let out;
@@ -297,6 +297,7 @@ function pubRun(fn, p) {
 function checkNewPw(pw, confirm) { if (String(pw || '').length < 8) throw new Error('WEAK_PW'); if (pw !== confirm) throw new Error('PW_MISMATCH'); }
 function register(p) { return pubRun(registerImpl, p); }
 function loginPw(p) { return pubRun(loginImpl, p); }
+function loginGoogle(p) { return pubRun(loginGoogleImpl, p); }
 function forgotRequest(p) { return pubRun(forgotRequestImpl, p); }
 function forgotReset(p) { return pubRun(forgotResetImpl, p); }
 
@@ -328,6 +329,56 @@ function loginImpl(p) {
   }
   if (u.failed_attempts > 0 || u.had_lock) q(`UPDATE users SET failed_attempts=0,locked_until=NULL WHERE id=$1::uuid RETURNING id`, [u.id]);
   return { session: newSession(u.id) };
+}
+function loginGoogleImpl(p) {
+  const cred = String(p && p.credential || '').trim();
+  if (!cred) throw new Error('BAD_GOOGLE_TOKEN');
+  const res = UrlFetchApp.fetch('https://oauth2.googleapis.com/tokeninfo?id_token=' + encodeURIComponent(cred), { muteHttpExceptions: true });
+  if (res.getResponseCode() !== 200) {
+    Logger.log('Google tokeninfo status: ' + res.getResponseCode() + ' ' + res.getContentText());
+    throw new Error('BAD_GOOGLE_TOKEN');
+  }
+  const payload = JSON.parse(res.getContentText());
+  const configuredAud = (P.getProperty('GOOGLE_CLIENT_ID') || '866753632616-opg57movh0h0th1av7b927d7fvrg3n6e.apps.googleusercontent.com').trim();
+  if (payload.aud !== configuredAud) {
+    Logger.log('Google aud mismatch: got ' + payload.aud + ', expected ' + configuredAud);
+    throw new Error('BAD_GOOGLE_AUD');
+  }
+  if (!payload.email || (payload.email_verified !== 'true' && payload.email_verified !== true)) {
+    throw new Error('BAD_GOOGLE_EMAIL');
+  }
+  const email = String(payload.email).trim().toLowerCase();
+  const name = String(payload.name || payload.given_name || email.split('@')[0]).trim();
+  const sub = String(payload.sub || '');
+  const picture = String(payload.picture || '');
+
+  // Cek apakah email sudah ada di database
+  let u = q(`SELECT id,whatsapp,age,church,role,locked_until FROM users WHERE lower(email)=$1`, [email])[0];
+  if (u) {
+    if (u.locked_until && new Date(u.locked_until) > new Date()) throw new Error('LOCKED');
+    try {
+      q(`UPDATE users SET failed_attempts=0,locked_until=NULL,google_sub=coalesce(google_sub,$1),picture=coalesce(picture,$2) WHERE id=$3::uuid RETURNING id`, [sub || null, picture || null, u.id]);
+    } catch (e) {
+      q(`UPDATE users SET failed_attempts=0,locked_until=NULL WHERE id=$1::uuid RETURNING id`, [u.id]);
+    }
+    return { session: newSession(u.id), isNewUser: !u.whatsapp };
+  }
+
+  // Pengguna baru mendaftar lewat Google
+  const sa = (P.getProperty('SUPERADMIN_EMAIL') || '').trim().toLowerCase();
+  const dummyPw = hashPw(Utilities.getUuid(), Utilities.getUuid(), ITER);
+  let r;
+  try {
+    r = q(`INSERT INTO users(name,email,password_hash,role,google_sub,picture)
+      VALUES($1,$2::text,$3,CASE WHEN $2::text=$4::text AND NOT EXISTS(SELECT 1 FROM users WHERE role='super_admin') THEN 'super_admin' ELSE 'attendee' END,$5,$6)
+      RETURNING id,whatsapp`, [name, email, dummyPw, sa, sub || null, picture || null]);
+  } catch (e) {
+    r = q(`INSERT INTO users(name,email,password_hash,role)
+      VALUES($1,$2::text,$3,CASE WHEN $2::text=$4::text AND NOT EXISTS(SELECT 1 FROM users WHERE role='super_admin') THEN 'super_admin' ELSE 'attendee' END)
+      RETURNING id,whatsapp`, [name, email, dummyPw, sa]);
+  }
+  if (!r || !r.length) throw new Error('E_GENERIC');
+  return { session: newSession(r[0].id), isNewUser: true };
 }
 function forgotRequestImpl(p) {
   const email = String(p.email || '').trim().toLowerCase();
@@ -361,7 +412,7 @@ function setPassword(uid, pw) {   // ganti password + keluarkan semua sesi + hap
     { query: wrap(`DELETE FROM password_resets WHERE user_id=$1::uuid RETURNING user_id`), params: [uid] }
   ]);
 }
-const AUTH_SQL = `SELECT u.id,u.email,u.name,u.whatsapp,u.age,u.church,u.role FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token_hash=$1 AND s.expires_at>now()`;
+const AUTH_SQL = `SELECT u.id,u.email,u.name,u.whatsapp,u.age,u.church,u.role,coalesce(u.picture,'') AS picture FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token_hash=$1 AND s.expires_at>now()`;
 function auth(token) {
   if (!token) throw new Error('AUTH');
   const key = 's' + sha(token).slice(0, 40), cache = CacheService.getScriptCache(), hit = cache.get(key);
@@ -380,7 +431,7 @@ function publicEventsList() {
 function eventsPublic() { return pubRun(publicEventsList); }
 // satu panggilan untuk membuka aplikasi: konfigurasi + pengguna + katalog (cache miss = 1 permintaan HTTP ke Neon berisi 2 query)
 function init(token) {
-  const out = { cfg: { scanUrl: P.getProperty('SCAN_URL') || '', appUrl: P.getProperty('APP_URL') || '', siteUrl: P.getProperty('SITE_URL') || 'https://www.ambiltiketnya.online' } };
+  const out = { cfg: { scanUrl: P.getProperty('SCAN_URL') || '', appUrl: P.getProperty('APP_URL') || '', siteUrl: P.getProperty('SITE_URL') || 'https://www.ambiltiketnya.online', googleClientId: (P.getProperty('GOOGLE_CLIENT_ID') || '866753632616-opg57movh0h0th1av7b927d7fvrg3n6e.apps.googleusercontent.com').trim() } };
   if (!token) {
     try { out.events = publicEventsList(); } catch (e) { out.events = []; }
     return out;
@@ -415,7 +466,8 @@ const ACTIONS = {
   validate:    { min: 1, fn: validate },
   adminEvents: { min: 2, fn: () => q(`SELECT e.*, coalesce((SELECT sum(qty) FROM orders o WHERE o.event_id=e.id AND o.status<>'cancelled'),0)::int AS sold FROM events e ORDER BY e.event_date DESC, e.start_time`) },
   orders:      { min: 2, fn: adminOrders },
-  users:       { min: 3, fn: () => q(`SELECT id,name,email,whatsapp,age,church,role,created_at FROM users ORDER BY created_at DESC LIMIT 1000`) },
+  users:       { min: 3, fn: () => q(`SELECT id,name,email,whatsapp,age,church,role,coalesce(picture,'') AS picture,created_at FROM users ORDER BY created_at DESC LIMIT 1000`) },
+  migrateOauth:{ min: 3, fn: () => migrateOauth() },
   saveEvent:   { min: 3, fn: saveEvent },
   toggleEvent: { min: 3, fn: (u, p) => q(`UPDATE events SET is_active=$2::bool WHERE id=$1::uuid RETURNING id`, [p.id, !!p.active]) && true },
   cancelOrder: { min: 3, fn: (u, p) => { const r = q(`UPDATE orders SET status='cancelled',cancelled_at=now() WHERE id=$1::uuid AND status<>'cancelled' RETURNING id,order_code`, [p.id]); if (!r.length) throw new Error('NOT_FOUND'); trashTicketFiles(r[0].order_code); return true; } },
@@ -758,4 +810,31 @@ function ticketPdf(u, p) {
   if (o.status !== 'confirmed') throw new Error('NOT_CONFIRMED');
   const b = ticketBlob(o);
   return { name: b.getName(), b64: Utilities.base64Encode(b.getBytes()) };
+}
+/* ---------- Migrasi Database untuk Google OAuth 2.0 ---------- */
+function migrateOauth() {
+  const statements = [
+    "ALTER TABLE users ADD COLUMN IF NOT EXISTS google_sub text",
+    "ALTER TABLE users ADD COLUMN IF NOT EXISTS picture text",
+    "CREATE UNIQUE INDEX IF NOT EXISTS users_google_sub_uq ON users (google_sub) WHERE google_sub IS NOT NULL",
+    "ALTER TABLE users ALTER COLUMN whatsapp DROP NOT NULL",
+    "ALTER TABLE users DROP CONSTRAINT IF EXISTS users_whatsapp_check",
+    "ALTER TABLE users ADD CONSTRAINT users_whatsapp_check CHECK (whatsapp IS NULL OR whatsapp ~ '^628[0-9]{7,11}$')",
+    "ALTER TABLE users ALTER COLUMN age DROP NOT NULL",
+    "ALTER TABLE users DROP CONSTRAINT IF EXISTS users_age_check",
+    "ALTER TABLE users ADD CONSTRAINT users_age_check CHECK (age IS NULL OR (age BETWEEN 1 AND 120))",
+    "ALTER TABLE users ALTER COLUMN church DROP NOT NULL",
+    "ALTER TABLE users ALTER COLUMN password_hash DROP NOT NULL"
+  ];
+  const results = [];
+  statements.forEach(sql => {
+    try {
+      neon([{ query: sql }]);
+      results.push({ sql: sql, ok: true });
+    } catch (e) {
+      Logger.log('migrateOauth: ' + sql + ' -> ' + e);
+      results.push({ sql: sql, ok: false, error: String(e) });
+    }
+  });
+  return results;
 }
