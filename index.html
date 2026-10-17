@@ -4,12 +4,12 @@
 <meta name="description" content="Platform pemesanan tiket acara gereja dan komunitas. Dapatkan e-tiket QR instan dan konfirmasi email otomatis.">
 <meta name="theme-color" content="#5b4ef0">
 <!-- PWA -->
-<link rel="manifest" href="/manifest.json">
+<link rel="manifest" href="manifest.json">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="AmbilTiketnya">
-<link rel="apple-touch-icon" href="/icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
 <!-- Open Graph / WhatsApp / Telegram preview -->
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="AmbilTiketnya">
@@ -462,9 +462,10 @@ async function doValidate(code){try{const r=await api('validate',{code:code},t('
 function manual(){const v=$('#mc').value.trim();if(v){doValidate(v);$('#mc').value=''}}
 let sw=null,nonce=null;
 function openScan(){const a=new Uint8Array(16);crypto.getRandomValues(a);nonce=[...a].map(b=>b.toString(16).padStart(2,'0')).join('');
- sw=window.open(B.scanUrl+'#n='+nonce+'&o='+encodeURIComponent(location.origin),'qrscan','width=420,height=660');if(!sw)toast('Pop-up blocked',1)}
+ try{if(typeof localStorage!=='undefined')localStorage.setItem('atk_tok',S.token||'')}catch(x){}
+ sw=window.open(B.scanUrl+'#n='+nonce+'&o='+encodeURIComponent(location.origin)+'&tok='+encodeURIComponent(S.token||''),'qrscan','width=420,height=660');if(!sw)toast('Pop-up blocked',1)}
 addEventListener('message',async e=>{let so;try{so=new URL(B.scanUrl).origin}catch(x){return}
- if(e.origin!==so||e.source!==sw||!nonce)return;const d=e.data;if(!d||d.type!=='scan'||d.n!==nonce)return;
+ if(e.origin!==so||!nonce)return;const d=e.data;if(!d||d.type!=='scan'||d.n!==nonce)return;
  const r=await doValidate(String(d.code||''));
  try{e.source.postMessage({type:'ack',n:d.n,result:r},e.origin)}catch(x){}});
 async function invView(c){try{const r=await Promise.all([api('adminEvents'),api('invitations')]);S.aev=r[0];S.inv=r[1]}catch(e){return fail(e)}mergeInvTix();paintInv()}
@@ -610,9 +611,23 @@ else{var sc=document.createElement('script');sc.src='config.js';
 // Daftarkan Service Worker (hanya di GitHub Pages, bukan di GAS iframe)
 if('serviceWorker' in navigator && !window.google?.script) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/sw.js').then(reg => {
+    navigator.serviceWorker.register('sw.js').then(reg => {
       console.log('[SW] registered:', reg.scope);
+      reg.addEventListener('updatefound', () => {
+        const nw = reg.installing;
+        if (nw) {
+          nw.addEventListener('statechange', () => {
+            if (nw.state === 'installed' && navigator.serviceWorker.controller) {
+              nw.postMessage({ type: 'SKIP_WAITING' });
+            }
+          });
+        }
+      });
     }).catch(e => console.log('[SW] error:', e));
+    let reloading = false;
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      if (!reloading) { reloading = true; window.location.reload(); }
+    });
   });
 }
 // Baca ?tab= dari URL untuk PWA shortcut (mis. /?tab=tickets dari manifest shortcut)

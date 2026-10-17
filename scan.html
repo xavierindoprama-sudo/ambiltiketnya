@@ -115,13 +115,15 @@ button.btn{width:100%;margin-top:10px;padding:12px;border:0;border-radius:12px;b
   </div>
 </div>
 
+<script src="config.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jsQR/1.4.0/jsQR.min.js"></script>
 <script>
 const h = new URLSearchParams(location.hash.slice(1)), N = h.get('n'), O = h.get('o');
+const TOK = h.get('tok') || (typeof localStorage !== 'undefined' ? localStorage.getItem('atk_tok') : '') || '';
 const $ = s => document.getElementById(s);
 
 let actx = null, muted = false, stream = null, track = null, torch = false, facing = 'environment';
-let scanning = true, cooldown = false, lastCode = '', lastTime = 0, sessionCount = 0;
+let scanning = true, cooldown = false, lastCode = '', lastTime = 0, sessionCount = 0, _verifying = false;
 
 function getAudioCtx() {
   if (!actx) {
@@ -186,10 +188,17 @@ function esc(s) {
 }
 
 function cardHtml(r) {
-  const isOk = r.result === 'VALID', isWn = r.result === 'USED' || r.result === 'UNPAID';
+  const isOk = r.result === 'VALID', isWn = r.result === 'USED' || r.result === 'UNPAID' || r.result === 'TIMEOUT';
   const cls = isOk ? 'ok' : isWn ? 'wn' : 'no';
   const ic = isOk ? '✓' : isWn ? '⚠' : '✕';
-  const title = isOk ? 'VALID — Silakan Masuk' : (r.result === 'USED' ? 'SUDAH DIGUNAKAN' : (r.result === 'UNPAID' ? 'BELUM DIBAYAR' : (r.result === 'CANCELLED' ? 'DIBATALKAN' : 'TIKET TIDAK DITEMUKAN')));
+  let title = 'TIKET TIDAK VALID';
+  if (isOk) title = 'VALID — Silakan Masuk';
+  else if (r.result === 'USED') title = 'SUDAH DIGUNAKAN';
+  else if (r.result === 'UNPAID') title = 'BELUM DIBAYAR';
+  else if (r.result === 'CANCELLED') title = 'PESANAN DIBATALKAN';
+  else if (r.result === 'NOT_FOUND') title = 'TIKET TIDAK DITEMUKAN';
+  else if (r.result === 'TIMEOUT') title = 'MENUNGGU RESPON';
+
   return `<div class="card ${cls}">
     <div class="status-h">
       <span class="icn">${ic}</span>
@@ -202,12 +211,13 @@ function cardHtml(r) {
     ${r.name ? `<div style="margin-top:8px;font-size:13px;display:grid;grid-template-columns:1fr 1fr;gap:4px">
       <div><b>${esc(r.name)}</b><br><small style="opacity:.75">${esc(r.church || '-')}${r.age ? ' · ' + esc(r.age) : ''}</small></div>
       <div style="text-align:right"><span>Check-in: <b>${r.checked || r.qty}/${r.qty}</b></span><br><small style="opacity:.75">${esc(r.event || '')}</small></div>
-    </div>` : ''}
+    </div>` : (r.message ? `<div style="margin-top:8px;font-size:12px;opacity:.9">${esc(r.message)}</div>` : '')}
     <div class="cool-bar"><div class="cool-fill"></div></div>
   </div>`;
 }
 
 function showResult(r) {
+  _verifying = false;
   if (r.result === 'VALID') {
     sessionCount += (r.entered || r.qty || 1);
     $('sc_cnt').textContent = sessionCount;
@@ -215,7 +225,7 @@ function showResult(r) {
   playSound(r.result);
   doVibrate(r.result);
   const fr = $('fr');
-  if (fr) fr.className = 'frame ' + (r.result === 'VALID' ? 'valid' : (r.result === 'USED' || r.result === 'UNPAID') ? 'used' : 'error');
+  if (fr) fr.className = 'frame ' + (r.result === 'VALID' ? 'valid' : (r.result === 'USED' || r.result === 'UNPAID' || r.result === 'TIMEOUT') ? 'used' : 'error');
   $('res_area').innerHTML = cardHtml(r);
 
   setTimeout(() => {
@@ -227,7 +237,7 @@ function showResult(r) {
   }, 1600);
 }
 
-// Communication with parent dashboard
+// Global listener for dashboard opener messages
 if (window.opener && O) {
   window.addEventListener('message', e => {
     if (e.origin !== O || !e.data) return;
@@ -237,27 +247,66 @@ if (window.opener && O) {
   });
 }
 
-function handleCode(raw) {
+async function handleCode(raw) {
   const code = String(raw || '').trim().toUpperCase();
-  if (!code || cooldown) return;
+  if (!code || cooldown || _verifying) return;
   const now = Date.now();
   if (code === lastCode && (now - lastTime < 3000)) return;
 
   cooldown = true;
+  _verifying = true;
   lastCode = code;
   lastTime = now;
 
+  $('res_area').innerHTML = `<div class="card" style="border-color:#8b5cf6;background:rgba(20,15,40,.92)"><div style="display:flex;align-items:center;gap:10px;justify-content:center"><span style="display:inline-block;animation:spin 1s linear infinite">⏳</span><span style="font-size:14px;font-weight:600">Memverifikasi ${esc(code)}...</span></div></div>`;
+
+  let answered = false;
+  const timer = setTimeout(async () => {
+    if (answered) return;
+    const tok = TOK || (typeof localStorage !== 'undefined' ? localStorage.getItem('atk_tok') : '');
+    const apiUrl = window.APP_API_URL;
+    if (apiUrl && tok) {
+      try {
+        const res = await fetch(apiUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'text/plain' },
+          body: JSON.stringify({ action: 'validate', token: tok, code: code })
+        });
+        const r = await res.json();
+        if (!answered) {
+          answered = true;
+          if (r.ok && r.data) showResult(r.data);
+          else showResult({ result: 'ERROR', code: code, message: r.error || 'Gagal memvalidasi' });
+          return;
+        }
+      } catch (err) {}
+    }
+
+    if (!answered) {
+      answered = true;
+      showResult({
+        result: 'TIMEOUT',
+        code: code,
+        message: 'Dashboard belum merespon. Pastikan tab dashboard tetap terbuka dan Anda sudah login.'
+      });
+    }
+  }, 3200);
+
+  const onMsg = e => {
+    if (e.origin !== O || !e.data) return;
+    if (e.data.type === 'ack' && e.data.result) {
+      answered = true;
+      clearTimeout(timer);
+      window.removeEventListener('message', onMsg);
+      showResult(e.data.result);
+    }
+  };
+  window.addEventListener('message', onMsg);
+
   if (window.opener && N && O) {
-    window.opener.postMessage({ type: 'scan', n: N, code: code }, O);
-    // Timeout fallback if dashboard takes too long
-    setTimeout(() => {
-      if (cooldown && $('res_area').querySelector('.pdot')) {
-        showResult({ result: 'VALID', code: code, qty: 1 });
-      }
-    }, 2800);
-  } else {
-    // Standalone demo fallback
-    showResult({ result: 'VALID', code: code, name: 'Tamu Terverifikasi', qty: 1, event: 'E-Ticket' });
+    try {
+      window.opener.postMessage({ type: 'scan', n: N, code: code }, O);
+    } catch (e) {}
   }
 }
 

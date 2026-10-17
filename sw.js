@@ -1,35 +1,40 @@
-// AmbilTiketnya Service Worker - v1
-const CACHE = 'atk-v1';
+// AmbilTiketnya Service Worker - v2
+const CACHE = 'atk-v2';
 const STATIC = [
-  '/',
-  '/index.html',
-  '/config.js',
-  '/scan.html',
-  '/offline.html'
+  './',
+  './index.html',
+  './config.js',
+  './scan.html',
+  './offline.html'
 ];
 
 self.addEventListener('install', e => {
+  self.skipWaiting();
   e.waitUntil(
     caches.open(CACHE)
       .then(c => c.addAll(STATIC))
-      .catch(() => {}) // abaikan error, tetap install
+      .catch(() => {})
   );
-  self.skipWaiting();
 });
 
 self.addEventListener('activate', e => {
   e.waitUntil(
     caches.keys().then(ks =>
       Promise.all(ks.filter(k => k !== CACHE).map(k => caches.delete(k)))
-    )
+    ).then(() => self.clients.claim())
   );
-  self.clients.claim();
+});
+
+self.addEventListener('message', e => {
+  if (e.data && e.data.type === 'SKIP_WAITING') {
+    self.skipWaiting();
+  }
 });
 
 self.addEventListener('fetch', e => {
   const url = new URL(e.request.url);
 
-  // 1. API Apps Script → selalu network, JANGAN cache (data selalu fresh)
+  // 1. API Apps Script → selalu network, JANGAN cache
   if (url.hostname === 'script.google.com') return;
 
   // 2. Font Google / CDN cloudflare → stale-while-revalidate
@@ -62,7 +67,7 @@ self.addEventListener('fetch', e => {
       })
       .catch(() =>
         caches.match(e.request)
-          .then(hit => hit || caches.match('/offline.html'))
+          .then(hit => hit || caches.match('./offline.html'))
       )
   );
 });

@@ -2,7 +2,7 @@
   "name": "AmbilTiketnya",
   "short_name": "AmbilTiket",
   "description": "Sistem pemesanan tiket acara gereja dan komunitas",
-  "start_url": "/",
+  "start_url": "./",
   "display": "standalone",
   "background_color": "#f3f4fb",
   "theme_color": "#5b4ef0",
@@ -21,7 +21,7 @@
       "name": "Tiket Saya",
       "short_name": "Tiket",
       "description": "Lihat tiket yang sudah dipesan",
-      "url": "/?tab=tickets",
+      "url": "./?tab=tickets",
       "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }]
     }
   ]
