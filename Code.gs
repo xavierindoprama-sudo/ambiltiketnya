@@ -695,7 +695,7 @@ function invitationPdfHtml(o, img) {             // desain undangan: navy + emas
   <td width="210" valign="top" style="padding:0 20px 0 36px"><div style="border:2px solid ${G};padding:8px;width:170px"><img src="${img}" width="170" height="170"/></div>
    <div style="font-family:monospace;font-size:13px;font-weight:bold;margin-top:10px">${o.ticket_code}</div><div style="font-size:9px;color:#778">Pindai di gerbang masuk</div></td>
   <td valign="top" style="padding-right:36px">${f('Hari & Tanggal', idDate(o.edate))}${f('Waktu', o.stime + ' WIB')}${f('Lokasi', o.location)}${f('Jumlah Tiket', o.qty + ' orang')}${f('Nomor Undangan', o.order_code)}</td></tr></table>
-  <div style="margin:26px 36px 0;padding:12px 16px;border:1px solid ${G};border-radius:6px;font-size:11px;color:#333">${esc(o.announcement || 'Tunjukkan QR ini di gerbang masuk. Satu QR berlaku untuk seluruh tamu pada undangan ini.')}</div>
+  <div style="margin:26px 36px 0;padding:12px 16px;border:1px solid ${G};background:#fffdf7;border-radius:6px;font-size:11px;color:#6b5300;line-height:1.5">&#9432; <b>Catatan:</b> Satu kode QR ini berlaku untuk ${o.qty} orang. Mohon hadir dan masuk bersamaan di gerbang masuk karena tiket hanya dapat dipindai 1 kali.</div>
   </body></html>`;
 }
 function ticketBlob(o) {
