@@ -30,7 +30,7 @@ function doGet(e) {
 /* ---------- API JSON untuk tampilan yang dihosting di luar Apps Script (mis. GitHub Pages) ----------
  * Klien memanggil POST ke alamat /exec dengan isi {"fn":"nama","args":[...]} (Content-Type: text/plain agar tanpa preflight CORS).
  * Hanya fungsi pada daftar putih di bawah yang bisa dipanggil; semuanya sama dengan yang dipakai google.script.run. */
-const API_FNS = { init: init, register: register, loginPw: loginPw, loginGoogle: loginGoogle, forgotRequest: forgotRequest, forgotReset: forgotReset, legalPublic: legalPublic, ticketPublic: ticketPublic, eventsPublic: eventsPublic, api: api, migrateOauth: migrateOauth };
+const API_FNS = { init: init, register: register, loginPw: loginPw, loginGoogle: loginGoogle, forgotRequest: forgotRequest, forgotReset: forgotReset, legalPublic: legalPublic, ticketPublic: ticketPublic, eventsPublic: eventsPublic, api: api, migrateOauth: migrateOauth, gateLogin: gateLogin };
 function jsonOut(o) { return ContentService.createTextOutput(JSON.stringify(o === undefined ? null : o)).setMimeType(ContentService.MimeType.JSON); }
 function doPost(e) {
   let out;
@@ -464,6 +464,9 @@ const ACTIONS = {
   ticketUpload:{ min: 0, prof: 1, fn: ticketUpload },
   stats:       { min: 1, fn: stats },
   validate:    { min: 1, fn: validate },
+  offlineManifest:   { min: 1, fn: offlineManifest },
+  syncOfflineCheckins:{ min: 1, fn: syncOfflineCheckins },
+  gateLink:          { min: 2, fn: gateLink },
   adminEvents: { min: 2, fn: () => q(`SELECT e.*, coalesce((SELECT sum(qty) FROM orders o WHERE o.event_id=e.id AND o.status<>'cancelled'),0)::int AS sold FROM events e ORDER BY e.event_date DESC, e.start_time`) },
   orders:      { min: 2, fn: adminOrders },
   users:       { min: 3, fn: () => q(`SELECT id,name,email,whatsapp,age,church,role,coalesce(picture,'') AS picture,created_at FROM users ORDER BY created_at DESC LIMIT 1000`) },
@@ -569,7 +572,7 @@ function stats() {
     coalesce(sum(o.total) FILTER (WHERE o.status='confirmed'),0)::int AS revenue
     FROM events e LEFT JOIN orders o ON o.event_id=e.id GROUP BY e.id ORDER BY e.event_date`);
 }
-const ORDERS_SQL = `SELECT o.id,o.order_code,o.ticket_code,o.qty,o.total,o.status,o.checked_in,o.created_at,o.kind,
+const ORDERS_SQL = `SELECT o.id,o.order_code,o.ticket_code,o.qty,o.total,o.status,o.checked_in,o.checked_in_at,o.created_at,o.kind,
     CASE WHEN o.kind='invitation' THEN o.guest_name ELSE u.name END AS name,
     CASE WHEN o.kind='invitation' THEN 'Undangan' ELSE u.email END AS email,
     CASE WHEN o.kind='invitation' THEN '' ELSE u.whatsapp END AS whatsapp,
@@ -619,6 +622,63 @@ function validate(u, p) {
   if (!r.length) return Object.assign(base, { result: 'USED', checked: o.qty });
   return Object.assign(base, { result: 'VALID', entered: o.qty - o.checked_in, checked: o.qty, at: new Date().toISOString() });
 }
+
+function offlineManifest(u, p) {
+  if (!p.eventId) throw new Error('BAD_EVENT');
+  const ev = q(`SELECT id, name FROM events WHERE id=$1::uuid`, [p.eventId])[0];
+  if (!ev) throw new Error('NOT_FOUND');
+  const sql = `SELECT o.ticket_code AS code, o.qty, o.checked_in AS checked, o.status, o.kind,
+    CASE WHEN o.kind='invitation' THEN o.guest_name ELSE u.name END AS name,
+    CASE WHEN o.kind='invitation' THEN o.guest_org ELSE u.church END AS church,
+    CASE WHEN o.kind='invitation' THEN NULL ELSE u.age END AS age,
+    e.name AS event_name
+    FROM orders o JOIN users u ON u.id=o.user_id JOIN events e ON e.id=o.event_id
+    WHERE o.event_id=$1::uuid AND o.status<>'cancelled'`;
+  const rows = q(sql, [p.eventId]);
+  return { eventId: ev.id, eventName: ev.name, downloadedAt: new Date().toISOString(), count: rows.length, tickets: rows };
+}
+
+function syncOfflineCheckins(u, p) {
+  const list = p.checkins || [];
+  if (!list.length) return { synced: 0 };
+  let count = 0;
+  for (let i = 0; i < list.length; i++) {
+    const it = list[i];
+    const code = String(it.code || '').trim().toUpperCase();
+    if (!code) continue;
+    const at = it.at ? new Date(it.at).toISOString() : new Date().toISOString();
+    const r = q(`UPDATE orders SET checked_in=qty, checked_in_at=$2::timestamptz, checked_in_by=$3::uuid WHERE ticket_code=$1 AND checked_in<qty RETURNING qty`, [code, at, u.id]);
+    if (r.length) count++;
+  }
+  return { synced: count, total: list.length };
+}
+
+function gateLink(u, p) {
+  if (!p.eventId) throw new Error('BAD_EVENT');
+  const ev = q(`SELECT id, name FROM events WHERE id=$1::uuid`, [p.eventId])[0];
+  if (!ev) throw new Error('NOT_FOUND');
+  const key = sha('gate_' + ev.id + '_' + P.getProperty('DATABASE_URL')).slice(0, 16);
+  const base = config().siteUrl || config().appUrl || 'https://xavierindoprama-sudo.github.io/ambiltiketnya';
+  const url = base.replace(/\/+$/, '') + '/?gate=' + ev.id + '&k=' + key;
+  return { eventId: ev.id, eventName: ev.name, key: key, url: url };
+}
+
+function gateLogin(p) { return pubRun(gateLoginImpl, p); }
+function gateLoginImpl(p) {
+  const evId = String(p.eventId || '').trim(), key = String(p.key || '').trim();
+  if (!evId || !key) throw new Error('BAD_GATE');
+  const expected = sha('gate_' + evId + '_' + P.getProperty('DATABASE_URL')).slice(0, 16);
+  if (key !== expected) throw new Error('INVALID_KEY');
+  const ev = q(`SELECT id, name, is_active FROM events WHERE id=$1::uuid`, [evId])[0];
+  if (!ev) throw new Error('EVENT_NOT_FOUND');
+  let vol = q(`SELECT id, name, role FROM users WHERE email='gate_volunteer@ambiltiketnya.online'`)[0];
+  if (!vol) {
+    vol = q(`INSERT INTO users(name,email,role,password) VALUES('Petugas Gerbang','gate_volunteer@ambiltiketnya.online','gate_staff','!') RETURNING id,name,role`)[0];
+  }
+  const token = newSession(vol.id);
+  return { session: token, role: 'gate_staff', name: 'Petugas Gerbang', eventId: ev.id, eventName: ev.name };
+}
+
 
 /* ---------- Pengiriman email: Gmail (MailApp) dulu, Brevo jika kuota harian habis ---------- */
 function gmailQuotaLeft() { try { return MailApp.getRemainingDailyQuota(); } catch (e) { return 1; } }
