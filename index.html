@@ -107,8 +107,8 @@ label{display:block;font-size:12px;font-weight:600;color:var(--mu);margin:12px 0
 .sc-card.no .icn{background:#ef4444;color:#fff}
 .sc-qty-pill{background:#10b981;color:#fff;font-weight:800;font-size:18px;padding:3px 14px;border-radius:99px;box-shadow:0 4px 14px rgba(16,185,129,.45);white-space:nowrap}
 .sc-cool-bar{height:4px;background:rgba(255,255,255,.15);border-radius:99px;overflow:hidden;margin-top:10px}
-.sc-cool-fill{height:100%;width:100%;background:#8b5cf6;animation:sccool 1.5s linear forwards}
-@keyframes sccool{from{width:0%}to{width:100%}}
+.sc-cool-fill{height:100%;width:100%;background:#8b5cf6;animation:sccool 7s linear forwards}
+@keyframes sccool{from{width:100%}to{width:0%}}
 .sc-pdot{width:10px;height:10px;border-radius:50%;background:#10b981;display:inline-block;animation:scdot 1s ease-in-out infinite alternate}
 @keyframes scdot{0%{transform:scale(.8);opacity:.6}100%{transform:scale(1.3);opacity:1;box-shadow:0 0 10px #10b981}}
 .scan{padding:24px;background:linear-gradient(135deg,#4a3df0,#3b2ab8);color:#fff;border-radius:22px}.scan .btn{background:#fff;color:#4a3df0}.scan input{background:rgba(255,255,255,.14);border-color:rgba(255,255,255,.25);color:#fff}.scan input::placeholder{color:#d7d3ff}
@@ -401,7 +401,7 @@ function paintOrders(){const k=($('#oq').value||'').toLowerCase(),l=S.ord.filter
  $('#ot').innerHTML=`<p><b style="font-size:20px">${l.reduce((a,o)=>a+o.qty,0)}</b> ${t('tix')} / ${n}</p>${S.ordTr?'<p class="muted">'+t('pg_trunc')+'</p>':''}<div class="tw"><table class="rt"><tr>${th}</tr>${rows.map(o=>`<tr><td data-l="${t('c_code')}" class="mono"><b>${esc(o.ticket_code)}</b><br><small class="muted">${new Date(o.created_at).toLocaleString(loc())}</small></td><td data-l="${t('c_name')}">${esc(o.name)}${o.kind==='invitation'?' <span class="pill gd">'+t('inv_badge')+'</span>':''}<br><small class="muted">${o.kind==='invitation'?esc(o.church):esc(o.email)+'<br>+'+esc(o.whatsapp)+' &#183; '+esc(o.age)+' &#183; '+esc(o.church)}</small></td><td data-l="${t('c_event')}">${esc(o.event_name)}</td><td data-l="${t('c_qty')}">${o.qty}</td><td data-l="${t('c_status')}">${stPill(o.status)}</td><td data-l="${t('c_chk')}" class="mono">${o.checked_in}/${o.qty}</td><td>${acts(o)}</td></tr>`).join('')}</table></div>${pagerHtml(n,S.ordPage,pages,from,rows.length)}`}
 
 /* ===== Scanner Engine (Continuous, Audio, Torch, Haptic) ===== */
-let _actx=null,_muted=false,_stream=null,_track=null,_torch=false,_facing='environment',_scanning=false,_cooldown=false,_lastCode='',_lastTime=0,_sessionCount=0;
+let _actx=null,_muted=false,_stream=null,_track=null,_torch=false,_facing='environment',_scanning=false,_cooldown=false,_lastCode='',_lastTime=0,_sessionCount=0,_resTimer=null;
 function actx(){if(!_actx){const AC=window.AudioContext||window.webkitAudioContext;if(AC)_actx=new AC()}if(_actx&&_actx.state==='suspended')_actx.resume();return _actx}
 function snd(type){if(_muted)return;try{const c=actx();if(!c)return;const t=c.currentTime;
  if(type==='VALID'){[523.25,659.25,783.99,1046.5].forEach((f,i)=>{const o=c.createOscillator(),g=c.createGain();o.type='triangle';o.frequency.setValueAtTime(f,t+i*.055);g.gain.setValueAtTime(0,t+i*.055);g.gain.linearRampToValueAtTime(.28,t+i*.055+.02);g.gain.exponentialRampToValueAtTime(.001,t+i*.055+.22);o.connect(g);g.connect(c.destination);o.start(t+i*.055);o.stop(t+i*.055+.24)})}
@@ -409,7 +409,7 @@ function snd(type){if(_muted)return;try{const c=actx();if(!c)return;const t=c.cu
  else{const o=c.createOscillator(),g=c.createGain();o.type='sawtooth';o.frequency.setValueAtTime(130,t);o.frequency.linearRampToValueAtTime(80,t+.25);g.gain.setValueAtTime(.35,t);g.gain.exponentialRampToValueAtTime(.001,t+.26);o.connect(g);g.connect(c.destination);o.start(t);o.stop(t+.28)}}}catch(e){}}
 function vib(type){if(!navigator.vibrate)return;try{if(type==='VALID')navigator.vibrate([60,40,90]);else if(type==='USED'||type==='UNPAID')navigator.vibrate([180,80,250]);else navigator.vibrate([300])}catch(e){}}
 async function openScannerModal(){const m=$('#sc_modal');if(!m)return;m.classList.add('on');$('#sc_cnt').textContent=_sessionCount;$('#sc_wait_lbl').textContent=t('v_wait');startCamera()}
-function closeScannerModal(){const m=$('#sc_modal');if(m)m.classList.remove('on','fullscreen');stopCamera()}
+function closeScannerModal(){if(_resTimer){clearTimeout(_resTimer);_resTimer=null}const m=$('#sc_modal');if(m)m.classList.remove('on','fullscreen');stopCamera()}
 async function toggleTorch(){if(!_track)return toast('Kamera belum aktif',1);try{const caps=_track.getCapabilities?_track.getCapabilities():{};if(!caps.torch)return toast('Lampu flash tidak didukung di perangkat/kamera ini',1);_torch=!_torch;await _track.applyConstraints({advanced:[{torch:_torch}]});const b=$('#sc_torch_btn');if(b)b.classList.toggle('active',_torch)}catch(e){toast('Gagal mengatur senter',1)}}
 function toggleAudio(){_muted=!_muted;const b=$('#sc_audio_btn');if(b){b.textContent=_muted?'🔇':'🔊';b.classList.toggle('active',_muted)}}
 async function toggleCamera(){_facing=_facing==='environment'?'user':'environment';stopCamera();startCamera()}
@@ -433,7 +433,8 @@ function scCardHtml(r){const isOk=r.result==='VALID',isWn=r.result==='USED'||r.r
   ${r.name?`<div style="margin-top:8px;font-size:13px;display:grid;grid-template-columns:1fr 1fr;gap:4px"><div><b>${esc(r.name)}</b><br><small style="opacity:.75">${esc(r.church||'-')}${r.age?' · '+esc(r.age):''}</small></div><div style="text-align:right"><span>Check-in: <b>${r.checked||r.qty}/${r.qty}</b></span><br><small style="opacity:.75">${esc(r.event||'')}</small></div></div>`:''}
   <div class="sc-cool-bar"><div class="sc-cool-fill"></div></div></div>`}
 async function handleScanCode(raw){const code=String(raw||'').trim().toUpperCase();if(!code)return;const now=Date.now();if(code===_lastCode&&(now-_lastTime<3000))return;if(_cooldown)return;
- _cooldown=true;_lastCode=code;_lastTime=now;const fr=$('#sc_frame'),resArea=$('#sc_res');
+ _cooldown=true;_lastCode=code;_lastTime=now;if(_resTimer){clearTimeout(_resTimer);_resTimer=null}
+ const fr=$('#sc_frame'),resArea=$('#sc_res');
  try{const r=await api('validate',{code:code});
   if(r.result==='VALID'){_sessionCount+=(r.entered||r.qty||1);const cnt=$('#sc_cnt'),dc=$('#dash_sc_cnt');if(cnt)cnt.textContent=_sessionCount;if(dc)dc.textContent=_sessionCount}
   snd(r.result);vib(r.result);
@@ -441,7 +442,12 @@ async function handleScanCode(raw){const code=String(raw||'').trim().toUpperCase
   if(resArea)resArea.innerHTML=scCardHtml(r);
   S.res=r;S.hist.unshift({code:r.code,name:r.name,result:r.result,qty:r.qty,entered:r.entered,time:new Date().toLocaleTimeString(loc())});S.hist=S.hist.slice(0,30);paintScan();
  }catch(err){snd('ERROR');vib('ERROR');if(fr)fr.className='sc-frame error';if(resArea)resArea.innerHTML=scCardHtml({result:'ERROR',code:code})}
- finally{setTimeout(()=>{_cooldown=false;if(fr)fr.className='sc-frame';if(resArea&&_scanning){resArea.innerHTML='<div class="sc-card ready"><div style="display:flex;align-items:center;gap:10px;justify-content:center"><span class="sc-pdot"></span><span style="font-size:14px;font-weight:600;letter-spacing:.5px">'+t('v_ready')+'</span></div></div>'}},1600)}}
+ finally{
+  setTimeout(()=>{_cooldown=false;if(fr)fr.className='sc-frame'},1200);
+  _resTimer=setTimeout(()=>{
+   if(resArea&&_scanning){resArea.innerHTML='<div class="sc-card ready"><div style="display:flex;align-items:center;gap:10px;justify-content:center"><span class="sc-pdot"></span><span style="font-size:14px;font-weight:600;letter-spacing:.5px">'+t('v_ready')+'</span></div></div>'}
+  },7000);
+ }}
 
 function scanView(c){c.innerHTML=`<div class="two"><div><div class="scan">
   <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px"><div><h2>${t('v_title')}</h2><p style="margin:4px 0 16px">${t('v_sub')}</p></div><div class="sc-badge" style="background:rgba(255,255,255,.15);flex:none"><span>🎯</span> <span><b id="dash_sc_cnt">${_sessionCount}</b> ${t('tix')}</span></div></div>

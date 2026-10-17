@@ -58,8 +58,8 @@ canvas#c{display:none}
 .qty-pill{background:var(--ok);color:#fff;font-weight:800;font-size:18px;padding:3px 14px;border-radius:99px;box-shadow:0 4px 14px rgba(16,185,129,.45);white-space:nowrap}
 .mono{font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace}
 .cool-bar{height:4px;background:rgba(255,255,255,.15);border-radius:99px;overflow:hidden;margin-top:10px}
-.cool-fill{height:100%;width:100%;background:#8b5cf6;animation:cool 1.5s linear forwards}
-@keyframes cool{from{width:0%}to{width:100%}}
+.cool-fill{height:100%;width:100%;background:#8b5cf6;animation:cool 7s linear forwards}
+@keyframes cool{from{width:100%}to{width:0%}}
 .pdot{width:10px;height:10px;border-radius:50%;background:var(--ok);display:inline-block;animation:pdot 1s ease-in-out infinite alternate}
 @keyframes pdot{0%{transform:scale(.8);opacity:.6}100%{transform:scale(1.3);opacity:1;box-shadow:0 0 10px var(--ok)}}
 
@@ -123,7 +123,7 @@ const TOK = h.get('tok') || (typeof localStorage !== 'undefined' ? localStorage.
 const $ = s => document.getElementById(s);
 
 let actx = null, muted = false, stream = null, track = null, torch = false, facing = 'environment';
-let scanning = true, cooldown = false, lastCode = '', lastTime = 0, sessionCount = 0, _verifying = false;
+let scanning = true, cooldown = false, lastCode = '', lastTime = 0, sessionCount = 0, _verifying = false, resTimer = null;
 
 function getAudioCtx() {
   if (!actx) {
@@ -218,6 +218,7 @@ function cardHtml(r) {
 
 function showResult(r) {
   _verifying = false;
+  if (resTimer) { clearTimeout(resTimer); resTimer = null; }
   if (r.result === 'VALID') {
     sessionCount += (r.entered || r.qty || 1);
     $('sc_cnt').textContent = sessionCount;
@@ -231,10 +232,13 @@ function showResult(r) {
   setTimeout(() => {
     cooldown = false;
     if (fr) fr.className = 'frame';
+  }, 1200);
+
+  resTimer = setTimeout(() => {
     if (scanning) {
       $('res_area').innerHTML = `<div class="card"><div style="display:flex;align-items:center;gap:10px;justify-content:center"><span class="pdot"></span><span style="font-size:14px;font-weight:600;letter-spacing:.5px">Siap scan tiket berikutnya...</span></div></div>`;
     }
-  }, 1600);
+  }, 7000);
 }
 
 // Global listener for dashboard opener messages
@@ -257,6 +261,7 @@ async function handleCode(raw) {
   _verifying = true;
   lastCode = code;
   lastTime = now;
+  if (resTimer) { clearTimeout(resTimer); resTimer = null; }
 
   $('res_area').innerHTML = `<div class="card" style="border-color:#8b5cf6;background:rgba(20,15,40,.92)"><div style="display:flex;align-items:center;gap:10px;justify-content:center"><span style="display:inline-block;animation:spin 1s linear infinite">⏳</span><span style="font-size:14px;font-weight:600">Memverifikasi ${esc(code)}...</span></div></div>`;
 
