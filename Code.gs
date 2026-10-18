@@ -269,8 +269,13 @@ function cekKoneksi() {
   if (!rk) ok('Resend belum diatur (opsional: dipakai saat kuota Gmail & Brevo habis)');
   else {
     try {
-      const r = UrlFetchApp.fetch('https://api.resend.com/domains', { muteHttpExceptions: true, headers: { 'Authorization': 'Bearer ' + rk } });
-      r.getResponseCode() === 200 ? ok('Resend terhubung (pengirim: ' + (rf || 'tiket@ambiltiketnya.online') + ') - jalankan ujiResend untuk mencoba kirim') : bad('Resend HTTP ' + r.getResponseCode() + ': ' + r.getContentText().slice(0, 200));
+      const r = UrlFetchApp.fetch('https://api.resend.com/api-keys', { muteHttpExceptions: true, headers: { 'Authorization': 'Bearer ' + rk } });
+      const txt = r.getContentText();
+      if (r.getResponseCode() === 200 || /restricted_api_key/i.test(txt)) {
+        ok('Resend terhubung (API key aktif & siap kirim email, pengirim: ' + (rf || 'tiket@ambiltiketnya.online') + ') - jalankan ujiResendTiket untuk mencoba');
+      } else {
+        bad('Resend HTTP ' + r.getResponseCode() + ': ' + txt.slice(0, 200));
+      }
     } catch (e) { bad('Resend: ' + e.message); }
   }
   try { if (!q("SELECT 1 FROM information_schema.columns WHERE table_name='orders' AND column_name='kind'").length) bad('Kolom orders.kind belum ada -> jalankan migrate-invitations.sql di Neon'); else ok('Kolom orders.kind ada (fitur undangan)'); } catch (e) { bad('Cek kolom kind: ' + e.message); }
@@ -664,8 +669,8 @@ function resendTicketEmail(id) {
   const o = orderFull(id);
   if (!o || o.status !== 'confirmed' || o.kind === 'invitation') throw new Error('NOT_CONFIRMED');
   try {
-    sendTicketEmail(o);
-    q(`UPDATE orders SET emailed=true, emailed_at=now(), email_error=NULL WHERE id=$1::uuid RETURNING id`, [o.id]);
+    const prov = sendTicketEmail(o);
+    q(`UPDATE orders SET emailed=true, emailed_at=now(), email_error=$2 WHERE id=$1::uuid RETURNING id`, [o.id, 'Terkirim via ' + (prov || 'email')]);
     return { ok: true, id: o.id };
   } catch (e) {
     const msg = e && e.message ? e.message : 'EMAIL_FAIL';
@@ -694,8 +699,8 @@ function batchResendEmails(u, p) {
     const item = list[i];
     try {
       const o = orderFull(item.id);
-      sendTicketEmail(o);
-      q(`UPDATE orders SET emailed=true, emailed_at=now(), email_error=NULL WHERE id=$1::uuid RETURNING id`, [item.id]);
+      const prov = sendTicketEmail(o);
+      q(`UPDATE orders SET emailed=true, emailed_at=now(), email_error=$2 WHERE id=$1::uuid RETURNING id`, [item.id, 'Terkirim via ' + (prov || 'email')]);
       sent++;
       Utilities.sleep(200);
     } catch (err) {
@@ -1012,7 +1017,7 @@ function ticketBlob(o) {
 }
 function sendTicketEmail(o) {
   const row = (l, v) => `<tr><td style="padding:6px 0;color:#667">${l}</td><td style="padding:6px 0;text-align:right;font-weight:bold">${esc(v)}</td></tr>`;
-  sendMail({
+  return sendMail({
     to: o.email, name: 'AmbilTiketnya', attachments: [ticketBlob(o)],
     subject: `[KONFIRMASI TIKET] ${o.ename} - Kode: ${o.ticket_code}`,
     htmlBody: `<div style="font-family:Arial,sans-serif;max-width:520px;margin:auto"><div style="background:#0f1222;color:#fff;padding:22px;border-radius:10px 10px 0 0">
