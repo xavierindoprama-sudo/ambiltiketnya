@@ -586,13 +586,18 @@ function stats() {
 
 function ensureEmailColumns() {
   const cache = CacheService.getScriptCache();
-  if (cache.get('col_em_ok')) return;
+  if (cache.get('col_em_v2')) return;
   try {
-    q(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS emailed boolean DEFAULT false`);
-    q(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS email_error text`);
-    q(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS emailed_at timestamptz`);
-    cache.put('col_em_ok', '1', 21600);
-  } catch (e) { Logger.log('ensureEmailColumns: ' + e); }
+    neon([
+      { query: 'ALTER TABLE orders ADD COLUMN IF NOT EXISTS emailed boolean DEFAULT true' },
+      { query: 'ALTER TABLE orders ALTER COLUMN emailed SET DEFAULT false' },
+      { query: 'ALTER TABLE orders ADD COLUMN IF NOT EXISTS email_error text' },
+      { query: 'ALTER TABLE orders ADD COLUMN IF NOT EXISTS emailed_at timestamptz' }
+    ]);
+    cache.put('col_em_v2', '1', 21600);
+  } catch (e) {
+    Logger.log('ensureEmailColumns error: ' + (e.stack || e));
+  }
 }
 
 const ORDERS_SQL = `SELECT o.id,o.order_code,o.ticket_code,o.qty,o.total,o.status,o.checked_in,o.checked_in_at,o.created_at,o.kind,
@@ -991,7 +996,11 @@ function migrateOauth() {
     "ALTER TABLE users DROP CONSTRAINT IF EXISTS users_age_check",
     "ALTER TABLE users ADD CONSTRAINT users_age_check CHECK (age IS NULL OR (age BETWEEN 1 AND 120))",
     "ALTER TABLE users ALTER COLUMN church DROP NOT NULL",
-    "ALTER TABLE users ALTER COLUMN password_hash DROP NOT NULL"
+    "ALTER TABLE users ALTER COLUMN password_hash DROP NOT NULL",
+    "ALTER TABLE orders ADD COLUMN IF NOT EXISTS emailed boolean DEFAULT true",
+    "ALTER TABLE orders ALTER COLUMN emailed SET DEFAULT false",
+    "ALTER TABLE orders ADD COLUMN IF NOT EXISTS email_error text",
+    "ALTER TABLE orders ADD COLUMN IF NOT EXISTS emailed_at timestamptz"
   ];
   const results = [];
   statements.forEach(sql => {
