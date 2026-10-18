@@ -714,7 +714,7 @@ const NL=String.fromCharCode(10),find=(a,id)=>a.find(x=>x.id===id),A={
    if(res.stopped)h+='<p style="color:var(--wn);font-size:13px">⚠️ Kuota email harian penyedia (Gmail/Brevo) telah mencapai batas limit. Sisa pemesan dapat dikirimi kembali besok saat kuota harian reset.</p>';
    h+='</div><div class="acts" style="margin-top:14px"><button class="btn pri" data-act="cm">'+t('close')+'</button></div>';
    if(prog)prog.innerHTML=h;loadOrders();
-  }catch(err){if(prog)prog.innerHTML='<div class="res no"><p style="color:var(--er)"><b>Gagal:</b> '+esc(errMsg(err))+'</p></div><div class="acts"><button class="btn" data-act="cm">'+t('close')+'</button></div>'}},
+  }catch(err){const m=(err&&err.message)?(D['e_'+err.message]?t('e_'+err.message):err.message):t('e_E_GENERIC');if(prog)prog.innerHTML='<div class="res no"><p style="color:var(--er)"><b>Gagal:</b> '+esc(m)+'</p></div><div class="acts"><button class="btn" data-act="cm">'+t('close')+'</button></div>'}},
  async cpay(el){try{await api('confirmPay',{id:el.dataset.id},t('sending'));loadOrders()}catch(e){fail(e)}},
  csv(){const h=['ticket_code','kind','name','email','whatsapp','age','church','event_name','qty','status','checked_in'],c=[h.join(',')].concat(S.ordv.map(o=>h.map(k=>'"'+String(o[k]==null?'':o[k]).replace(/"/g,'""')+'"').join(',')));const a=document.createElement('a');a.href='data:text/csv;charset=utf-8,'+encodeURIComponent(String.fromCharCode(65279)+c.join(NL));a.download='rekap-pemesan.csv';a.click()},
 

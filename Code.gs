@@ -696,11 +696,16 @@ function batchResendEmails(u, p) {
     } catch (err) {
       failed++;
       const msg = err && err.message ? err.message : 'EMAIL_FAIL';
-      q(`UPDATE orders SET emailed=false, email_error=$2 WHERE id=$1::uuid`, [item.id, msg]);
+      q(`UPDATE orders SET emailed=false, email_error=$2 WHERE id=$1::uuid`, [item.id, msg.slice(0, 500)]);
       Logger.log('Batch resend err on ' + item.ticket_code + ': ' + err);
       if (/quota|limit|too many times/i.test(msg) || msg === 'EMAIL_QUOTA') {
         stopped = true;
         stopReason = 'EMAIL_QUOTA';
+        break;
+      }
+      if (failed >= 2 && sent === 0) {
+        stopped = true;
+        stopReason = msg;
         break;
       }
     }
@@ -903,8 +908,15 @@ function resendSend(m) {
   if (!P.getProperty('RESEND_API_KEY')) throw new Error('EMAIL_QUOTA');
   const r = resendRaw(m);
   if (r.code < 200 || r.code >= 300) {
-    Logger.log('Resend ' + r.code + ': ' + r.text.slice(0, 300));
-    throw new Error('EMAIL_FAIL');
+    let msg = 'Resend HTTP ' + r.code;
+    try {
+      const j = JSON.parse(r.text);
+      if (j.message) msg += ': ' + j.message;
+    } catch (e) {
+      msg += ': ' + r.text.slice(0, 150);
+    }
+    Logger.log(msg);
+    throw new Error(msg);
   }
   return 'resend';
 }
