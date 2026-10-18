@@ -509,7 +509,7 @@ function api(token, action, p) {
     return { ok: true, data: h.fn(u, p || {}, token) };
   } catch (e) {
     Logger.log(e.stack || e);
-    return { ok: false, error: /^[A-Z_]+$/.test(e.message) ? e.message : 'E_GENERIC' };
+    return { ok: false, error: (e && e.message) ? e.message : 'E_GENERIC' };
   }
 }
 
@@ -885,12 +885,13 @@ function ujiBrevo() {
 
 /* ---------- Provider Resend (api.resend.com) ---------- */
 function resendRaw(m) {
-  const key = P.getProperty('RESEND_API_KEY');
-  const from = P.getProperty('RESEND_SENDER_EMAIL') || 'tiket@ambiltiketnya.online';
-  const name = P.getProperty('RESEND_SENDER_NAME') || m.name || 'AmbilTiketnya';
+  const key = (P.getProperty('RESEND_API_KEY') || '').trim();
+  const from = (P.getProperty('RESEND_SENDER_EMAIL') || 'tiket@ambiltiketnya.online').trim();
+  const name = (P.getProperty('RESEND_SENDER_NAME') || m.name || 'AmbilTiketnya').trim();
+  const toEmail = String(m.to || '').trim();
   const body = {
     from: `${name} <${from}>`,
-    to: [m.to],
+    to: [toEmail],
     subject: m.subject,
     html: m.htmlBody
   };
@@ -932,6 +933,33 @@ function ujiResend() {
   const r = resendRaw({ to: to, subject: 'Uji Resend - ambiltiketnya.online', htmlBody: '<p>Jika email ini diterima, integrasi Resend berfungsi sempurna!</p>' });
   if (r.code >= 200 && r.code < 300) Logger.log('OK - email percobaan terkirim via Resend ke ' + to + ' (periksa kotak masuk/spam)');
   else Logger.log('GAGAL (HTTP ' + r.code + '): ' + r.text);
+}
+function ujiResendTiket() {
+  const to = P.getProperty('SUPERADMIN_EMAIL');
+  if (!to) { Logger.log('GAGAL: SUPERADMIN_EMAIL belum diisi'); return; }
+  const list = q(`SELECT o.id, o.ticket_code, u.email FROM orders o JOIN users u ON u.id=o.user_id WHERE o.status='confirmed' AND o.kind='order' LIMIT 1`);
+  if (!list.length) { Logger.log('GAGAL: Tidak ada pesanan confirmed di database'); return; }
+  const item = list[0];
+  Logger.log('Membuat e-tiket PDF untuk kode ' + item.ticket_code + '...');
+  try {
+    const o = orderFull(item.id);
+    const blob = ticketBlob(o);
+    Logger.log('PDF berhasil dibuat (' + blob.getBytes().length + ' bytes). Mengirim via Resend ke ' + to + '...');
+    const r = resendRaw({
+      to: to,
+      subject: '[UJI TIKET PDF] ' + o.ename + ' - ' + o.ticket_code,
+      htmlBody: '<p>Halo, ini adalah email uji coba tiket PDF via Resend.</p>',
+      attachments: [blob]
+    });
+    Logger.log('Status Resend HTTP ' + r.code + ': ' + r.text);
+    if (r.code >= 200 && r.code < 300) {
+      Logger.log('SUKSES! E-tiket PDF berhasil dikirim ke ' + to);
+    } else {
+      Logger.log('GAGAL dari Resend: ' + r.text);
+    }
+  } catch (err) {
+    Logger.log('ERROR: ' + (err.stack || err));
+  }
 }
 
 /* ---------- E-ticket PDF + email ---------- */
