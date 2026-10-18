@@ -1074,7 +1074,7 @@ function ujiMailersendTiket() {
 function orderFull(id) {
   return q(`SELECT o.id,o.user_id,o.order_code,o.ticket_code,o.qty,o.total,o.status,o.created_at,o.kind,o.guest_name,o.guest_org,
     CASE WHEN o.kind='invitation' THEN o.guest_name ELSE u.name END AS uname,u.email,CASE WHEN o.kind='invitation' THEN o.guest_org ELSE u.church END AS church,
-    e.name AS ename,e.event_date::text AS edate,to_char(e.start_time,'HH24:MI') AS stime,e.location,e.announcement
+    e.name AS ename,e.event_date::text AS edate,to_char(e.start_time,'HH24:MI') AS stime,e.location,e.announcement,e.terms
     FROM orders o JOIN users u ON u.id=o.user_id JOIN events e ON e.id=o.event_id WHERE o.id=$1::uuid`, [id])[0];
 }
 const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -1083,38 +1083,67 @@ function idDate(s) {
   const [y, m, d] = s.split('-').map(Number), dt = new Date(Date.UTC(y, m - 1, d));
   return D[dt.getUTCDay()] + ', ' + d + ' ' + M[m - 1] + ' ' + y;
 }
+function getEventTerms(o) {
+  if (o.terms && String(o.terms).trim()) return String(o.terms).trim();
+  return [
+    '1. Tiket berlaku untuk satu kali masuk dan sesuai jumlah kuota pesanan.',
+    '2. Tunjukkan kode QR e-tiket di gerbang masuk. Satu QR berlaku untuk seluruh rombongan.',
+    '3. Peserta diharapkan hadir sebelum acara dimulai sesuai pengumuman panitia.',
+    '4. Tiket tidak dapat dipindahtangankan atau diperjualbelikan.',
+    '5. Panitia berhak menolak peserta yang tidak membawa tiket sah atau mengganggu ketertiban.',
+    '6. Dengan memiliki tiket ini, peserta menyetujui seluruh syarat dan ketentuan yang berlaku.'
+  ].join('\n');
+}
+function formatTermsHtml(rawTerms, isGold) {
+  const text = String(rawTerms || '').trim();
+  if (!text) return '';
+  const lines = text.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
+  const color = isGold ? '#6b5300' : '#475569';
+  const border = isGold ? '#e5d59e' : '#e2e8f0';
+  const bg = isGold ? '#fffdf7' : '#f8fafc';
+  const headerColor = isGold ? '#8a7a3a' : '#1e293b';
+  const rows = lines.map(line => `<div style="margin-bottom:3px;font-size:9px;line-height:1.4;color:${color}">${esc(line)}</div>`).join('');
+  return `<div style="margin:14px 36px 0;padding:10px 14px;background:${bg};border:1px solid ${border};border-radius:6px">
+    <div style="font-size:9.5px;font-weight:bold;letter-spacing:1px;text-transform:uppercase;color:${headerColor};margin-bottom:6px">Syarat & Ketentuan Acara</div>
+    ${rows}
+  </div>`;
+}
 function invitationPdfHtml(o, img) {             // desain undangan: navy + emas
   const G = '#d4af37', N = '#0b1026';
-  const f = (l, v) => `<div style="font-size:9px;color:#8a7a3a;letter-spacing:1px;text-transform:uppercase;margin-top:12px">${l}</div><div style="font-size:15px;font-weight:bold">${esc(v)}</div>`;
+  const f = (l, v) => `<div style="font-size:9px;color:#8a7a3a;letter-spacing:1px;text-transform:uppercase;margin-top:10px">${l}</div><div style="font-size:14px;font-weight:bold">${esc(v)}</div>`;
+  const termsHtml = formatTermsHtml(getEventTerms(o), true);
   return `<html><body style="margin:0;font-family:Arial,sans-serif;color:${N}">
-  <table width="100%" cellpadding="0" cellspacing="0" style="background:${N};border-bottom:6px solid ${G}"><tr><td style="padding:26px 36px">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:${N};border-bottom:6px solid ${G}"><tr><td style="padding:22px 36px">
   <div style="font-size:12px;letter-spacing:7px;color:${G};font-weight:bold">UNDANGAN</div>
-  <div style="font-size:26px;font-weight:bold;color:#fff;margin-top:8px">${esc(o.ename)}</div>
-  <div style="font-size:9px;letter-spacing:3px;color:#c9b873;margin-top:8px">E-TIKET UNDANGAN - AMBILTIKETNYA</div></td></tr></table>
-  <table width="100%" cellpadding="0" cellspacing="0"><tr><td style="padding:22px 36px 0"><div style="font-size:10px;color:#8a7a3a;letter-spacing:3px">KEPADA YTH.</div>
-  <div style="font-size:24px;font-weight:bold;margin-top:4px">${esc(o.uname)}</div><div style="font-size:14px;color:#555;margin-top:2px">${esc(o.church)}</div></td></tr></table>
+  <div style="font-size:24px;font-weight:bold;color:#fff;margin-top:6px">${esc(o.ename)}</div>
+  <div style="font-size:9px;letter-spacing:3px;color:#c9b873;margin-top:6px">E-TIKET UNDANGAN - AMBILTIKETNYA</div></td></tr></table>
+  <table width="100%" cellpadding="0" cellspacing="0"><tr><td style="padding:18px 36px 0"><div style="font-size:10px;color:#8a7a3a;letter-spacing:3px">KEPADA YTH.</div>
+  <div style="font-size:22px;font-weight:bold;margin-top:4px">${esc(o.uname)}</div><div style="font-size:13px;color:#555;margin-top:2px">${esc(o.church)}</div></td></tr></table>
   <table width="100%" cellpadding="0" cellspacing="0" style="margin-top:14px"><tr>
-  <td width="210" valign="top" style="padding:0 20px 0 36px"><div style="border:2px solid ${G};padding:8px;width:170px"><img src="${img}" width="170" height="170"/></div>
-   <div style="font-family:monospace;font-size:13px;font-weight:bold;margin-top:10px">${o.ticket_code}</div><div style="font-size:9px;color:#778">Pindai di gerbang masuk</div></td>
+  <td width="200" valign="top" style="padding:0 20px 0 36px"><div style="border:2px solid ${G};padding:6px;width:160px"><img src="${img}" width="160" height="160"/></div>
+   <div style="font-family:monospace;font-size:13px;font-weight:bold;margin-top:8px">${o.ticket_code}</div><div style="font-size:9px;color:#778">Pindai di gerbang masuk</div></td>
   <td valign="top" style="padding-right:36px">${f('Hari & Tanggal', idDate(o.edate))}${f('Waktu', o.stime + ' WIB')}${f('Lokasi', o.location)}${f('Jumlah Tiket', o.qty + ' orang')}${f('Nomor Undangan', o.order_code)}</td></tr></table>
-  <div style="margin:26px 36px 0;padding:12px 16px;border:1px solid ${G};background:#fffdf7;border-radius:6px;font-size:11px;color:#6b5300;line-height:1.5">&#9432; <b>Catatan:</b> Satu kode QR ini berlaku untuk ${o.qty} orang. Mohon hadir dan masuk bersamaan di gerbang masuk karena tiket hanya dapat dipindai 1 kali.</div>
+  <div style="margin:14px 36px 0;padding:10px 14px;border:1px solid ${G};background:#fffdf7;border-radius:6px;font-size:10.5px;color:#6b5300;line-height:1.45">&#9432; <b>Catatan:</b> Satu kode QR ini berlaku untuk ${o.qty} orang. Mohon hadir dan masuk bersamaan di gerbang masuk karena tiket hanya dapat dipindai 1 kali.</div>
+  ${termsHtml}
   </body></html>`;
 }
 function ticketBlob(o) {
   const png = UrlFetchApp.fetch('https://api.qrserver.com/v1/create-qr-code/?size=300x300&margin=0&data=' + encodeURIComponent(o.ticket_code)).getBlob();
   const img = 'data:image/png;base64,' + Utilities.base64Encode(png.getBytes());
-  const f = (l, v) => `<div style="font-size:9px;color:#778;letter-spacing:1px;text-transform:uppercase;margin-top:13px">${l}</div><div style="font-size:15px;font-weight:bold">${esc(v)}</div>`;
+  const f = (l, v) => `<div style="font-size:9px;color:#778;letter-spacing:1px;text-transform:uppercase;margin-top:10px">${l}</div><div style="font-size:14px;font-weight:bold">${esc(v)}</div>`;
+  const termsHtml = formatTermsHtml(getEventTerms(o), false);
   const html = o.kind === 'invitation' ? invitationPdfHtml(o, img) : `<html><body style="margin:0;font-family:Arial,sans-serif;color:#0f1222">
-  <table width="100%" cellpadding="0" cellspacing="0" style="background:#0f1222"><tr><td style="padding:28px 36px">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#0f1222"><tr><td style="padding:22px 36px">
   <div style="font-size:10px;letter-spacing:3px;color:#9a8cff">E-TIKET RESMI · AMBILTIKETNYA</div>
-  <div style="font-size:26px;font-weight:bold;color:#fff;margin-top:8px">${esc(o.ename)}</div></td></tr></table>
-  <table width="100%" cellpadding="0" cellspacing="0" style="margin-top:26px"><tr>
-  <td width="210" valign="top" style="padding:0 20px 0 36px"><img src="${img}" width="170" height="170"/>
-   <div style="font-family:monospace;font-size:13px;font-weight:bold;margin-top:10px">${o.ticket_code}</div>
+  <div style="font-size:24px;font-weight:bold;color:#fff;margin-top:6px">${esc(o.ename)}</div></td></tr></table>
+  <table width="100%" cellpadding="0" cellspacing="0" style="margin-top:18px"><tr>
+  <td width="200" valign="top" style="padding:0 20px 0 36px"><img src="${img}" width="160" height="160"/>
+   <div style="font-family:monospace;font-size:13px;font-weight:bold;margin-top:8px">${o.ticket_code}</div>
    <div style="font-size:9px;color:#778">Pindai di gerbang masuk</div></td>
   <td valign="top" style="padding-right:36px">${f('Hari & Tanggal', idDate(o.edate))}${f('Waktu', o.stime + ' WIB')}${f('Lokasi', o.location)}
    ${f('Nama', o.uname)}${f('Gereja / Komunitas', o.church || '-')}${f('Jumlah Tiket', o.qty + ' orang')}${f('Nomor Pesanan', o.order_code)}</td></tr></table>
-  <div style="margin:30px 36px 0;padding:12px 16px;background:#f1f0ff;border-radius:6px;font-size:11px;color:#333">${esc(o.announcement || 'Satu QR berlaku untuk seluruh rombongan. Tunjukkan di gerbang masuk.')}</div>
+  ${o.announcement ? `<div style="margin:14px 36px 0;padding:10px 14px;background:#f1f0ff;border-radius:6px;font-size:10.5px;color:#333"><b>Pengumuman:</b> ${esc(o.announcement)}</div>` : ''}
+  ${termsHtml}
   </body></html>`;
   return HtmlService.createHtmlOutput(html).getBlob().getAs('application/pdf').setName('E-Tiket-' + o.ticket_code + '.pdf');
 }
