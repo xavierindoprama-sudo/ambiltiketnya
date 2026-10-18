@@ -475,7 +475,8 @@ const ACTIONS = {
   toggleEvent: { min: 3, fn: (u, p) => q(`UPDATE events SET is_active=$2::bool WHERE id=$1::uuid RETURNING id`, [p.id, !!p.active]) && true },
   cancelOrder: { min: 3, fn: (u, p) => { const r = q(`UPDATE orders SET status='cancelled',cancelled_at=now() WHERE id=$1::uuid AND status<>'cancelled' RETURNING id,order_code`, [p.id]); if (!r.length) throw new Error('NOT_FOUND'); trashTicketFiles(r[0].order_code); return true; } },
   confirmPay:  { min: 3, fn: confirmPay },
-  resend:      { min: 3, fn: (u, p) => { const o = orderFull(p.id); if (!o || o.status !== 'confirmed' || o.kind === 'invitation') throw new Error('NOT_CONFIRMED'); sendTicketEmail(o); return true; } },
+  resend:      { min: 2, fn: (u, p) => resendTicketEmail(p.id) },
+  batchResendEmails: { min: 2, fn: batchResendEmails },
   ordersAll:   { min: 2, fn: ordersAll },
   invitations: { min: 3, fn: () => invitations() },
   invitationCreate: { min: 3, fn: invitationCreate },
@@ -559,7 +560,17 @@ function book(u, p) {
   }
   const o = orderFull(row.id);
   let emailed = false;
-  if (o.status === 'confirmed') { try { sendTicketEmail(o); emailed = true; } catch (e) { Logger.log(e); } }
+  if (o.status === 'confirmed' && o.kind !== 'invitation') {
+    try {
+      sendTicketEmail(o);
+      emailed = true;
+      try { q(`UPDATE orders SET emailed=true, emailed_at=now(), email_error=NULL WHERE id=$1::uuid`, [row.id]); } catch (x) {}
+    } catch (e) {
+      const emMsg = e && e.message ? e.message : 'EMAIL_FAIL';
+      try { q(`UPDATE orders SET emailed=false, email_error=$2 WHERE id=$1::uuid`, [row.id, emMsg]); } catch (x) {}
+      Logger.log('Booking email err: ' + e);
+    }
+  }
   return { id: row.id, status: row.status, ticket_code: row.ticket_code, emailed: emailed };
 }
 
@@ -572,7 +583,20 @@ function stats() {
     coalesce(sum(o.total) FILTER (WHERE o.status='confirmed'),0)::int AS revenue
     FROM events e LEFT JOIN orders o ON o.event_id=e.id GROUP BY e.id ORDER BY e.event_date`);
 }
+
+function ensureEmailColumns() {
+  const cache = CacheService.getScriptCache();
+  if (cache.get('col_em_ok')) return;
+  try {
+    q(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS emailed boolean DEFAULT false`);
+    q(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS email_error text`);
+    q(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS emailed_at timestamptz`);
+    cache.put('col_em_ok', '1', 21600);
+  } catch (e) { Logger.log('ensureEmailColumns: ' + e); }
+}
+
 const ORDERS_SQL = `SELECT o.id,o.order_code,o.ticket_code,o.qty,o.total,o.status,o.checked_in,o.checked_in_at,o.created_at,o.kind,
+    coalesce(o.emailed, false) AS emailed, o.email_error, o.emailed_at,
     CASE WHEN o.kind='invitation' THEN o.guest_name ELSE u.name END AS name,
     CASE WHEN o.kind='invitation' THEN 'Undangan' ELSE u.email END AS email,
     CASE WHEN o.kind='invitation' THEN '' ELSE u.whatsapp END AS whatsapp,
@@ -582,12 +606,15 @@ const ORDERS_SQL = `SELECT o.id,o.order_code,o.ticket_code,o.qty,o.total,o.statu
     FROM orders o JOIN users u ON u.id=o.user_id JOIN events e ON e.id=o.event_id
     WHERE ($1::uuid IS NULL OR o.event_id=$1::uuid) AND ($2::text IS NULL OR o.status=$2::text)
     ORDER BY o.created_at DESC`;
-function adminOrders(u, p) { return q(ORDERS_SQL + ' LIMIT 1000', [p.eventId || null, p.status || null]); }      // dipakai tampilan lama
-function ordersAll(u, p) {                       // tampilan baru: semua data (maks 5000), pagination dilakukan di klien
+
+function adminOrders(u, p) { ensureEmailColumns(); return q(ORDERS_SQL + ' LIMIT 1000', [p.eventId || null, p.status || null]); }
+function ordersAll(u, p) {
+  ensureEmailColumns();
   const rows = q(ORDERS_SQL + ' LIMIT 5001', [p.eventId || null, p.status || null]);
   const trunc = rows.length > 5000; if (trunc) rows.length = 5000;
   return { rows: rows, truncated: trunc };
 }
+
 function saveEvent(u, p) {
   const cols = ['name', 'category', 'banner_url', 'description', 'announcement', 'event_date', 'start_time', 'end_time', 'location', 'quota', 'is_paid', 'price', 'max_per_order', 'one_order_per_account', 'is_active', 'payment_instructions', 'terms'];
   const types = ['text', 'text', 'text', 'text', 'text', 'date', 'time', 'time', 'text', 'int', 'bool', 'int', 'int', 'bool', 'bool', 'text', 'text'];
@@ -600,10 +627,69 @@ function saveEvent(u, p) {
   const upd = cols.map(c => `${c}=EXCLUDED.${c}`).join(',');
   return q(`INSERT INTO events(${cols.join(',')},id) VALUES(${ph},$${cols.length + 1}::uuid) ON CONFLICT(id) DO UPDATE SET ${upd} RETURNING id`, v.concat([p.id || Utilities.getUuid()]))[0];
 }
+
 function confirmPay(u, p) {
   if (!q(`UPDATE orders SET status='confirmed' WHERE id=$1::uuid AND status='pending_payment' RETURNING id`, [p.id]).length) throw new Error('NOT_FOUND');
-  try { sendTicketEmail(orderFull(p.id)); } catch (e) { Logger.log(e); }
+  const o = orderFull(p.id);
+  if (o && o.kind !== 'invitation') {
+    try {
+      sendTicketEmail(o);
+      q(`UPDATE orders SET emailed=true, emailed_at=now(), email_error=NULL WHERE id=$1::uuid`, [p.id]);
+    } catch (e) {
+      const emMsg = e && e.message ? e.message : 'EMAIL_FAIL';
+      q(`UPDATE orders SET emailed=false, email_error=$2 WHERE id=$1::uuid`, [p.id, emMsg]);
+      Logger.log('Confirm pay email err: ' + e);
+    }
+  }
   return true;
+}
+
+function resendTicketEmail(id) {
+  const o = orderFull(id);
+  if (!o || o.status !== 'confirmed' || o.kind === 'invitation') throw new Error('NOT_CONFIRMED');
+  try {
+    sendTicketEmail(o);
+    q(`UPDATE orders SET emailed=true, emailed_at=now(), email_error=NULL WHERE id=$1::uuid`, [o.id]);
+    return { ok: true, id: o.id };
+  } catch (e) {
+    const msg = e && e.message ? e.message : 'EMAIL_FAIL';
+    q(`UPDATE orders SET emailed=false, email_error=$2 WHERE id=$1::uuid`, [o.id, msg]);
+    throw e;
+  }
+}
+
+function batchResendEmails(u, p) {
+  ensureEmailColumns();
+  const evId = p && p.eventId ? p.eventId : null;
+  const list = q(`SELECT o.id, o.order_code, o.ticket_code
+    FROM orders o WHERE o.status='confirmed' AND o.kind='order' AND coalesce(o.emailed, false)=false
+    AND ($1::uuid IS NULL OR o.event_id=$1::uuid)
+    ORDER BY o.created_at ASC LIMIT 100`, [evId]);
+  
+  if (!list.length) return { total: 0, sent: 0, failed: 0, stopped: false, message: 'Semua pemesan sudah menerima email.' };
+  
+  let sent = 0, failed = 0, stopped = false, stopReason = '';
+  for (let i = 0; i < list.length; i++) {
+    const item = list[i];
+    try {
+      const o = orderFull(item.id);
+      sendTicketEmail(o);
+      q(`UPDATE orders SET emailed=true, emailed_at=now(), email_error=NULL WHERE id=$1::uuid`, [item.id]);
+      sent++;
+      Utilities.sleep(300);
+    } catch (err) {
+      failed++;
+      const msg = err && err.message ? err.message : 'EMAIL_FAIL';
+      q(`UPDATE orders SET emailed=false, email_error=$2 WHERE id=$1::uuid`, [item.id, msg]);
+      Logger.log('Batch resend err on ' + item.ticket_code + ': ' + err);
+      if (/quota|limit|too many times/i.test(msg) || msg === 'EMAIL_QUOTA') {
+        stopped = true;
+        stopReason = 'EMAIL_QUOTA';
+        break;
+      }
+    }
+  }
+  return { total: list.length, sent: sent, failed: failed, stopped: stopped, reason: stopReason };
 }
 function validate(u, p) {
   const code = String(p.code || '').trim().toUpperCase().replace(/\s/g, '');
