@@ -692,9 +692,6 @@ function gateLoginImpl(p) {
       try {
         vol = q(`SELECT id, name, role, email FROM users WHERE lower(email)='gate_volunteer@ambiltiketnya.online'`)[0];
       } catch (e3) {}
-      if (!vol) {
-        vol = q(`SELECT id, name, role, email FROM users WHERE role IN ('super_admin','admin') LIMIT 1`)[0];
-      }
     }
   }
   if (!vol) throw new Error('AUTH');
