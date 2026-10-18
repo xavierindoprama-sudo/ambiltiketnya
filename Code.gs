@@ -575,10 +575,10 @@ function book(u, p) {
     try {
       sendTicketEmail(o);
       emailed = true;
-      try { q(`UPDATE orders SET emailed=true, emailed_at=now(), email_error=NULL WHERE id=$1::uuid`, [row.id]); } catch (x) {}
+      try { q(`UPDATE orders SET emailed=true, emailed_at=now(), email_error=NULL WHERE id=$1::uuid RETURNING id`, [row.id]); } catch (x) {}
     } catch (e) {
       const emMsg = e && e.message ? e.message : 'EMAIL_FAIL';
-      try { q(`UPDATE orders SET emailed=false, email_error=$2 WHERE id=$1::uuid`, [row.id, emMsg]); } catch (x) {}
+      try { q(`UPDATE orders SET emailed=false, email_error=$2 WHERE id=$1::uuid RETURNING id`, [row.id, emMsg]); } catch (x) {}
       Logger.log('Booking email err: ' + e);
     }
   }
@@ -650,10 +650,10 @@ function confirmPay(u, p) {
   if (o && o.kind !== 'invitation') {
     try {
       sendTicketEmail(o);
-      q(`UPDATE orders SET emailed=true, emailed_at=now(), email_error=NULL WHERE id=$1::uuid`, [p.id]);
+      q(`UPDATE orders SET emailed=true, emailed_at=now(), email_error=NULL WHERE id=$1::uuid RETURNING id`, [p.id]);
     } catch (e) {
       const emMsg = e && e.message ? e.message : 'EMAIL_FAIL';
-      q(`UPDATE orders SET emailed=false, email_error=$2 WHERE id=$1::uuid`, [p.id, emMsg]);
+      q(`UPDATE orders SET emailed=false, email_error=$2 WHERE id=$1::uuid RETURNING id`, [p.id, emMsg]);
       Logger.log('Confirm pay email err: ' + e);
     }
   }
@@ -665,11 +665,11 @@ function resendTicketEmail(id) {
   if (!o || o.status !== 'confirmed' || o.kind === 'invitation') throw new Error('NOT_CONFIRMED');
   try {
     sendTicketEmail(o);
-    q(`UPDATE orders SET emailed=true, emailed_at=now(), email_error=NULL WHERE id=$1::uuid`, [o.id]);
+    q(`UPDATE orders SET emailed=true, emailed_at=now(), email_error=NULL WHERE id=$1::uuid RETURNING id`, [o.id]);
     return { ok: true, id: o.id };
   } catch (e) {
     const msg = e && e.message ? e.message : 'EMAIL_FAIL';
-    q(`UPDATE orders SET emailed=false, email_error=$2 WHERE id=$1::uuid`, [o.id, msg]);
+    q(`UPDATE orders SET emailed=false, email_error=$2 WHERE id=$1::uuid RETURNING id`, [o.id, msg]);
     throw e;
   }
 }
@@ -695,13 +695,13 @@ function batchResendEmails(u, p) {
     try {
       const o = orderFull(item.id);
       sendTicketEmail(o);
-      q(`UPDATE orders SET emailed=true, emailed_at=now(), email_error=NULL WHERE id=$1::uuid`, [item.id]);
+      q(`UPDATE orders SET emailed=true, emailed_at=now(), email_error=NULL WHERE id=$1::uuid RETURNING id`, [item.id]);
       sent++;
       Utilities.sleep(200);
     } catch (err) {
       failed++;
       const msg = err && err.message ? err.message : 'EMAIL_FAIL';
-      q(`UPDATE orders SET emailed=false, email_error=$2 WHERE id=$1::uuid`, [item.id, msg.slice(0, 500)]);
+      q(`UPDATE orders SET emailed=false, email_error=$2 WHERE id=$1::uuid RETURNING id`, [item.id, msg.slice(0, 500)]);
       Logger.log('Batch resend err on ' + item.ticket_code + ': ' + err);
       if (/quota|limit|too many times/i.test(msg) || msg === 'EMAIL_QUOTA') {
         stopped = true;
