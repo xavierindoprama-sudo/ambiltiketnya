@@ -578,9 +578,9 @@ function book(u, p) {
   let emailed = false;
   if (o.status === 'confirmed' && o.kind !== 'invitation') {
     try {
-      sendTicketEmail(o);
+      const prov = sendTicketEmail(o);
       emailed = true;
-      try { q(`UPDATE orders SET emailed=true, emailed_at=now(), email_error=NULL WHERE id=$1::uuid RETURNING id`, [row.id]); } catch (x) {}
+      try { q(`UPDATE orders SET emailed=true, emailed_at=now(), email_error=$2 WHERE id=$1::uuid RETURNING id`, [row.id, 'Terkirim via ' + (prov || 'email')]); } catch (x) {}
     } catch (e) {
       const emMsg = e && e.message ? e.message : 'EMAIL_FAIL';
       try { q(`UPDATE orders SET emailed=false, email_error=$2 WHERE id=$1::uuid RETURNING id`, [row.id, emMsg]); } catch (x) {}
@@ -654,8 +654,8 @@ function confirmPay(u, p) {
   const o = orderFull(p.id);
   if (o && o.kind !== 'invitation') {
     try {
-      sendTicketEmail(o);
-      q(`UPDATE orders SET emailed=true, emailed_at=now(), email_error=NULL WHERE id=$1::uuid RETURNING id`, [p.id]);
+      const prov = sendTicketEmail(o);
+      q(`UPDATE orders SET emailed=true, emailed_at=now(), email_error=$2 WHERE id=$1::uuid RETURNING id`, [p.id, 'Terkirim via ' + (prov || 'email')]);
     } catch (e) {
       const emMsg = e && e.message ? e.message : 'EMAIL_FAIL';
       q(`UPDATE orders SET emailed=false, email_error=$2 WHERE id=$1::uuid RETURNING id`, [p.id, emMsg]);
