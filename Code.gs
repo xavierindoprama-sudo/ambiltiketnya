@@ -278,6 +278,19 @@ function cekKoneksi() {
       }
     } catch (e) { bad('Resend: ' + e.message); }
   }
+  const mk = P.getProperty('MAILERSEND_API_KEY'), mf = P.getProperty('MAILERSEND_SENDER_EMAIL');
+  if (!mk) ok('MailerSend belum diatur (opsional: cadangan tambahan 3.000 email/bulan)');
+  else {
+    try {
+      const r = UrlFetchApp.fetch('https://api.mailersend.com/v1/domains', { muteHttpExceptions: true, headers: { 'Authorization': 'Bearer ' + mk } });
+      const txt = r.getContentText();
+      if (r.getResponseCode() === 200 || r.getResponseCode() === 202) {
+        ok('MailerSend terhubung (pengirim: ' + (mf || 'tiket@ambiltiketnya.online') + ') - jalankan ujiMailersendTiket untuk mencoba');
+      } else {
+        ok('MailerSend API key terpasang (HTTP ' + r.getResponseCode() + ') - jalankan ujiMailersendTiket untuk mencoba');
+      }
+    } catch (e) { bad('MailerSend: ' + e.message); }
+  }
   try { if (!q("SELECT 1 FROM information_schema.columns WHERE table_name='orders' AND column_name='kind'").length) bad('Kolom orders.kind belum ada -> jalankan migrate-invitations.sql di Neon'); else ok('Kolom orders.kind ada (fitur undangan)'); } catch (e) { bad('Cek kolom kind: ' + e.message); }
   try { if (!q("SELECT 1 FROM information_schema.columns WHERE table_name='events' AND column_name='terms'").length) bad('Kolom events.terms belum ada -> jalankan migrate-terms.sql di Neon'); else ok('Kolom events.terms ada'); } catch (e) { bad('Cek kolom terms: ' + e.message); }
   try {
@@ -847,7 +860,16 @@ function sendMail(m) {                           // m: {to, subject, htmlBody, n
     try {
       return resendSend(m);
     } catch (e) {
-      Logger.log('Resend gagal: ' + (e.message || e));
+      Logger.log('Resend gagal: ' + (e.message || e) + ', mencoba MailerSend...');
+    }
+  }
+
+  // 3. Coba MailerSend jika sudah diatur
+  if (P.getProperty('MAILERSEND_API_KEY')) {
+    try {
+      return mailersendSend(m);
+    } catch (e) {
+      Logger.log('MailerSend gagal: ' + (e.message || e));
       throw e;
     }
   }
@@ -961,6 +983,87 @@ function ujiResendTiket() {
       Logger.log('SUKSES! E-tiket PDF berhasil dikirim ke ' + to);
     } else {
       Logger.log('GAGAL dari Resend: ' + r.text);
+    }
+  } catch (err) {
+    Logger.log('ERROR: ' + (err.stack || err));
+  }
+}
+
+/* ---------- Provider MailerSend (api.mailersend.com) ---------- */
+function mailersendRaw(m) {
+  const key = (P.getProperty('MAILERSEND_API_KEY') || '').trim();
+  const from = (P.getProperty('MAILERSEND_SENDER_EMAIL') || P.getProperty('RESEND_SENDER_EMAIL') || 'tiket@ambiltiketnya.online').trim();
+  const name = (P.getProperty('MAILERSEND_SENDER_NAME') || m.name || 'AmbilTiketnya').trim();
+  const toEmail = String(m.to || '').trim();
+  const body = {
+    from: { email: from, name: name },
+    to: [{ email: toEmail }],
+    subject: m.subject,
+    html: m.htmlBody
+  };
+  if (m.attachments && m.attachments.length) {
+    body.attachments = m.attachments.map(b => ({
+      filename: b.getName(),
+      content: Utilities.base64Encode(b.getBytes()),
+      disposition: 'attachment'
+    }));
+  }
+  const r = UrlFetchApp.fetch('https://api.mailersend.com/v1/email', {
+    method: 'post',
+    contentType: 'application/json',
+    muteHttpExceptions: true,
+    headers: { 'Authorization': 'Bearer ' + key, 'X-Requested-With': 'XMLHttpRequest' },
+    payload: JSON.stringify(body)
+  });
+  return { code: r.getResponseCode(), text: String(r.getContentText()) };
+}
+function mailersendSend(m) {
+  if (!P.getProperty('MAILERSEND_API_KEY')) throw new Error('EMAIL_QUOTA');
+  const r = mailersendRaw(m);
+  if (r.code < 200 || r.code >= 300) {
+    let msg = 'MailerSend HTTP ' + r.code;
+    try {
+      const j = JSON.parse(r.text);
+      if (j.message) msg += ': ' + j.message;
+      else if (j.errors) msg += ': ' + JSON.stringify(j.errors);
+    } catch (e) {
+      msg += ': ' + r.text.slice(0, 150);
+    }
+    Logger.log(msg);
+    throw new Error(msg);
+  }
+  return 'mailersend';
+}
+function ujiMailersend() {
+  const to = P.getProperty('SUPERADMIN_EMAIL');
+  if (!to) { Logger.log('GAGAL: SUPERADMIN_EMAIL belum diisi'); return; }
+  if (!P.getProperty('MAILERSEND_API_KEY')) { Logger.log('GAGAL: isi MAILERSEND_API_KEY di Script Properties'); return; }
+  const r = mailersendRaw({ to: to, subject: 'Uji MailerSend - ambiltiketnya.online', htmlBody: '<p>Jika email ini diterima, integrasi MailerSend berfungsi sempurna!</p>' });
+  if (r.code >= 200 && r.code < 300) Logger.log('OK - email percobaan terkirim via MailerSend ke ' + to + ' (periksa kotak masuk/spam)');
+  else Logger.log('GAGAL (HTTP ' + r.code + '): ' + r.text);
+}
+function ujiMailersendTiket() {
+  const to = P.getProperty('SUPERADMIN_EMAIL');
+  if (!to) { Logger.log('GAGAL: SUPERADMIN_EMAIL belum diisi'); return; }
+  const list = q(`SELECT o.id, o.ticket_code, u.email FROM orders o JOIN users u ON u.id=o.user_id WHERE o.status='confirmed' AND o.kind='order' LIMIT 1`);
+  if (!list.length) { Logger.log('GAGAL: Tidak ada pesanan confirmed di database'); return; }
+  const item = list[0];
+  Logger.log('Membuat e-tiket PDF untuk kode ' + item.ticket_code + '...');
+  try {
+    const o = orderFull(item.id);
+    const blob = ticketBlob(o);
+    Logger.log('PDF berhasil dibuat (' + blob.getBytes().length + ' byte). Mengirim via MailerSend ke ' + to + '...');
+    const r = mailersendRaw({
+      to: to,
+      subject: '[UJI TIKET PDF] ' + o.ename + ' - ' + o.ticket_code,
+      htmlBody: '<p>Halo, ini adalah email uji coba tiket PDF via MailerSend.</p>',
+      attachments: [blob]
+    });
+    Logger.log('Status MailerSend HTTP ' + r.code + ': ' + r.text);
+    if (r.code >= 200 && r.code < 300) {
+      Logger.log('SUKSES! E-tiket PDF berhasil dikirim ke ' + to);
+    } else {
+      Logger.log('GAGAL dari MailerSend: ' + r.text);
     }
   } catch (err) {
     Logger.log('ERROR: ' + (err.stack || err));
