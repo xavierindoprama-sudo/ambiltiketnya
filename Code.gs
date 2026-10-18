@@ -831,7 +831,7 @@ function gateLoginImpl(p) {
 }
 
 
-/* ---------- Pengiriman email: Gmail (MailApp) -> Brevo -> Resend ---------- */
+/* ---------- Pengiriman email: Gmail (MailApp) -> Brevo -> MailerSend -> Resend ---------- */
 function gmailQuotaLeft() { try { return MailApp.getRemainingDailyQuota(); } catch (e) { return 1; } }
 function sendMail(m) {                           // m: {to, subject, htmlBody, name, attachments[]}
   if (gmailQuotaLeft() > 0) {
@@ -851,25 +851,25 @@ function sendMail(m) {                           // m: {to, subject, htmlBody, n
     try {
       return brevoSend(m);
     } catch (e) {
-      Logger.log('Brevo gagal / kuota habis: ' + (e.message || e) + ', mencoba Resend...');
+      Logger.log('Brevo gagal / kuota habis: ' + (e.message || e) + ', mencoba MailerSend...');
     }
   }
 
-  // 2. Coba Resend jika sudah diatur
-  if (P.getProperty('RESEND_API_KEY')) {
-    try {
-      return resendSend(m);
-    } catch (e) {
-      Logger.log('Resend gagal: ' + (e.message || e) + ', mencoba MailerSend...');
-    }
-  }
-
-  // 3. Coba MailerSend jika sudah diatur
+  // 2. Coba MailerSend jika sudah diatur
   if (P.getProperty('MAILERSEND_API_KEY')) {
     try {
       return mailersendSend(m);
     } catch (e) {
-      Logger.log('MailerSend gagal: ' + (e.message || e));
+      Logger.log('MailerSend gagal / kuota habis: ' + (e.message || e) + ', mencoba Resend...');
+    }
+  }
+
+  // 3. Coba Resend jika sudah diatur
+  if (P.getProperty('RESEND_API_KEY')) {
+    try {
+      return resendSend(m);
+    } catch (e) {
+      Logger.log('Resend gagal: ' + (e.message || e));
       throw e;
     }
   }
