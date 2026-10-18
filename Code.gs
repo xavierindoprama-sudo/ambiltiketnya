@@ -8,6 +8,9 @@
  *   BREVO_API_KEY       (opsional) API key Brevo - dipakai otomatis bila kuota email harian Gmail/Apps Script habis
  *   BREVO_SENDER_EMAIL  (wajib jika Brevo dipakai) email pengirim yang sudah diverifikasi di Brevo
  *   BREVO_SENDER_NAME   (opsional) nama pengirim, default AmbilTiketnya
+ *   RESEND_API_KEY      (opsional) API key Resend - dipakai otomatis bila kuota Gmail & Brevo habis
+ *   RESEND_SENDER_EMAIL (opsional) email pengirim terverifikasi di Resend (default tiket@ambiltiketnya.online)
+ *   RESEND_SENDER_NAME  (opsional) nama pengirim, default AmbilTiketnya
  *   ORG_NAME         (opsional) nama pengelola di halaman syarat/privasi/cookie
  *   CONTACT_EMAIL    (opsional) email kontak di halaman syarat/privasi/cookie
  *   TICKET_FOLDER_ID (otomatis) id folder Google Drive berisi gambar e-tiket
@@ -261,6 +264,14 @@ function cekKoneksi() {
       const r = UrlFetchApp.fetch('https://api.brevo.com/v3/account', { muteHttpExceptions: true, headers: { 'api-key': bk, accept: 'application/json' } });
       r.getResponseCode() === 200 ? ok('Brevo terhubung (akun: ' + (JSON.parse(r.getContentText()).email || '?') + '), pengirim: ' + bf + ' - jalankan ujiBrevo untuk mencoba kirim') : bad('Brevo HTTP ' + r.getResponseCode() + ': ' + brevoMessage(r.getContentText()) + ' | ' + brevoHint(r.getResponseCode(), r.getContentText()));
     } catch (e) { bad('Brevo: ' + e.message); }
+  }
+  const rk = P.getProperty('RESEND_API_KEY'), rf = P.getProperty('RESEND_SENDER_EMAIL');
+  if (!rk) ok('Resend belum diatur (opsional: dipakai saat kuota Gmail & Brevo habis)');
+  else {
+    try {
+      const r = UrlFetchApp.fetch('https://api.resend.com/domains', { muteHttpExceptions: true, headers: { 'Authorization': 'Bearer ' + rk } });
+      r.getResponseCode() === 200 ? ok('Resend terhubung (pengirim: ' + (rf || 'tiket@ambiltiketnya.online') + ') - jalankan ujiResend untuk mencoba kirim') : bad('Resend HTTP ' + r.getResponseCode() + ': ' + r.getContentText().slice(0, 200));
+    } catch (e) { bad('Resend: ' + e.message); }
   }
   try { if (!q("SELECT 1 FROM information_schema.columns WHERE table_name='orders' AND column_name='kind'").length) bad('Kolom orders.kind belum ada -> jalankan migrate-invitations.sql di Neon'); else ok('Kolom orders.kind ada (fitur undangan)'); } catch (e) { bad('Cek kolom kind: ' + e.message); }
   try { if (!q("SELECT 1 FROM information_schema.columns WHERE table_name='events' AND column_name='terms'").length) bad('Kolom events.terms belum ada -> jalankan migrate-terms.sql di Neon'); else ok('Kolom events.terms ada'); } catch (e) { bad('Cek kolom terms: ' + e.message); }
@@ -792,7 +803,7 @@ function gateLoginImpl(p) {
 }
 
 
-/* ---------- Pengiriman email: Gmail (MailApp) dulu, Brevo jika kuota harian habis ---------- */
+/* ---------- Pengiriman email: Gmail (MailApp) -> Brevo -> Resend ---------- */
 function gmailQuotaLeft() { try { return MailApp.getRemainingDailyQuota(); } catch (e) { return 1; } }
 function sendMail(m) {                           // m: {to, subject, htmlBody, name, attachments[]}
   if (gmailQuotaLeft() > 0) {
@@ -803,11 +814,32 @@ function sendMail(m) {                           // m: {to, subject, htmlBody, n
       return 'gmail';
     } catch (e) {
       if (!/quota|too many times|limit/i.test(String(e && e.message))) throw e;   // error lain (mis. alamat salah) tidak dialihkan
-      Logger.log('Kuota Gmail habis, beralih ke Brevo: ' + e.message);
+      Logger.log('Kuota Gmail habis, coba provider cadangan: ' + e.message);
     }
   }
-  return brevoSend(m);
+
+  // 1. Coba Brevo jika sudah diatur
+  if (P.getProperty('BREVO_API_KEY') && P.getProperty('BREVO_SENDER_EMAIL')) {
+    try {
+      return brevoSend(m);
+    } catch (e) {
+      Logger.log('Brevo gagal / kuota habis: ' + (e.message || e) + ', mencoba Resend...');
+    }
+  }
+
+  // 2. Coba Resend jika sudah diatur
+  if (P.getProperty('RESEND_API_KEY')) {
+    try {
+      return resendSend(m);
+    } catch (e) {
+      Logger.log('Resend gagal: ' + (e.message || e));
+      throw e;
+    }
+  }
+
+  throw new Error('EMAIL_QUOTA');
 }
+
 function brevoRaw(m) {                           // panggilan mentah ke Brevo -> {code, text}
   const key = P.getProperty('BREVO_API_KEY'), from = P.getProperty('BREVO_SENDER_EMAIL');
   const body = { sender: { name: P.getProperty('BREVO_SENDER_NAME') || m.name || 'AmbilTiketnya', email: from }, to: [{ email: m.to }], subject: m.subject, htmlContent: m.htmlBody };
@@ -830,6 +862,7 @@ function brevoHint(code, text) {                 // penjelasan singkat untuk gal
   return '';
 }
 function brevoMessage(text) { try { return JSON.parse(text).message || text; } catch (e) { return String(text).slice(0, 200); } }
+
 // Uji manual dari editor: kirim email percobaan lewat Brevo ke SUPERADMIN_EMAIL (tanpa menunggu kuota habis)
 function ujiBrevo() {
   const to = P.getProperty('SUPERADMIN_EMAIL');
@@ -838,6 +871,50 @@ function ujiBrevo() {
   const r = brevoRaw({ to: to, subject: 'Uji Brevo - ambiltiketnya.online', htmlBody: '<p>Jika email ini diterima, cadangan Brevo berfungsi.</p>' });
   if (r.code >= 200 && r.code < 300) Logger.log('OK - email percobaan terkirim via Brevo ke ' + to + ' (periksa kotak masuk/spam)');
   else Logger.log('GAGAL (HTTP ' + r.code + '): ' + brevoMessage(r.text) + '\nSARAN: ' + (brevoHint(r.code, r.text) || 'lihat pesan di atas'));
+}
+
+/* ---------- Provider Resend (api.resend.com) ---------- */
+function resendRaw(m) {
+  const key = P.getProperty('RESEND_API_KEY');
+  const from = P.getProperty('RESEND_SENDER_EMAIL') || 'tiket@ambiltiketnya.online';
+  const name = P.getProperty('RESEND_SENDER_NAME') || m.name || 'AmbilTiketnya';
+  const body = {
+    from: `${name} <${from}>`,
+    to: [m.to],
+    subject: m.subject,
+    html: m.htmlBody
+  };
+  if (m.attachments && m.attachments.length) {
+    body.attachments = m.attachments.map(b => ({
+      filename: b.getName(),
+      content: Utilities.base64Encode(b.getBytes())
+    }));
+  }
+  const r = UrlFetchApp.fetch('https://api.resend.com/emails', {
+    method: 'post',
+    contentType: 'application/json',
+    muteHttpExceptions: true,
+    headers: { 'Authorization': 'Bearer ' + key },
+    payload: JSON.stringify(body)
+  });
+  return { code: r.getResponseCode(), text: String(r.getContentText()) };
+}
+function resendSend(m) {
+  if (!P.getProperty('RESEND_API_KEY')) throw new Error('EMAIL_QUOTA');
+  const r = resendRaw(m);
+  if (r.code < 200 || r.code >= 300) {
+    Logger.log('Resend ' + r.code + ': ' + r.text.slice(0, 300));
+    throw new Error('EMAIL_FAIL');
+  }
+  return 'resend';
+}
+function ujiResend() {
+  const to = P.getProperty('SUPERADMIN_EMAIL');
+  if (!to) { Logger.log('GAGAL: SUPERADMIN_EMAIL belum diisi'); return; }
+  if (!P.getProperty('RESEND_API_KEY')) { Logger.log('GAGAL: isi RESEND_API_KEY di Script Properties'); return; }
+  const r = resendRaw({ to: to, subject: 'Uji Resend - ambiltiketnya.online', htmlBody: '<p>Jika email ini diterima, integrasi Resend berfungsi sempurna!</p>' });
+  if (r.code >= 200 && r.code < 300) Logger.log('OK - email percobaan terkirim via Resend ke ' + to + ' (periksa kotak masuk/spam)');
+  else Logger.log('GAGAL (HTTP ' + r.code + '): ' + r.text);
 }
 
 /* ---------- E-ticket PDF + email ---------- */
