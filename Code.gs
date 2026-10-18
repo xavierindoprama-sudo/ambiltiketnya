@@ -677,12 +677,17 @@ function resendTicketEmail(id) {
 function batchResendEmails(u, p) {
   ensureEmailColumns();
   const evId = p && p.eventId ? p.eventId : null;
+  const limit = Math.min(Math.max(parseInt(p && p.limit, 10) || 5, 1), 25);
   const list = q(`SELECT o.id, o.order_code, o.ticket_code
     FROM orders o WHERE o.status='confirmed' AND o.kind='order' AND coalesce(o.emailed, false)=false
     AND ($1::uuid IS NULL OR o.event_id=$1::uuid)
-    ORDER BY o.created_at ASC LIMIT 100`, [evId]);
+    ORDER BY o.created_at ASC LIMIT $2`, [evId, limit]);
   
-  if (!list.length) return { total: 0, sent: 0, failed: 0, stopped: false, message: 'Semua pemesan sudah menerima email.' };
+  const totalLeft = q(`SELECT count(*)::int AS cnt
+    FROM orders o WHERE o.status='confirmed' AND o.kind='order' AND coalesce(o.emailed, false)=false
+    AND ($1::uuid IS NULL OR o.event_id=$1::uuid)`, [evId])[0].cnt;
+
+  if (!list.length) return { total: 0, sent: 0, failed: 0, remaining: 0, stopped: false, message: 'Semua pemesan sudah menerima email.' };
   
   let sent = 0, failed = 0, stopped = false, stopReason = '';
   for (let i = 0; i < list.length; i++) {
@@ -692,7 +697,7 @@ function batchResendEmails(u, p) {
       sendTicketEmail(o);
       q(`UPDATE orders SET emailed=true, emailed_at=now(), email_error=NULL WHERE id=$1::uuid`, [item.id]);
       sent++;
-      Utilities.sleep(300);
+      Utilities.sleep(200);
     } catch (err) {
       failed++;
       const msg = err && err.message ? err.message : 'EMAIL_FAIL';
@@ -710,7 +715,7 @@ function batchResendEmails(u, p) {
       }
     }
   }
-  return { total: list.length, sent: sent, failed: failed, stopped: stopped, reason: stopReason };
+  return { total: list.length, sent: sent, failed: failed, remaining: Math.max(0, totalLeft - sent), stopped: stopped, reason: stopReason };
 }
 function validate(u, p) {
   const code = String(p.code || '').trim().toUpperCase().replace(/\s/g, '');
