@@ -517,9 +517,11 @@ const ACTIONS = {
   resend:      { min: 2, fn: (u, p) => resendTicketEmail(p.id) },
   batchResendEmails: { min: 2, fn: batchResendEmails },
   ordersAll:   { min: 2, fn: ordersAll },
-  invitations: { min: 3, fn: () => invitations() },
-  invitationCreate: { min: 3, fn: invitationCreate },
+  invitations: { min: 2, fn: () => invitations() },
+  invitationCreate: { min: 2, fn: invitationCreate },
   checkinOrder:{ min: 2, fn: checkinOrder },
+  getCheckinPin: { min: 3, fn: getCheckinPin },
+  setCheckinPin: { min: 3, fn: setCheckinPin },
   legalGet:    { min: 2, fn: () => legalGetAll() },
   legalSave:   { min: 3, fn: legalSave },
   legalPreview:{ min: 2, fn: (u, p) => legalPreview(p) },
@@ -1220,17 +1222,51 @@ function invitationCreate(u, p) {                // undangan memakai kuota yang 
   if (!row) throw new Error('SOLDOUT');
   return q(INV_SQL + ' WHERE o.id=$1::uuid', [row.id])[0];
 }
-function verifySuperPassword(u, pw) {            // password SUPER ADMIN mana pun; 5 kali salah -> terkunci 10 menit
+function getCheckinPin(u) {
+  const r = q(`SELECT value, to_char(updated_at AT TIME ZONE 'Asia/Jakarta', 'YYYY-MM-DD HH24:MI') AS updated_at FROM settings WHERE key='checkin_pin'`)[0];
+  const custom = r ? r.value : (P.getProperty('CHECKIN_PIN') || P.getProperty('CHECKIN_PASSWORD') || '');
+  return { pin: custom || '', isCustom: !!custom, updated: r ? r.updated_at : null };
+}
+
+function setCheckinPin(u, p) {
+  const pin = String(p.pin || '').trim();
+  if (p.reset || !pin) {
+    q(`DELETE FROM settings WHERE key='checkin_pin' RETURNING key`);
+    return { pin: '', isCustom: false };
+  }
+  if (pin.length < 4 || pin.length > 50) throw new Error('BAD_PIN');
+  q(`INSERT INTO settings(key, value, updated_at) VALUES('checkin_pin', $1, now())
+     ON CONFLICT (key) DO UPDATE SET value=EXCLUDED.value, updated_at=now() RETURNING key`, [pin]);
+  return { pin: pin, isCustom: true };
+}
+
+function verifyCheckinPassword(u, pw) {          // PIN khusus check-in atau password SUPER ADMIN; 5 kali salah -> terkunci 10 menit
   const cache = CacheService.getScriptCache(), key = 'ci:' + u.id, n = parseInt(cache.get(key) || '0', 10);
   if (n >= 5) throw new Error('LOCKED');
-  const rows = q(`SELECT password_hash FROM users WHERE role='super_admin'`);
+
+  const inputPw = String(pw || '').trim();
   let ok = false;
-  for (let i = 0; i < rows.length && !ok; i++) ok = checkPw(String(pw || ''), rows[i].password_hash);
+
+  // 1. Cek PIN khusus check-in di settings / Script Properties
+  const r = q(`SELECT value FROM settings WHERE key='checkin_pin'`)[0];
+  const customPin = r ? r.value : (P.getProperty('CHECKIN_PIN') || P.getProperty('CHECKIN_PASSWORD') || '');
+  if (customPin && inputPw === customPin.trim()) {
+    ok = true;
+  }
+
+  // 2. Fallback: jika belum cocok, periksa password super admin mana pun (master password)
+  if (!ok) {
+    const rows = q(`SELECT password_hash FROM users WHERE role='super_admin'`);
+    for (let i = 0; i < rows.length && !ok; i++) ok = checkPw(inputPw, rows[i].password_hash);
+  }
+
   if (!ok) { cache.put(key, String(n + 1), 600); throw new Error('BAD_PASSWORD'); }
   cache.remove(key);
 }
-function checkinOrder(u, p) {                    // cek in manual = sama seperti scan QR, tetapi wajib password super admin
-  verifySuperPassword(u, p.password);
+function verifySuperPassword(u, pw) { return verifyCheckinPassword(u, pw); }
+
+function checkinOrder(u, p) {                    // cek in manual = sama seperti scan QR, wajib PIN check-in / password super admin
+  verifyCheckinPassword(u, p.password);
   const o = q(`SELECT ticket_code FROM orders WHERE id=$1::uuid`, [p.id])[0];
   if (!o) throw new Error('NOT_FOUND');
   return validate(u, { code: o.ticket_code });
