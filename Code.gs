@@ -553,11 +553,17 @@ function normPhone(s) {
 }
 function saveProfile(u, p) {
   const wa = normPhone(p.whatsapp), age = parseInt(p.age, 10), church = String(p.church || '').trim();
+  const name = String(p.name || '').trim();
+  if (name && name.length < 2) throw new Error('BAD_NAME');
   if (!wa) throw new Error('BAD_PHONE');
   if (!(age >= 1 && age <= 120)) throw new Error('BAD_AGE');
   if (church.length < 2) throw new Error('BAD_CHURCH');
-  q(`UPDATE users SET whatsapp=$1,age=$2::int,church=$3 WHERE id=$4::uuid RETURNING id`, [wa, age, church, u.id]);
-  return { whatsapp: wa };
+  if (name) {
+    q(`UPDATE users SET name=$1,whatsapp=$2,age=$3::int,church=$4 WHERE id=$5::uuid RETURNING id`, [name, wa, age, church, u.id]);
+  } else {
+    q(`UPDATE users SET whatsapp=$1,age=$2::int,church=$3 WHERE id=$4::uuid RETURNING id`, [wa, age, church, u.id]);
+  }
+  return { whatsapp: wa, name: name || u.name };
 }
 const UID_SESSION = "(SELECT user_id FROM sessions WHERE token_hash=$1 AND expires_at>now())";
 function eventsSql(uid) {   // uid = ekspresi SQL untuk id pengguna
