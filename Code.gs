@@ -508,7 +508,7 @@ const ACTIONS = {
   } },
   walkinCreate:{ min: 1, fn: walkinCreate },
   orders:      { min: 2, fn: adminOrders },
-  users:       { min: 3, fn: () => q(`SELECT id,name,email,whatsapp,age,church,role,coalesce(picture,'') AS picture,created_at FROM users ORDER BY created_at DESC LIMIT 1000`) },
+  users:       { min: 3, fn: () => q(`SELECT id,name,email,whatsapp,age,church,role,coalesce(picture,'') AS picture,created_at FROM users ORDER BY created_at DESC LIMIT 5000`) },
   migrateOauth:{ min: 3, fn: () => migrateOauth() },
   saveEvent:   { min: 3, fn: saveEvent },
   toggleEvent: { min: 3, fn: (u, p) => q(`UPDATE events SET is_active=$2::bool WHERE id=$1::uuid RETURNING id`, [p.id, !!p.active]) && true },
