@@ -809,8 +809,16 @@ const NL=String.fromCharCode(10),find=(a,id)=>a.find(x=>x.id===id),A={
   if(!numAge||numAge<1||numAge>120)return toast(t('e_BAD_AGE'),1);
   if(!ch||ch.length<2)return toast(t('e_BAD_CHURCH'),1);
   try{
-    await api('saveProfile',{name:nm,whatsapp:wa,age:ag,church:ch},t('loading'));
-    S.user=await api('me');cm();renderUser();
+    const res=await api('saveProfile',{name:nm,whatsapp:wa,age:ag,church:ch},t('loading'));
+    if(res&&res.id){
+      S.user=res;
+    }else{
+      S.user=Object.assign({},S.user||{},{name:nm,whatsapp:wa,age:ag,church:ch,needProfile:false});
+    }
+    S.user.needProfile=false;
+    cm();
+    renderUser();
+    toast('✅ Profil berhasil disimpan!',0);
   }catch(e){fail(e)}
  },
  async book(el){if(!S.user){S.pendingEventId=el.dataset.id;gateModal();return;}const q=$('#bq')?+$('#bq').value:1,ev=S.ev&&find(S.ev,el.dataset.id),auto=!!(ev&&!ev.is_paid),w=auto?openWait():null;   // acara gratis: buka tab WhatsApp sekarang (saat klik)

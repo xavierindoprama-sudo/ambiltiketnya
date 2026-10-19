@@ -485,7 +485,16 @@ function keepWarm() { q('SELECT 1 AS ok'); }
 /* ---------- Dispatcher: min = peran minimum, prof = profil harus lengkap ---------- */
 const ACTIONS = {
   me:          { min: 0, fn: u => Object.assign({}, u, { needProfile: !u.whatsapp }) },
-  saveProfile: { min: 0, fn: saveProfile },
+  saveProfile: { min: 0, fn: (u, p, tk) => {
+    const res = saveProfile(u, p);
+    try { CacheService.getScriptCache().remove('s' + sha(tk).slice(0, 40)); } catch (e) {}
+    const updated = q(AUTH_SQL, [sha(tk)])[0];
+    if (updated) {
+      try { CacheService.getScriptCache().put('s' + sha(tk).slice(0, 40), JSON.stringify(updated), 120); } catch (e) {}
+      return Object.assign({}, updated, { needProfile: !updated.whatsapp });
+    }
+    return Object.assign({}, u, res, { needProfile: false });
+  } },
   logout:      { min: 0, fn: (u, p, tk) => { CacheService.getScriptCache().remove('s' + sha(tk).slice(0, 40)); q(`DELETE FROM sessions WHERE token_hash=$1 RETURNING token_hash`, [sha(tk)]); return true; } },
   events:      { min: 0, prof: 1, fn: userEvents },
   myTickets:   { min: 0, prof: 1, fn: myTickets },
