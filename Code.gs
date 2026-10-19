@@ -519,6 +519,8 @@ const ACTIONS = {
   ordersAll:   { min: 2, fn: ordersAll },
   invitations: { min: 2, fn: () => invitations() },
   invitationCreate: { min: 2, fn: invitationCreate },
+  getInvConfig: { min: 2, fn: getInvConfig },
+  setInvMaxQty: { min: 3, fn: setInvMaxQty },
   checkinOrder:{ min: 2, fn: checkinOrder },
   getCheckinPin: { min: 3, fn: getCheckinPin },
   setCheckinPin: { min: 3, fn: setCheckinPin },
@@ -631,16 +633,17 @@ function stats() {
 
 function ensureWalkinSchema() {
   const cache = CacheService.getScriptCache();
-  if (cache.get('col_walkin_v2')) return;
+  if (cache.get('col_walkin_v3')) return;
   try {
     neon([
       { query: 'ALTER TABLE events ADD COLUMN IF NOT EXISTS walkin_quota int DEFAULT 0' },
       { query: 'ALTER TABLE orders ADD COLUMN IF NOT EXISTS guest_phone text' },
       { query: 'ALTER TABLE orders ADD COLUMN IF NOT EXISTS guest_email text' },
+      { query: 'ALTER TABLE orders ADD COLUMN IF NOT EXISTS guest_age int' },
       { query: 'ALTER TABLE orders DROP CONSTRAINT IF EXISTS orders_kind_check' },
       { query: "ALTER TABLE orders ADD CONSTRAINT orders_kind_check CHECK (kind IN ('order','invitation','walk_in'))" }
     ]);
-    cache.put('col_walkin_v2', '1', 21600);
+    cache.put('col_walkin_v3', '1', 21600);
   } catch (e) {
     Logger.log('ensureWalkinSchema error: ' + (e.stack || e));
   }
@@ -666,8 +669,8 @@ const ORDERS_SQL = `SELECT o.id,o.order_code,o.ticket_code,o.qty,o.total,o.statu
     coalesce(o.emailed, false) AS emailed, o.email_error, o.emailed_at,
     CASE WHEN o.kind IN ('invitation','walk_in') THEN o.guest_name ELSE u.name END AS name,
     CASE WHEN o.kind='invitation' THEN 'Undangan' WHEN o.kind='walk_in' THEN coalesce(nullif(o.guest_email,''), 'Walk-In') ELSE u.email END AS email,
-    CASE WHEN o.kind='invitation' THEN '' WHEN o.kind='walk_in' THEN coalesce(o.guest_phone, '') ELSE u.whatsapp END AS whatsapp,
-    CASE WHEN o.kind IN ('invitation','walk_in') THEN NULL ELSE u.age END AS age,
+    CASE WHEN o.kind IN ('invitation','walk_in') THEN coalesce(o.guest_phone, '') ELSE u.whatsapp END AS whatsapp,
+    CASE WHEN o.kind IN ('invitation','walk_in') THEN o.guest_age ELSE u.age END AS age,
     CASE WHEN o.kind IN ('invitation','walk_in') THEN o.guest_org ELSE u.church END AS church,
     e.id AS event_id,e.name AS event_name
     FROM orders o JOIN users u ON u.id=o.user_id JOIN events e ON e.id=o.event_id
@@ -774,8 +777,8 @@ function validate(u, p) {
   const o = q(`SELECT o.id,o.qty,o.status,o.checked_in,o.checked_in_at,o.kind,
     CASE WHEN o.kind IN ('invitation','walk_in') THEN o.guest_name ELSE u.name END AS name,
     CASE WHEN o.kind IN ('invitation','walk_in') THEN o.guest_org ELSE u.church END AS church,
-    CASE WHEN o.kind IN ('invitation','walk_in') THEN NULL ELSE u.age END AS age,
-    CASE WHEN o.kind='invitation' THEN '' WHEN o.kind='walk_in' THEN coalesce(o.guest_phone, '') ELSE u.whatsapp END AS whatsapp,e.name AS event_name
+    CASE WHEN o.kind IN ('invitation','walk_in') THEN o.guest_age ELSE u.age END AS age,
+    CASE WHEN o.kind IN ('invitation','walk_in') THEN coalesce(o.guest_phone, '') ELSE u.whatsapp END AS whatsapp,e.name AS event_name
     FROM orders o JOIN users u ON u.id=o.user_id JOIN events e ON e.id=o.event_id WHERE o.ticket_code=$1`, [code])[0];
   if (!o) return { result: 'NOT_FOUND', code: code };
   const base = { code: code, kind: o.kind, name: o.name, church: o.church, age: o.age, whatsapp: o.whatsapp, event: o.event_name, qty: o.qty, at: o.checked_in_at };
@@ -794,7 +797,7 @@ function offlineManifest(u, p) {
   const sql = `SELECT o.ticket_code AS code, o.qty, o.checked_in AS checked, o.status, o.kind,
     CASE WHEN o.kind IN ('invitation','walk_in') THEN o.guest_name ELSE u.name END AS name,
     CASE WHEN o.kind IN ('invitation','walk_in') THEN o.guest_org ELSE u.church END AS church,
-    CASE WHEN o.kind IN ('invitation','walk_in') THEN NULL ELSE u.age END AS age,
+    CASE WHEN o.kind IN ('invitation','walk_in') THEN o.guest_age ELSE u.age END AS age,
     e.name AS event_name
     FROM orders o JOIN users u ON u.id=o.user_id JOIN events e ON e.id=o.event_id
     WHERE o.event_id=$1::uuid AND o.status<>'cancelled'`;
@@ -1106,7 +1109,7 @@ function ujiMailersendTiket() {
 
 /* ---------- E-ticket PDF + email ---------- */
 function orderFull(id) {
-  return q(`SELECT o.id,o.user_id,o.order_code,o.ticket_code,o.qty,o.total,o.status,o.created_at,o.kind,o.guest_name,o.guest_org,o.guest_phone,o.guest_email,
+  return q(`SELECT o.id,o.user_id,o.order_code,o.ticket_code,o.qty,o.total,o.status,o.created_at,o.kind,o.guest_name,o.guest_org,o.guest_phone,o.guest_email,o.guest_age,
     CASE WHEN o.kind IN ('invitation','walk_in') THEN o.guest_name ELSE u.name END AS uname,
     CASE WHEN o.kind='invitation' THEN 'Undangan' WHEN o.kind='walk_in' THEN coalesce(nullif(o.guest_email,''), 'Walk-In') ELSE u.email END AS email,
     CASE WHEN o.kind IN ('invitation','walk_in') THEN o.guest_org ELSE u.church END AS church,
@@ -1198,25 +1201,53 @@ function sendTicketEmail(o) {
   });
 }
 /* ---------- Undangan (super admin) dan cek in manual oleh admin ---------- */
-const INV_SQL = `SELECT o.id,o.order_code,o.ticket_code,o.qty,o.total,o.status,o.checked_in,o.created_at,o.kind,o.guest_name,o.guest_org,
+const INV_SQL = `SELECT o.id,o.order_code,o.ticket_code,o.qty,o.total,o.status,o.checked_in,o.created_at,o.kind,o.guest_name,o.guest_org,o.guest_phone,o.guest_age,
     e.id AS event_id,e.name,e.banner_url,e.event_date,e.start_time,e.end_time,e.location,e.announcement,e.is_paid,e.payment_instructions
     FROM orders o JOIN events e ON e.id=o.event_id`;
 function invitations() { return q(INV_SQL + " WHERE o.kind='invitation' ORDER BY o.created_at DESC LIMIT 500"); }
+
+function getInvConfig(u) {
+  const r = q(`SELECT value FROM settings WHERE key='invitation_max_qty'`)[0];
+  const maxQty = r ? parseInt(r.value, 10) : (parseInt(P.getProperty('INVITATION_MAX_QTY'), 10) || 50);
+  return { maxQty: (maxQty >= 1 && maxQty <= 1000) ? maxQty : 50 };
+}
+
+function setInvMaxQty(u, p) {
+  const maxQty = parseInt(p.maxQty, 10);
+  if (isNaN(maxQty) || maxQty < 1 || maxQty > 1000) throw new Error('BAD_MAX_QTY');
+  q(`INSERT INTO settings(key, value, updated_at) VALUES('invitation_max_qty', $1, now())
+     ON CONFLICT (key) DO UPDATE SET value=EXCLUDED.value, updated_at=now() RETURNING key`, [String(maxQty)]);
+  return { maxQty: maxQty };
+}
+
 function invitationCreate(u, p) {                // undangan memakai kuota yang sama dengan pesanan biasa
+  ensureWalkinSchema();
+  const cfg = getInvConfig(u);
+  const maxAllowed = cfg.maxQty || 50;
   const name = String(p.name || '').trim().slice(0, 120), org = String(p.org || '').trim().slice(0, 120), qty = parseInt(p.qty, 10) || 1;
+  let phone = String(p.phone || '').trim();
+  if (phone) {
+    phone = normPhone(phone);
+    if (!phone) throw new Error('BAD_PHONE');
+  } else {
+    phone = null;
+  }
+  let age = p.age != null && String(p.age).trim() !== '' ? parseInt(p.age, 10) : null;
+  if (age !== null && (isNaN(age) || age < 1 || age > 120)) throw new Error('BAD_AGE');
+
   if (name.length < 2) throw new Error('BAD_NAME');
   if (org.length < 2) throw new Error('BAD_ORG');
-  if (!(qty >= 1 && qty <= 50)) throw new Error('BAD_QTY');
+  if (!(qty >= 1 && qty <= maxAllowed)) throw new Error('BAD_QTY');
   const ev = q(`SELECT name FROM events WHERE id=$1::uuid`, [p.eventId])[0];
   if (!ev) throw new Error('NOT_FOUND');
   const prefix = (ev.name.replace(/[^A-Za-z]/g, '').slice(0, 4).toUpperCase() || 'EVNT');
-  const ins = `INSERT INTO orders(order_code,ticket_code,user_id,event_id,qty,total,status,kind,guest_name,guest_org)
-    SELECT $1,$2,$3::uuid,e.id,$4::int,0,'confirmed','invitation',$6::text,$7::text FROM events e WHERE e.id=$5::uuid
+  const ins = `INSERT INTO orders(order_code,ticket_code,user_id,event_id,qty,total,status,kind,guest_name,guest_org,guest_phone,guest_age)
+    SELECT $1,$2,$3::uuid,e.id,$4::int,0,'confirmed','invitation',$6::text,$7::text,$8::text,$9::int FROM events e WHERE e.id=$5::uuid
      AND (SELECT coalesce(sum(qty),0) FROM orders WHERE event_id=e.id AND status<>'cancelled') + $4::int <= e.quota
     RETURNING id`;
   const res = neon([
     { query: 'SELECT pg_advisory_xact_lock(hashtext($1))', params: [p.eventId] },
-    { query: wrap(ins), params: [rnd(8), 'TKT-' + prefix + '-' + rnd(6), u.id, qty, p.eventId, name, org] }
+    { query: wrap(ins), params: [rnd(8), 'TKT-' + prefix + '-' + rnd(6), u.id, qty, p.eventId, name, org, phone, age] }
   ]);
   const row = rowsOf(res[1])[0];
   if (!row) throw new Error('SOLDOUT');
@@ -1279,6 +1310,7 @@ function walkinCreate(u, p) {
   const org = String(p.church || p.org || '').trim().slice(0, 120);
   const phone = normPhone(p.whatsapp || p.phone || '');
   const email = String(p.email || '').trim().toLowerCase();
+  const age = p.age != null && String(p.age).trim() !== '' ? parseInt(p.age, 10) : null;
   const qty = parseInt(p.qty, 10) || 1;
   const autoCheckin = p.autoCheckin !== false; // default true: langsung check-in saat registrasi di gerbang
 
@@ -1294,18 +1326,18 @@ function walkinCreate(u, p) {
   const ticketCode = 'TKT-WLK-' + prefix.slice(0, 3) + '-' + rnd(5);
   const orderCode = 'WLK-' + rnd(7);
 
-  const ins = `INSERT INTO orders(order_code, ticket_code, user_id, event_id, qty, total, status, kind, guest_name, guest_org, guest_phone, guest_email, checked_in, checked_in_at, checked_in_by)
-    SELECT $1, $2, $3::uuid, e.id, $4::int, 0, 'confirmed', 'walk_in', $6::text, $7::text, $8::text, $9::text,
-      CASE WHEN $10::boolean THEN $4::int ELSE 0 END,
-      CASE WHEN $10::boolean THEN now() ELSE NULL END,
-      CASE WHEN $10::boolean THEN $3::uuid ELSE NULL END
+  const ins = `INSERT INTO orders(order_code, ticket_code, user_id, event_id, qty, total, status, kind, guest_name, guest_org, guest_phone, guest_email, guest_age, checked_in, checked_in_at, checked_in_by)
+    SELECT $1, $2, $3::uuid, e.id, $4::int, 0, 'confirmed', 'walk_in', $6::text, $7::text, $8::text, $9::text, $10::int,
+      CASE WHEN $11::boolean THEN $4::int ELSE 0 END,
+      CASE WHEN $11::boolean THEN now() ELSE NULL END,
+      CASE WHEN $11::boolean THEN $3::uuid ELSE NULL END
     FROM events e WHERE e.id=$5::uuid AND e.is_active
       AND (coalesce(e.walkin_quota, 0) - coalesce((SELECT sum(qty) FROM orders WHERE event_id=e.id AND status<>'cancelled' AND kind='walk_in'), 0)) >= $4::int
     RETURNING id`;
 
   const res = neon([
     { query: 'SELECT pg_advisory_xact_lock(hashtext($1))', params: [p.eventId] },
-    { query: wrap(ins), params: [orderCode, ticketCode, u.id, qty, p.eventId, name, org, phone, email, autoCheckin] }
+    { query: wrap(ins), params: [orderCode, ticketCode, u.id, qty, p.eventId, name, org, phone, email, age, autoCheckin] }
   ]);
   const row = rowsOf(res[1])[0];
   if (!row) throw new Error('WALKIN_SOLDOUT');
