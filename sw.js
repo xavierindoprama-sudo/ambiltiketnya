@@ -1,5 +1,5 @@
-// AmbilTiketnya Service Worker - v17
-const CACHE = 'atk-v17';
+// AmbilTiketnya Service Worker - v18
+const CACHE = 'atk-v18';
 const STATIC = [
   './',
   './index.html',
