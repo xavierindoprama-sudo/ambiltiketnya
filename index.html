@@ -951,7 +951,7 @@ async function generateTicketPdf(o) {
   };
 
   fld('Hari & Tanggal', fd(o.event_date, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }));
-  fld('Waktu', tm(o) + ' WIB');
+  fld('Waktu', tm(o));
   fld('Lokasi', o.location);
   if (!inv && !wlk) fld('Nama Pemesan', (S.user && S.user.name) || o.uname || '-');
   fld('Jumlah Tiket', (o.qty || 1) + ' orang (' + (o.qty || 1) + ' tiket)');
@@ -991,8 +991,24 @@ async function generateTicketPdf(o) {
   let termsText = String(o.terms || '').trim();
   if (!termsText) {
     const ev = (S.aev && (S.aev.find(e => e.id === o.event_id) || S.aev.find(e => e.name === o.name || e.name === o.event_name))) ||
-               (S.ev && (S.ev.find(e => e.id === o.event_id) || S.ev.find(e => e.name === o.name || e.name === o.event_name)));
+               (S.ev && (S.ev.find(e => e.id === o.event_id) || S.ev.find(e => e.name === o.name || e.name === o.event_name))) ||
+               (S.pre && (S.pre.find(e => e.id === o.event_id) || S.pre.find(e => e.name === o.name || e.name === o.event_name)));
     if (ev && ev.terms) termsText = String(ev.terms).trim();
+  }
+  if (!termsText) {
+    try {
+      const allEvs = await (S.user ? api('events') : call('init', '')).catch(() => null);
+      const evList = Array.isArray(allEvs) ? allEvs : (allEvs && allEvs.events) ? allEvs.events : [];
+      if (evList.length) S.ev = evList;
+      const matchedEv = evList.find(e => e.id === o.event_id || e.name === o.name || e.name === o.event_name);
+      if (matchedEv && matchedEv.terms) termsText = String(matchedEv.terms).trim();
+    } catch(errEv) {}
+  }
+  if (!termsText && o.ticket_code) {
+    try {
+      const pubInfo = await pub('ticketPublic', { code: o.ticket_code });
+      if (pubInfo && pubInfo.terms) termsText = String(pubInfo.terms).trim();
+    } catch(errPub) {}
   }
   if (!termsText && o.id) {
     try {

@@ -437,7 +437,7 @@ export default {
       if (fn === 'ticketPublic') {
         const [p] = args;
         const code = String(p.code || '').trim().toUpperCase();
-        const rows = await neonQuery(env, `SELECT o.ticket_code AS code,o.qty,o.status,o.checked_in,o.kind,e.name,e.event_date::text AS edate,to_char(e.start_time,'HH24:MI') AS stime,e.location
+        const rows = await neonQuery(env, `SELECT o.ticket_code AS code,o.qty,o.status,o.checked_in,o.kind,e.id AS event_id,e.name,e.event_date::text AS edate,to_char(e.start_time,'HH24:MI') AS stime,e.location,e.terms
           FROM orders o JOIN events e ON e.id=o.event_id WHERE o.ticket_code=$1`, [code]);
         if (!rows.length) return json({ ok: true, data: { found: false } });
         const o = rows[0];
@@ -488,7 +488,7 @@ export default {
 
         if (action === 'myTickets') {
           const rows = await neonQuery(env, `SELECT o.id,o.order_code,o.ticket_code,o.qty,o.total,o.status,o.checked_in,o.created_at,
-            e.name,e.banner_url,e.event_date,e.start_time,e.end_time,e.location,e.announcement,e.is_paid,e.payment_instructions
+            e.id AS event_id,e.name,e.banner_url,e.event_date,e.start_time,e.end_time,e.location,e.announcement,e.is_paid,e.payment_instructions,e.terms
             FROM orders o JOIN events e ON e.id=o.event_id WHERE o.user_id=$1::uuid AND o.kind='order' ORDER BY o.created_at DESC`, [u.id]);
           return json({ ok: true, data: rows });
         }
