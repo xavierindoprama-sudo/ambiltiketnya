@@ -22,8 +22,9 @@ function json(data, status = 200) {
 }
 
 function errJson(errorMsg, status = 200) {
-  const code = /^[A-Z0-9_]+$/.test(String(errorMsg)) ? errorMsg : 'E_GENERIC';
-  return json({ ok: false, error: code, __error: code }, status);
+  const str = String(errorMsg || '');
+  const code = /^[A-Z0-9_]+$/.test(str) ? str : 'E_GENERIC';
+  return json({ ok: false, error: code, __error: code, message: str }, status);
 }
 
 // SHA-256 Web Crypto
@@ -397,11 +398,27 @@ export default {
 
         let vol = (await neonQuery(env, `SELECT id, name, role, email FROM users WHERE lower(email)='gate_volunteer@ambiltiketnya.online'`))[0];
         if (!vol) {
-          vol = (await neonQuery(env, `INSERT INTO users(name,email,whatsapp,age,church,password_hash,role)
-            VALUES('Petugas Gerbang','gate_volunteer@ambiltiketnya.online','628123456789',25,'Panitia Gerbang','!','gate_staff')
-            ON CONFLICT (email) DO UPDATE SET role='gate_staff'
-            RETURNING id,name,role,email`))[0];
+          try {
+            const ins = await neonQuery(env, `INSERT INTO users(name,email,whatsapp,age,church,password_hash,role)
+              VALUES('Petugas Gerbang','gate_volunteer@ambiltiketnya.online','628123456789',25,'Panitia Gerbang','!','gate_staff')
+              ON CONFLICT (lower(email)) DO UPDATE SET role='gate_staff'
+              RETURNING id,name,role,email`);
+            vol = ins[0];
+          } catch (eIns) {
+            vol = (await neonQuery(env, `SELECT id, name, role, email FROM users WHERE lower(email)='gate_volunteer@ambiltiketnya.online'`))[0];
+          }
         }
+        if (!vol) {
+          try {
+            const ins2 = await neonQuery(env, `INSERT INTO users(name,email,whatsapp,age,church,password_hash,role)
+              VALUES('Petugas Gerbang','gate_volunteer@ambiltiketnya.online','628123456789',25,'Panitia Gerbang','!','gate_staff')
+              RETURNING id,name,role,email`);
+            vol = ins2[0];
+          } catch (eIns2) {
+            vol = (await neonQuery(env, `SELECT id, name, role, email FROM users WHERE lower(email)='gate_volunteer@ambiltiketnya.online'`))[0];
+          }
+        }
+        if (!vol) throw new Error('VOLUNTEER_FAIL');
 
         const sess = await newSession(env, vol.id);
         return json({ ok: true, data: { session: sess, user: vol, role: 'gate_staff', name: 'Petugas Gerbang', eventId: ev.id, eventName: ev.name } });
