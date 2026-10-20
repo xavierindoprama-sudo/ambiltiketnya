@@ -803,6 +803,236 @@ function ticketImg(o){return new Promise(res=>{try{if(typeof qrcode==='undefined
  const c2=document.createElement('canvas');c2.width=W;c2.height=Math.min(H,y+10);const x2=c2.getContext('2d');x2.drawImage(c,0,0);
  c2.toBlob(b=>res(b?new File([b],'tiket-'+o.ticket_code+'.jpg',{type:'image/jpeg'}):null),'image/jpeg',0.9)}catch(e){res(null)}})}
 const toB64=f=>new Promise((ok,no)=>{const r=new FileReader();r.onload=()=>ok(String(r.result).split(',')[1]);r.onerror=no;r.readAsDataURL(f)});
+
+function qrDataUrl(code, size = 260) {
+  if (typeof qrcode === 'undefined') return '';
+  const q = qrcode(0, 'M');
+  q.addData(code);
+  q.make();
+  const n = q.getModuleCount();
+  const c = document.createElement('canvas');
+  c.width = size;
+  c.height = size;
+  const ctx = c.getContext('2d');
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, size, size);
+  ctx.fillStyle = '#000000';
+  const m = size / n;
+  for (let r = 0; r < n; r++) {
+    for (let col = 0; col < n; col++) {
+      if (q.isDark(r, col)) {
+        ctx.fillRect(col * m, r * m, m, m);
+      }
+    }
+  }
+  return c.toDataURL('image/png');
+}
+
+async function generateTicketPdf(o) {
+  if (!window.jspdf || !window.jspdf.jsPDF) throw new Error('Pustaka PDF belum dimuat');
+  const { jsPDF } = window.jspdf;
+  const pdf = new jsPDF({ orientation: 'p', unit: 'pt', format: 'a4' });
+  const pw = 595.28, ph = 841.89, mx = 36, cw = pw - (mx * 2);
+  const inv = o.kind === 'invitation', wlk = o.kind === 'walk_in';
+
+  // 1. Header Banner
+  if (inv) {
+    pdf.setFillColor(11, 16, 38);
+    pdf.rect(0, 0, pw, 75, 'F');
+    pdf.setFillColor(212, 175, 55);
+    pdf.rect(0, 75, pw, 4, 'F');
+    pdf.setTextColor(212, 175, 55);
+    pdf.setFont('helvetica', 'bold');
+    pdf.setFontSize(10);
+    pdf.text('U N D A N G A N   R E S M I   ·   A M B I L T I K E T N Y A', mx, 28);
+    pdf.setTextColor(255, 255, 255);
+    pdf.setFontSize(18);
+    pdf.text(pdf.splitTextToSize(o.name || o.event_name || 'E-Tiket Undangan', cw), mx, 52);
+  } else if (wlk) {
+    pdf.setFillColor(6, 78, 59);
+    pdf.rect(0, 0, pw, 75, 'F');
+    pdf.setFillColor(16, 185, 129);
+    pdf.rect(0, 75, pw, 4, 'F');
+    pdf.setTextColor(52, 211, 153);
+    pdf.setFont('helvetica', 'bold');
+    pdf.setFontSize(10);
+    pdf.text('E - T I K E T   W A L K - I N   (D I   T E M P A T)   ·   A M B I L T I K E T N Y A', mx, 28);
+    pdf.setTextColor(255, 255, 255);
+    pdf.setFontSize(18);
+    pdf.text(pdf.splitTextToSize(o.name || o.event_name || 'E-Tiket Walk-In', cw), mx, 52);
+  } else {
+    pdf.setFillColor(15, 18, 34);
+    pdf.rect(0, 0, pw, 75, 'F');
+    pdf.setFillColor(91, 78, 240);
+    pdf.rect(0, 75, pw, 4, 'F');
+    pdf.setTextColor(154, 140, 255);
+    pdf.setFont('helvetica', 'bold');
+    pdf.setFontSize(10);
+    pdf.text('E - T I K E T   R E S M I   ·   A M B I L T I K E T N Y A', mx, 28);
+    pdf.setTextColor(255, 255, 255);
+    pdf.setFontSize(18);
+    pdf.text(pdf.splitTextToSize(o.name || o.event_name || 'E-Tiket Resmi', cw), mx, 52);
+  }
+
+  let curY = 96;
+
+  // 2. Guest Info (Undangan / Walk-In)
+  if (inv) {
+    pdf.setFillColor(255, 253, 247);
+    pdf.setDrawColor(212, 175, 55);
+    pdf.roundedRect(mx, curY, cw, 50, 4, 4, 'FD');
+    pdf.setTextColor(184, 146, 31);
+    pdf.setFont('helvetica', 'bold');
+    pdf.setFontSize(8.5);
+    pdf.text('KEPADA YTH.', mx + 14, curY + 16);
+    pdf.setTextColor(11, 16, 38);
+    pdf.setFontSize(14);
+    pdf.text(String(o.guest_name || '-'), mx + 14, curY + 32);
+    pdf.setTextColor(100, 100, 100);
+    pdf.setFont('helvetica', 'normal');
+    pdf.setFontSize(9.5);
+    const gMeta = (o.guest_org || '') + (o.guest_phone ? ' · +' + o.guest_phone : '') + (o.guest_age ? ' · ' + o.guest_age + ' thn' : '');
+    pdf.text(gMeta, mx + 14, curY + 44);
+    curY += 60;
+  } else if (wlk) {
+    pdf.setFillColor(240, 253, 244);
+    pdf.setDrawColor(16, 185, 129);
+    pdf.roundedRect(mx, curY, cw, 50, 4, 4, 'FD');
+    pdf.setTextColor(5, 150, 105);
+    pdf.setFont('helvetica', 'bold');
+    pdf.setFontSize(8.5);
+    pdf.text('PESERTA WALK-IN', mx + 14, curY + 16);
+    pdf.setTextColor(6, 78, 59);
+    pdf.setFontSize(14);
+    pdf.text(String(o.guest_name || o.name || '-'), mx + 14, curY + 32);
+    pdf.setTextColor(100, 100, 100);
+    pdf.setFont('helvetica', 'normal');
+    pdf.setFontSize(9.5);
+    const wMeta = (o.guest_org || o.church || '-') + (o.guest_phone ? ' · +' + o.guest_phone : '');
+    pdf.text(wMeta, mx + 14, curY + 44);
+    curY += 60;
+  }
+
+  // 3. QR Code & Event Details
+  const qrSize = 125;
+  const qrImg = qrDataUrl(o.ticket_code, 260);
+  if (qrImg) {
+    if (inv) {
+      pdf.setDrawColor(212, 175, 55);
+      pdf.rect(mx, curY, qrSize, qrSize);
+    }
+    pdf.addImage(qrImg, 'PNG', mx + 2, curY + 2, qrSize - 4, qrSize - 4);
+    pdf.setFont('courier', 'bold');
+    pdf.setFontSize(11);
+    pdf.setTextColor(15, 18, 34);
+    pdf.text(o.ticket_code, mx + (qrSize / 2), curY + qrSize + 13, { align: 'center' });
+    pdf.setFont('helvetica', 'normal');
+    pdf.setFontSize(7.5);
+    pdf.setTextColor(120, 128, 145);
+    pdf.text('Pindai di gerbang masuk', mx + (qrSize / 2), curY + qrSize + 23, { align: 'center' });
+  }
+
+  const colX = mx + qrSize + 20;
+  const colW = cw - qrSize - 20;
+  let detY = curY + 6;
+
+  const fld = (label, val) => {
+    pdf.setFont('helvetica', 'bold');
+    pdf.setFontSize(7.5);
+    pdf.setTextColor(120, 128, 145);
+    pdf.text(label.toUpperCase(), colX, detY);
+    detY += 11;
+    pdf.setFont('helvetica', 'bold');
+    pdf.setFontSize(11);
+    pdf.setTextColor(15, 18, 34);
+    const sVal = pdf.splitTextToSize(String(val || '-'), colW);
+    pdf.text(sVal, colX, detY);
+    detY += (sVal.length * 12.5) + 5;
+  };
+
+  fld('Hari & Tanggal', fd(o.event_date, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }));
+  fld('Waktu', tm(o) + ' WIB');
+  fld('Lokasi', o.location);
+  if (!inv && !wlk) fld('Nama Pemesan', (S.user && S.user.name) || o.uname || '-');
+  fld('Jumlah Tiket', (o.qty || 1) + ' orang (' + (o.qty || 1) + ' tiket)');
+  fld(inv ? 'Nomor Undangan' : wlk ? 'Nomor Walk-In' : 'Nomor Pesanan', o.order_code || o.id);
+
+  curY = Math.max(curY + qrSize + 30, detY + 4);
+
+  // 4. Catatan / Pengumuman
+  if (inv) {
+    pdf.setFillColor(255, 251, 230);
+    pdf.setDrawColor(255, 229, 143);
+    pdf.roundedRect(mx, curY, cw, 26, 3, 3, 'FD');
+    pdf.setTextColor(135, 77, 0);
+    pdf.setFont('helvetica', 'bold');
+    pdf.setFontSize(8);
+    const nStr = 'ⓘ Catatan: Satu kode QR ini berlaku untuk ' + o.qty + ' orang. Mohon hadir dan masuk bersamaan di gerbang masuk karena tiket hanya dapat dipindai 1 kali.';
+    pdf.text(pdf.splitTextToSize(nStr, cw - 16), mx + 8, curY + 12);
+    curY += 34;
+  } else if (o.announcement) {
+    pdf.setFillColor(241, 240, 255);
+    pdf.setDrawColor(218, 215, 254);
+    pdf.roundedRect(mx, curY, cw, 26, 3, 3, 'FD');
+    pdf.setTextColor(60, 50, 150);
+    pdf.setFont('helvetica', 'normal');
+    pdf.setFontSize(8);
+    pdf.text(pdf.splitTextToSize('Pengumuman: ' + o.announcement, cw - 16), mx + 8, curY + 12);
+    curY += 34;
+  }
+
+  // 5. Divider
+  pdf.setDrawColor(220, 224, 235);
+  pdf.setLineWidth(1);
+  pdf.line(mx, curY, mx + cw, curY);
+  curY += 16;
+
+  // 6. SYARAT & KETENTUAN ACARA (A4 multi-page support)
+  const ev = (S.ev && find(S.ev, o.event_id)) || (S.aev && find(S.aev, o.event_id)) || {};
+  const termsText = (o.terms || ev.terms || defTerms() || '').trim();
+
+  pdf.setFont('helvetica', 'bold');
+  pdf.setFontSize(10);
+  pdf.setTextColor(15, 18, 34);
+  pdf.text('SYARAT & KETENTUAN ACARA', mx, curY);
+  curY += 13;
+
+  pdf.setFont('helvetica', 'normal');
+  pdf.setFontSize(7.5);
+  pdf.setTextColor(65, 70, 80);
+
+  const paras = termsText.split(/\r?\n/).filter(p => p.trim().length > 0);
+  for (const para of paras) {
+    const lines = pdf.splitTextToSize(para.trim(), cw);
+    if (curY + (lines.length * 9.5) > ph - 30) {
+      pdf.addPage('a4', 'p');
+      curY = 36;
+      pdf.setFont('helvetica', 'bold');
+      pdf.setFontSize(9);
+      pdf.setTextColor(120, 128, 145);
+      pdf.text('SYARAT & KETENTUAN ACARA (Lanjutan) — ' + (o.name || o.event_name || ''), mx, curY);
+      curY += 14;
+      pdf.setFont('helvetica', 'normal');
+      pdf.setFontSize(7.5);
+      pdf.setTextColor(65, 70, 80);
+    }
+    pdf.text(lines, mx, curY);
+    curY += (lines.length * 9.5) + 3;
+  }
+
+  // 7. Footer on all pages
+  const totalP = pdf.getNumberOfPages();
+  for (let p = 1; p <= totalP; p++) {
+    pdf.setPage(p);
+    pdf.setFont('helvetica', 'normal');
+    pdf.setFontSize(7.5);
+    pdf.setTextColor(150, 155, 165);
+    pdf.text('ambiltiketnya.online · Dokumen E-Tiket Resmi · Halaman ' + p + ' dari ' + totalP, mx, ph - 16);
+  }
+
+  pdf.save('E-Tiket-' + o.ticket_code + '.pdf');
+}
+
 function waitHtml(){const css='html,body{height:100%;margin:0}body{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:24px;background:radial-gradient(circle at 50% 30%,#2a2380,#0a0d17 70%);color:#fff;font-family:Arial,sans-serif;text-align:center;padding:20px;box-sizing:border-box}.w{display:flex;flex-direction:column;align-items:center}.t{position:relative;width:96px;height:60px;border-radius:12px;background:linear-gradient(135deg,#5b4ef0,#8b5cf6);animation:fl 1s ease-in-out infinite;box-shadow:0 16px 34px rgba(91,78,240,.55)}.t:before,.t:after{content:"";position:absolute;top:23px;width:14px;height:14px;border-radius:50%;background:#0b0e1a}.t:before{left:-7px}.t:after{right:-7px}.t i{position:absolute;left:16px;right:16px;top:16px;height:5px;border-radius:5px;background:rgba(255,255,255,.75);box-shadow:0 12px 0 rgba(255,255,255,.45)}.s{width:70px;height:10px;border-radius:50%;background:rgba(0,0,0,.5);filter:blur(4px);margin-top:20px;animation:sh 1s ease-in-out infinite}h1{font-size:20px;margin:0}p{margin:8px 0 0;color:#b9bfe0;font-size:14px;max-width:320px}.d:after{content:"";animation:dt 1.2s steps(4) infinite}@keyframes fl{50%{transform:translateY(-18px) rotate(-5deg)}}@keyframes sh{50%{transform:scale(.65);opacity:.45}}@keyframes dt{0%{content:""}25%{content:"."}50%{content:".."}75%{content:"..."}}';
  return '<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>'+esc(t('prep_t'))+'</title><style>'+css+'</style></head><body><div class="w"><div class="t"><i></i></div><div class="s"></div></div><div><h1>'+esc(t('prep_t'))+'<span class="d"></span></h1><p>'+esc(t('please_wait'))+'</p></div></body></html>'}
 function openWait(){let w=null;try{w=window.open('','_blank');if(w){w.document.open();w.document.write(waitHtml());w.document.close()}}catch(e){w=null}return w}   // harus dipanggil langsung saat klik
@@ -936,7 +1166,7 @@ const NL=String.fromCharCode(10),find=(a,id)=>a.find(x=>x.id===id),A={
  async lgreset(){if(!await ask(t('lg_ask_reset')))return;try{await api('legalSave',{key:S.lgk,reset:true},t('loading'));toast(t('saved'));S.lg=await api('legalGet');paintLegal()}catch(e){fail(e)}},cm2,bg2(el,e){if(e.target===el)cm2()},
  evTerms(el){const e=S.ev&&find(S.ev,el.dataset.id);if(!e||!e.terms)return;modal2('<button class="btn sm x" data-act="cm2">&#10005;</button><h2>'+t('ev_terms')+'</h2><p class="muted" style="margin:0">'+esc(e.name)+'</p><div class="tcb">'+esc(e.terms)+'</div><div class="acts"><button class="btn pri" data-act="cm2">'+t('close')+'</button></div>')},
  async dlpng(el){const o=find(S.tix,el.dataset.id);if(!o)return;const f=await ticketImg(o);if(!f)return toast(t('e_E_GENERIC'),1);const a=document.createElement('a');a.href=URL.createObjectURL(f);a.download=f.name;document.body.append(a);a.click();a.remove()},
- async dl(el){bz(1,t('preparing'));try{let o=S.tix&&find(S.tix,el.dataset.id);if(!o){S.tix=await api('myTickets');o=find(S.tix,el.dataset.id)}if(!o)throw new Error('NOT_FOUND');const f=await ticketImg(o);if(!f)throw new Error('E_GENERIC');const b64=await toB64(f);const imgData='data:image/jpeg;base64,'+b64;if(window.jspdf&&window.jspdf.jsPDF){const img=new Image();img.src=imgData;await new Promise(r=>{img.onload=r});const wPt=420,hPt=(img.height/img.width)*wPt;const pdf=new window.jspdf.jsPDF({orientation:'portrait',unit:'pt',format:[wPt,hPt]});pdf.addImage(imgData,'JPEG',0,0,wPt,hPt);pdf.save('E-Tiket-'+o.ticket_code+'.pdf')}else{const a=document.createElement('a');a.href=URL.createObjectURL(f);a.download='E-Tiket-'+o.ticket_code+'.jpg';document.body.append(a);a.click();a.remove()}}catch(e){fail(e)}finally{bz(-1,t('preparing'))}},
+ async dl(el){bz(1,t('preparing'));try{let o=S.tix&&find(S.tix,el.dataset.id);if(!o){S.tix=await api('myTickets');o=find(S.tix,el.dataset.id)}if(!o)throw new Error('NOT_FOUND');await generateTicketPdf(o)}catch(e){fail(e)}finally{bz(-1,t('preparing'))}},
  scOpen(){openScannerModal()},scClose(){closeScannerModal()},scTorch(){toggleTorch()},scAudio(){toggleAudio()},scFlip(){toggleCamera()},scFs(){toggleFullscreen()},evForm(el){evForm(el.dataset.id)},paid(el){S.paid=el.dataset.v==='1';document.querySelectorAll('[data-act=paid]').forEach(b=>b.classList.toggle('on',b===el));const p=$('#pr');p.disabled=!S.paid;if(!S.paid)p.value=0},
  async saveEv(){const f=$('#ef'),d=Object.fromEntries(new FormData(f));d.one_order_per_account=f.one_order_per_account.checked;d.is_active=f.is_active.checked;d.is_paid=S.paid;d.price=S.paid?d.price:0;d.quota=parseInt(d.quota,10)||0;d.walkin_quota=parseInt(d.walkin_quota,10)||0;if(!d.id)delete d.id;try{await api('saveEvent',d,t('loading'));cm();toast(t('saved'));S.aev=null;adminView()}catch(e){fail(e)}},
  async cxl(el){if(await ask(t('ask_cancel')))try{await api('cancelOrder',{id:el.dataset.id},t('loading'));S.view==='inv'?invView($('#ac')):loadOrders()}catch(e){fail(e)}},

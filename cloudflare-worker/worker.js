@@ -579,7 +579,7 @@ export default {
             CASE WHEN o.kind IN ('invitation','walk_in') THEN coalesce(o.guest_phone, '') ELSE u.whatsapp END AS whatsapp,
             CASE WHEN o.kind IN ('invitation','walk_in') THEN o.guest_age ELSE u.age END AS age,
             CASE WHEN o.kind IN ('invitation','walk_in') THEN o.guest_org ELSE u.church END AS church,
-            e.id AS event_id,e.name AS event_name
+            e.id AS event_id,e.name AS event_name,e.terms,e.location,e.event_date,e.start_time,e.announcement
             FROM orders o JOIN users u ON u.id=o.user_id JOIN events e ON e.id=o.event_id
             WHERE ($1::uuid IS NULL OR o.event_id=$1::uuid) AND ($2::text IS NULL OR o.status=$2::text)
             ORDER BY o.created_at DESC LIMIT 5000`;
@@ -596,7 +596,7 @@ export default {
         if (action === 'invitations') {
           needRole(2);
           const r = await neonQuery(env, `SELECT o.id,o.order_code,o.ticket_code,o.qty,o.total,o.status,o.checked_in,o.created_at,o.kind,o.guest_name,o.guest_org,o.guest_phone,o.guest_age,
-            e.id AS event_id,e.name,e.banner_url,e.event_date,e.start_time,e.end_time,e.location,e.announcement,e.is_paid,e.payment_instructions
+            e.id AS event_id,e.name,e.banner_url,e.event_date,e.start_time,e.end_time,e.location,e.announcement,e.is_paid,e.payment_instructions,e.terms
             FROM orders o JOIN events e ON e.id=o.event_id WHERE o.kind='invitation' ORDER BY o.created_at DESC LIMIT 500`);
           return json({ ok: true, data: r });
         }
