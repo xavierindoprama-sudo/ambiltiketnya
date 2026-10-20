@@ -987,9 +987,20 @@ async function generateTicketPdf(o) {
   pdf.line(mx, curY, mx + cw, curY);
   curY += 16;
 
-  // 6. SYARAT & KETENTUAN ACARA (A4 multi-page support)
-  const ev = (S.ev && find(S.ev, o.event_id)) || (S.aev && find(S.aev, o.event_id)) || {};
-  const termsText = (o.terms || ev.terms || defTerms() || '').trim();
+  // 6. SYARAT & KETENTUAN ACARA CUSTOM (A4 multi-page support)
+  let termsText = String(o.terms || '').trim();
+  if (!termsText) {
+    const ev = (S.aev && (S.aev.find(e => e.id === o.event_id) || S.aev.find(e => e.name === o.name || e.name === o.event_name))) ||
+               (S.ev && (S.ev.find(e => e.id === o.event_id) || S.ev.find(e => e.name === o.name || e.name === o.event_name)));
+    if (ev && ev.terms) termsText = String(ev.terms).trim();
+  }
+  if (!termsText && o.id) {
+    try {
+      const full = await api('orderDetail', { id: o.id });
+      if (full && full.terms) termsText = String(full.terms).trim();
+    } catch(x) {}
+  }
+  if (!termsText) termsText = defTerms();
 
   pdf.setFont('helvetica', 'bold');
   pdf.setFontSize(10);

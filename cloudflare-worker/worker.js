@@ -493,6 +493,13 @@ export default {
           return json({ ok: true, data: rows });
         }
 
+        if (action === 'orderDetail') {
+          const r = (await neonQuery(env, `SELECT o.id,o.order_code,o.ticket_code,o.qty,o.status,o.kind,o.guest_name,o.guest_org,o.guest_phone,o.guest_age,
+            e.id AS event_id,e.name,e.banner_url,e.event_date,e.start_time,e.end_time,e.location,e.announcement,e.terms
+            FROM orders o JOIN events e ON e.id=o.event_id WHERE o.id=$1::uuid`, [params.id]))[0];
+          return json({ ok: true, data: r });
+        }
+
         if (action === 'book') {
           const qty = parseInt(params.qty, 10) || 1;
           const ev = (await neonQuery(env, `SELECT name, quota, is_paid, price, max_per_order, one_order_per_account FROM events WHERE id=$1::uuid AND is_active`, [params.eventId]))[0];
