@@ -554,16 +554,71 @@ async function toggleTorch(){if(!_track)return toast('Kamera belum aktif',1);try
 function toggleAudio(){_muted=!_muted;const b=$('#sc_audio_btn');if(b){b.textContent=_muted?'🔇':'🔊';b.classList.toggle('active',_muted)}}
 async function toggleCamera(){_facing=_facing==='environment'?'user':'environment';stopCamera();startCamera()}
 function toggleFullscreen(){const m=$('#sc_modal');if(!m)return;m.classList.toggle('fullscreen');const isFs=m.classList.contains('fullscreen'),b=$('#sc_fs_btn');if(b)b.textContent=isFs?'🗗':'⛶';if(isFs&&m.requestFullscreen)m.requestFullscreen().catch(()=>{});else if(!isFs&&document.fullscreenElement&&document.exitFullscreen)document.exitFullscreen().catch(()=>{})}
+function getFrameRoi(v,fr){
+ if(!v||!v.videoWidth||!v.videoHeight)return null;
+ const vr=v.getBoundingClientRect(),frc=fr?fr.getBoundingClientRect():null;
+ if(!vr.width||!vr.height||!frc||!frc.width||!frc.height){const w=v.videoWidth*0.6,h=v.videoHeight*0.6;return {x:(v.videoWidth-w)/2,y:(v.videoHeight-h)/2,w:w,h:h}}
+ const s=Math.max(vr.width/v.videoWidth,vr.height/v.videoHeight);
+ const ox=((v.videoWidth*s)-vr.width)/2,oy=((v.videoHeight*s)-vr.height)/2;
+ const x=Math.max(0,((frc.left-vr.left)+ox)/s),y=Math.max(0,((frc.top-vr.top)+oy)/s);
+ const w=Math.min(v.videoWidth-x,frc.width/s),h=Math.min(v.videoHeight-y,frc.height/s);
+ return {x:x,y:y,w:w,h:h};
+}
 async function startCamera(){const v=$('#sc_video');if(!v)return;try{
  _stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:_facing},width:{ideal:1280},height:{ideal:720}}});
  v.srcObject=_stream;await v.play();_track=_stream.getVideoTracks()[0];_scanning=true;
  const caps=_track&&_track.getCapabilities?_track.getCapabilities():{};const tb=$('#sc_torch_btn');if(tb)tb.style.display=caps.torch?'grid':'none';
  const bd=('BarcodeDetector' in window)?new BarcodeDetector({formats:['qr_code']}):null;const canvas=$('#sc_canvas'),ctx=canvas.getContext('2d',{willReadFrequently:true});
- async function loop(){if(!_scanning)return;if(!_cooldown&&v.readyState>=2){try{let code='';
-  if(bd){const det=await bd.detect(v);if(det.length)code=det[0].rawValue}
-  else if(typeof jsQR!=='undefined'&&v.videoWidth){canvas.width=v.videoWidth;canvas.height=v.videoHeight;ctx.drawImage(v,0,0);const d=ctx.getImageData(0,0,canvas.width,canvas.height),res=jsQR(d.data,d.width,d.height);if(res&&res.data)code=res.data}
-  if(code)handleScanCode(code)}catch(x){}}
-  if(_scanning)requestAnimationFrame(loop)}
+ async function loop(){
+  if(!_scanning)return;
+  if(!_cooldown&&v.readyState>=2){
+   try{
+    let code='';
+    const roi=getFrameRoi(v,$('#sc_frame'));
+    if(bd){
+     const det=await bd.detect(v);
+     if(det&&det.length){
+      for(const it of det){
+       if(!it.rawValue)continue;
+       if(roi){
+        let cx=0,cy=0;
+        if(it.boundingBox&&(it.boundingBox.width||it.boundingBox.height)){
+         const bx=(it.boundingBox.x!==undefined?it.boundingBox.x:it.boundingBox.left)||0;
+         const by=(it.boundingBox.y!==undefined?it.boundingBox.y:it.boundingBox.top)||0;
+         cx=bx+(it.boundingBox.width||0)/2;
+         cy=by+(it.boundingBox.height||0)/2;
+        }else if(it.cornerPoints&&it.cornerPoints.length){
+         cx=it.cornerPoints.reduce((a,b)=>a+(b.x||0),0)/it.cornerPoints.length;
+         cy=it.cornerPoints.reduce((a,b)=>a+(b.y||0),0)/it.cornerPoints.length;
+        }
+        if(cx||cy){
+         const px=roi.w*0.12,py=roi.h*0.12;
+         if(cx<roi.x-px||cx>roi.x+roi.w+px||cy<roi.y-py||cy>roi.y+roi.h+py)continue;
+        }
+       }
+       code=it.rawValue;
+       break;
+      }
+     }
+    }else if(typeof jsQR!=='undefined'&&v.videoWidth){
+     if(roi&&roi.w>30&&roi.h>30){
+      const sz=Math.min(480,Math.max(260,Math.round(roi.w)));
+      canvas.width=sz;canvas.height=sz;
+      ctx.drawImage(v,roi.x,roi.y,roi.w,roi.h,0,0,sz,sz);
+      const d=ctx.getImageData(0,0,sz,sz),res=jsQR(d.data,d.width,d.height,{inversionAttempts:'dontInvert'});
+      if(res&&res.data)code=res.data;
+     }else{
+      canvas.width=v.videoWidth;canvas.height=v.videoHeight;
+      ctx.drawImage(v,0,0);
+      const d=ctx.getImageData(0,0,canvas.width,canvas.height),res=jsQR(d.data,d.width,d.height);
+      if(res&&res.data)code=res.data;
+     }
+    }
+    if(code)handleScanCode(code);
+   }catch(x){}
+  }
+  if(_scanning)requestAnimationFrame(loop);
+ }
  requestAnimationFrame(loop)
 }catch(err){toast('Tidak dapat mengakses kamera: '+(err.message||'Izin ditolak'),1);closeScannerModal()}}
 function stopCamera(){_scanning=false;if(_stream){_stream.getTracks().forEach(t=>t.stop());_stream=null;_track=null;_torch=false;const b=$('#sc_torch_btn');if(b)b.classList.remove('active')}}
@@ -572,7 +627,9 @@ function scCardHtml(r){const isOk=r.result==='VALID',isWn=r.result==='USED'||r.r
   <div class="sc-status-h"><span class="icn">${ic}</span><div style="flex:1;min-width:0"><div style="font-size:17px;font-weight:800;color:var(--${isOk?'ok':isWn?'wn':'er'})">${title} ${r.isOffline?'<span class="pill wn" style="font-size:11px;vertical-align:middle;margin-left:4px">⚡ Offline</span>':''}</div><div class="mono" style="font-size:12px;opacity:.85">${esc(r.code)} ${isInv?'<span class="pill gd">'+t('inv_badge')+'</span>':isWalkin?'<span class="pill wn" style="background:#10b981;color:#fff;font-weight:700">'+t('walkin_badge')+'</span>':''}</div></div>${isOk?`<div class="sc-qty-pill">${r.entered||r.qty} ${t('tix')}</div>`:''}</div>
   ${r.name?`<div style="margin-top:8px;font-size:13px;display:grid;grid-template-columns:1fr 1fr;gap:4px"><div><b>${esc(r.name)}</b><br><small style="opacity:.75">${isWalkin?'Walk-In: '+(esc(r.church)||'-'):esc(r.church||'-')}${(!isInv&&!isWalkin&&r.age)?' · '+esc(r.age):''}</small></div><div style="text-align:right"><span>Check-in: <b>${r.checked||r.qty}/${r.qty}</b></span><br><small style="opacity:.75">${esc(r.event||'')}</small></div></div>`:''}
   <div class="sc-cool-bar"><div class="sc-cool-fill"></div></div></div>`}
-async function handleScanCode(raw){const code=String(raw||'').trim().toUpperCase();if(!code)return;const now=Date.now();if(code===_lastCode&&(now-_lastTime<3000))return;if(_cooldown)return;
+async function handleScanCode(raw){const code=String(raw||'').trim().toUpperCase();if(!code)return;const now=Date.now();
+ if(code===_lastCode&&(now-_lastTime<10000)){_lastTime=now;return}
+ if(_cooldown)return;
  _cooldown=true;_lastCode=code;_lastTime=now;if(_resTimer){clearTimeout(_resTimer);_resTimer=null}
  const fr=$('#sc_frame'),resArea=$('#sc_res');
  try{let r;
@@ -588,7 +645,7 @@ async function handleScanCode(raw){const code=String(raw||'').trim().toUpperCase
   S.res=r;S.hist.unshift({code:r.code,name:r.name,result:r.result,qty:r.qty,entered:r.entered,time:new Date().toLocaleTimeString(loc())});S.hist=S.hist.slice(0,30);paintScan();
  }catch(err){snd('ERROR');vib('ERROR');if(fr)fr.className='sc-frame error';if(resArea)resArea.innerHTML=scCardHtml({result:'ERROR',code:code})}
  finally{
-  setTimeout(()=>{_cooldown=false;if(fr)fr.className='sc-frame'},1200);
+  setTimeout(()=>{_cooldown=false;if(fr)fr.className='sc-frame'},1500);
   _resTimer=setTimeout(()=>{
    if(resArea&&_scanning){resArea.innerHTML='<div class="sc-card ready"><div style="display:flex;align-items:center;gap:10px;justify-content:center"><span class="sc-pdot"></span><span style="font-size:14px;font-weight:600;letter-spacing:.5px">'+t('v_ready')+'</span></div></div>'}
   },7000);

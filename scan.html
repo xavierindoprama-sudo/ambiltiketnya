@@ -234,8 +234,9 @@ function showResult(r) {
 
   setTimeout(() => {
     cooldown = false;
+    _verifying = false;
     if (fr) fr.className = 'frame';
-  }, 1200);
+  }, 1500);
 
   resTimer = setTimeout(() => {
     if (scanning) {
@@ -258,7 +259,10 @@ async function handleCode(raw) {
   const code = String(raw || '').trim().toUpperCase();
   if (!code || cooldown || _verifying) return;
   const now = Date.now();
-  if (code === lastCode && (now - lastTime < 3000)) return;
+  if (code === lastCode && (now - lastTime < 10000)) {
+    lastTime = now;
+    return;
+  }
 
   cooldown = true;
   _verifying = true;
@@ -377,6 +381,22 @@ async function startCamera() {
     const caps = track && track.getCapabilities ? track.getCapabilities() : {};
     $('btn_torch').style.display = caps.torch ? 'grid' : 'none';
 
+    function getFrameRoi(v, fr) {
+      if (!v || !v.videoWidth || !v.videoHeight) return null;
+      const vr = v.getBoundingClientRect(), frc = fr ? fr.getBoundingClientRect() : null;
+      if (!vr.width || !vr.height || !frc || !frc.width || !frc.height) {
+        const w = v.videoWidth * 0.6, h = v.videoHeight * 0.6;
+        return { x: (v.videoWidth - w) / 2, y: (v.videoHeight - h) / 2, w: w, h: h };
+      }
+      const s = Math.max(vr.width / v.videoWidth, vr.height / v.videoHeight);
+      const ox = ((v.videoWidth * s) - vr.width) / 2, oy = ((v.videoHeight * s) - vr.height) / 2;
+      const x = Math.max(0, ((frc.left - vr.left) + ox) / s);
+      const y = Math.max(0, ((frc.top - vr.top) + oy) / s);
+      const w = Math.min(v.videoWidth - x, frc.width / s);
+      const h = Math.min(v.videoHeight - y, frc.height / s);
+      return { x: x, y: y, w: w, h: h };
+    }
+
     const bd = ('BarcodeDetector' in window) ? new BarcodeDetector({ formats: ['qr_code'] }) : null;
     const canvas = $('c'), ctx = canvas.getContext('2d', { willReadFrequently: true });
 
@@ -385,15 +405,49 @@ async function startCamera() {
       if (!cooldown && v.readyState >= 2) {
         try {
           let code = '';
+          const roi = getFrameRoi(v, $('fr'));
           if (bd) {
             const det = await bd.detect(v);
-            if (det.length) code = det[0].rawValue;
+            if (det && det.length) {
+              for (const item of det) {
+                if (!item.rawValue) continue;
+                if (roi) {
+                  let cx = 0, cy = 0;
+                  if (item.boundingBox && (item.boundingBox.width || item.boundingBox.height)) {
+                    const bx = (item.boundingBox.x !== undefined ? item.boundingBox.x : item.boundingBox.left) || 0;
+                    const by = (item.boundingBox.y !== undefined ? item.boundingBox.y : item.boundingBox.top) || 0;
+                    cx = bx + (item.boundingBox.width || 0) / 2;
+                    cy = by + (item.boundingBox.height || 0) / 2;
+                  } else if (item.cornerPoints && item.cornerPoints.length) {
+                    cx = item.cornerPoints.reduce((s, p) => s + (p.x || 0), 0) / item.cornerPoints.length;
+                    cy = item.cornerPoints.reduce((s, p) => s + (p.y || 0), 0) / item.cornerPoints.length;
+                  }
+                  if (cx || cy) {
+                    const padX = roi.w * 0.12, padY = roi.h * 0.12;
+                    if (cx < roi.x - padX || cx > roi.x + roi.w + padX || cy < roi.y - padY || cy > roi.y + roi.h + padY) {
+                      continue; // Di luar area bidik frame laser!
+                    }
+                  }
+                }
+                code = item.rawValue;
+                break;
+              }
+            }
           } else if (typeof jsQR !== 'undefined' && v.videoWidth) {
-            canvas.width = v.videoWidth; canvas.height = v.videoHeight;
-            ctx.drawImage(v, 0, 0);
-            const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-            const res = jsQR(imgData.data, imgData.width, imgData.height);
-            if (res && res.data) code = res.data;
+            if (roi && roi.w > 30 && roi.h > 30) {
+              const sz = Math.min(480, Math.max(260, Math.round(roi.w)));
+              canvas.width = sz; canvas.height = sz;
+              ctx.drawImage(v, roi.x, roi.y, roi.w, roi.h, 0, 0, sz, sz);
+              const imgData = ctx.getImageData(0, 0, sz, sz);
+              const res = jsQR(imgData.data, imgData.width, imgData.height, { inversionAttempts: 'dontInvert' });
+              if (res && res.data) code = res.data;
+            } else {
+              canvas.width = v.videoWidth; canvas.height = v.videoHeight;
+              ctx.drawImage(v, 0, 0);
+              const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+              const res = jsQR(imgData.data, imgData.width, imgData.height);
+              if (res && res.data) code = res.data;
+            }
           }
           if (code) handleCode(code);
         } catch (e) {}
