@@ -1,5 +1,5 @@
-// AmbilTiketnya Service Worker - v21
-const CACHE = 'atk-v22';
+// AmbilTiketnya Service Worker - v23
+const CACHE = 'atk-v23';
 const STATIC = [
   './',
   './index.html',
@@ -35,7 +35,7 @@ self.addEventListener('fetch', e => {
   const url = new URL(e.request.url);
 
   // 1. API Apps Script → selalu network, JANGAN cache
-  if (url.hostname === 'script.google.com') return;
+  if (url.hostname.includes('workers.dev') || url.hostname === 'script.google.com') return;
 
   // 2. Font Google / CDN cloudflare → stale-while-revalidate
   if (url.hostname.includes('googleapis.com') ||
