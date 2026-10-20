@@ -1274,7 +1274,7 @@ function invitationCreate(u, p) {                // undangan memakai kuota yang 
   return q(INV_SQL + ' WHERE o.id=$1::uuid', [row.id])[0];
 }
 function ensureWaitingSchema() {
-  neon([{ query: CREATE TABLE IF NOT EXISTS invitation_waiting_list (
+  neon([{ query: `CREATE TABLE IF NOT EXISTS invitation_waiting_list (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     event_id uuid NOT NULL REFERENCES events(id) ON DELETE CASCADE,
     created_by uuid REFERENCES users(id) ON DELETE SET NULL,
@@ -1287,20 +1287,20 @@ function ensureWaitingSchema() {
     order_id uuid REFERENCES orders(id) ON DELETE SET NULL,
     promoted_at timestamptz,
     created_at timestamptz NOT NULL DEFAULT now()
-  ) }]);
+  )` }]);
 }
 
 function waitingList(u, p) {
   ensureWaitingSchema();
   const evId = p && p.eventId ? String(p.eventId).trim() : '';
-  const filterEv = evId ?  AND w.event_id=''::uuid : '';
-  return q(SELECT w.id, w.event_id, w.guest_name, w.guest_org, w.guest_phone, w.guest_age, w.qty, w.status, w.order_id,
+  const filterEv = evId ? ` AND w.event_id='` + evId + `'::uuid` : '';
+  return q(`SELECT w.id, w.event_id, w.guest_name, w.guest_org, w.guest_phone, w.guest_age, w.qty, w.status, w.order_id,
       w.created_at, e.name AS event_name, e.event_date,
       (e.quota - coalesce((SELECT sum(qty) FROM orders o WHERE o.event_id=e.id AND o.status<>'cancelled' AND o.kind<>'walk_in'),0))::int AS remaining
     FROM invitation_waiting_list w
     JOIN events e ON e.id=w.event_id
-    WHERE w.status='waiting' 
-    ORDER BY w.created_at ASC);
+    WHERE w.status='waiting'` + filterEv + `
+    ORDER BY w.created_at ASC`);
 }
 
 function waitingCreate(u, p) {
@@ -1323,24 +1323,24 @@ function waitingCreate(u, p) {
   if (name.length < 2) throw new Error('BAD_NAME');
   if (org.length < 2) throw new Error('BAD_ORG');
   if (!(qty >= 1 && qty <= maxAllowed)) throw new Error('BAD_QTY');
-  const ev = q(SELECT id, name FROM events WHERE id=::uuid, [p.eventId])[0];
+  const ev = q(`SELECT id, name FROM events WHERE id=$1::uuid`, [p.eventId])[0];
   if (!ev) throw new Error('NOT_FOUND');
 
-  const r = q(INSERT INTO invitation_waiting_list(event_id, created_by, guest_name, guest_org, guest_phone, guest_age, qty, status, created_at)
-    VALUES(::uuid, ::uuid, , , , , , 'waiting', now()) RETURNING id,
+  const r = q(`INSERT INTO invitation_waiting_list(event_id, created_by, guest_name, guest_org, guest_phone, guest_age, qty, status, created_at)
+    VALUES($1::uuid, $2::uuid, $3, $4, $5, $6, $7, 'waiting', now()) RETURNING id`,
     [ev.id, u.id, name, org, phone, age, qty]);
   return { id: r[0].id, name: name, qty: qty, eventId: ev.id };
 }
 
 function waitingDelete(u, p) {
   ensureWaitingSchema();
-  q(DELETE FROM invitation_waiting_list WHERE id=::uuid RETURNING id, [p.id]);
+  q(`DELETE FROM invitation_waiting_list WHERE id=$1::uuid RETURNING id`, [p.id]);
   return true;
 }
 
 function waitingPromote(u, p) {
   ensureWaitingSchema();
-  const item = q(SELECT * FROM invitation_waiting_list WHERE id=::uuid AND status='waiting', [p.id])[0];
+  const item = q(`SELECT * FROM invitation_waiting_list WHERE id=$1::uuid AND status='waiting'`, [p.id])[0];
   if (!item) throw new Error('NOT_FOUND');
 
   const invOrder = invitationCreate(u, {
@@ -1352,7 +1352,7 @@ function waitingPromote(u, p) {
     qty: item.qty
   });
 
-  q(UPDATE invitation_waiting_list SET status='promoted', order_id=::uuid, promoted_at=now() WHERE id=::uuid RETURNING id,
+  q(`UPDATE invitation_waiting_list SET status='promoted', order_id=$1::uuid, promoted_at=now() WHERE id=$2::uuid RETURNING id`,
     [invOrder.id, item.id]);
 
   return invOrder;
@@ -1361,8 +1361,8 @@ function waitingPromote(u, p) {
 function waitingPromoteAll(u, p) {
   ensureWaitingSchema();
   const evId = p && p.eventId ? String(p.eventId).trim() : '';
-  const filterEv = evId ?  AND event_id=''::uuid : '';
-  const items = q(SELECT * FROM invitation_waiting_list WHERE status='waiting'  ORDER BY created_at ASC);
+  const filterEv = evId ? ` AND event_id='` + evId + `'::uuid` : '';
+  const items = q(`SELECT * FROM invitation_waiting_list WHERE status='waiting'` + filterEv + ` ORDER BY created_at ASC`);
   if (!items.length) return { promoted: 0, failed: 0, items: [] };
 
   let successCount = 0;
@@ -1380,14 +1380,14 @@ function waitingPromoteAll(u, p) {
         age: item.guest_age,
         qty: item.qty
       });
-      q(UPDATE invitation_waiting_list SET status='promoted', order_id=::uuid, promoted_at=now() WHERE id=::uuid RETURNING id,
+      q(`UPDATE invitation_waiting_list SET status='promoted', order_id=$1::uuid, promoted_at=now() WHERE id=$2::uuid RETURNING id`,
         [invOrder.id, item.id]);
       createdOrders.push(invOrder);
       successCount++;
     } catch (err) {
       Logger.log('Promote all error at item ' + item.id + ': ' + err);
       failedCount++;
-      break; // berhenti jika kuota habis
+      break;
     }
   }
 
