@@ -287,9 +287,9 @@ export default {
       if (fn === 'init') {
         const [token] = args;
         const cfg = {
-          scanUrl: env.SCAN_URL || 'https://xavierindoprama-sudo.github.io/ambiltiketnya/scan.html',
-          appUrl: env.APP_URL || 'https://xavierindoprama-sudo.github.io/ambiltiketnya/',
-          siteUrl: env.SITE_URL || 'https://www.ambiltiketnya.online',
+          scanUrl: env.SCAN_URL || 'https://ambiltiketnya.online/scan.html',
+          appUrl: env.APP_URL || 'https://ambiltiketnya.online/',
+          siteUrl: env.SITE_URL || 'https://ambiltiketnya.online',
           googleClientId: (env.GOOGLE_CLIENT_ID || '866753632616-opg57movh0h0th1av7b927d7fvrg3n6e.apps.googleusercontent.com').trim()
         };
 
@@ -773,7 +773,7 @@ export default {
           if (!ev) throw new Error('NOT_FOUND');
           const evId = String(ev.id).toLowerCase();
           const key = (await sha256('gate_' + evId)).slice(0, 16);
-          const base = (params && params.base ? String(params.base) : 'https://xavierindoprama-sudo.github.io/ambiltiketnya/').replace(/\/+$/, '');
+          const base = (params && params.base ? String(params.base) : (env.SITE_URL || 'https://ambiltiketnya.online')).replace(/\/+$/, '');
           return json({ ok: true, data: { eventId: evId, eventName: ev.name, key, url: `${base}/?gate=${evId}&k=${key}` } });
         }
 

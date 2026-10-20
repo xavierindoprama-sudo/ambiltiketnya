@@ -296,7 +296,7 @@ const call=(fn,...a)=>rpc(fn,a);
 function pub(fn,p,m){return new Promise((ok,no)=>{bz(1,m);rpc(fn,[p]).then(r=>{bz(-1,m);r&&r.ok?ok(r.data):no(new Error(r?r.error:'E_GENERIC'))},()=>{bz(-1,m);no(new Error('E_GENERIC'))})})}
 const errMsg=e=>D['e_'+(e&&e.message)]?t('e_'+e.message):t('e_E_GENERIC');
 function ticketParam(){try{return(new URLSearchParams(location.search).get('tiket')||'').trim().toUpperCase()}catch(e){return ''}}
-function ticketBase(){return(window.google&&google.script&&google.script.run)?(B.appUrl||''):location.origin+location.pathname}
+function ticketBase(){if(window.google&&google.script&&google.script.run)return(B.appUrl||'');if(B&&B.siteUrl){const s=String(B.siteUrl).trim().replace(/\/+$/,'');return(s.indexOf('http')===0?s:'https://'+s)+'/'}return'https://ambiltiketnya.online/'}
 function waitQr(n){return new Promise(r=>{const f=()=>{if(typeof qrcode!=='undefined'||n--<=0)r();else setTimeout(f,100)};f()})}
 async function ticketView(code){
  const shell=b=>'<div class="gate"><div class="card tkc">'+b+'</div></div>';
@@ -1045,7 +1045,7 @@ const NL=String.fromCharCode(10),find=(a,id)=>a.find(x=>x.id===id),A={
  themecycle(){TH={light:'dark',dark:'system',system:'light'}[TH]||'light';ls.s('theme',TH);applyTheme();render()},langtoggle(){L=L==='id'?'en':'id';ls.s('lang',L);render()},
  openScan,manual,
  expcsv(el){exportOrdersCsv()},
-  async gatelink(el){try{const base=location.origin+location.pathname;const r=await api('gateLink',{eventId:el.dataset.id,base:base},t('loading'));const fullUrl=r.url||(base.replace(/\/+$/,'')+'/?gate='+r.eventId+'&k='+r.key);modal('<button class="btn sm x" data-act="cm">&#10005;</button><h2>📋 '+t('gate_pass')+'</h2><p class="muted" style="margin:4px 0 12px">'+t('gate_pass_sub')+'</p><p style="margin:12px 0 6px"><b>'+esc(r.eventName)+'</b></p><div style="background:rgba(0,0,0,.25);border:1px solid var(--bd);padding:10px;border-radius:8px;word-break:break-all;font-size:12px;user-select:all" class="mono" id="gl_txt">'+esc(fullUrl)+'</div><div class="acts" style="margin-top:14px"><button class="btn pri" data-act="copyGateLink">📋 '+t('gate_copy')+'</button><button class="btn" data-act="cm">'+t('close')+'</button></div>')}catch(e){fail(e)}},
+  async gatelink(el){try{const base=(B&&B.siteUrl?String(B.siteUrl).trim().replace(/\/+$/,''):'https://ambiltiketnya.online');const r=await api('gateLink',{eventId:el.dataset.id,base:base},t('loading'));const fullUrl=r.url||(base.replace(/\/+$/,'')+'/?gate='+r.eventId+'&k='+r.key);modal('<button class="btn sm x" data-act="cm">&#10005;</button><h2>📋 '+t('gate_pass')+'</h2><p class="muted" style="margin:4px 0 12px">'+t('gate_pass_sub')+'</p><p style="margin:12px 0 6px"><b>'+esc(r.eventName)+'</b></p><div style="background:rgba(0,0,0,.25);border:1px solid var(--bd);padding:10px;border-radius:8px;word-break:break-all;font-size:12px;user-select:all" class="mono" id="gl_txt">'+esc(fullUrl)+'</div><div class="acts" style="margin-top:14px"><button class="btn pri" data-act="copyGateLink">📋 '+t('gate_copy')+'</button><button class="btn" data-act="cm">'+t('close')+'</button></div>')}catch(e){fail(e)}},
  copyGateLink(){const el=$('#gl_txt');if(!el)return;navigator.clipboard.writeText(el.textContent.trim()).then(()=>toast(t('gate_copied'),0)).catch(()=>toast('Gagal menyalin',1))},
  async cacheEv(){const sel=$('#off_ev_sel');if(sel&&sel.value)await cacheOfflineEvent(sel.value)},
  async syncoff(){await syncOfflineQueue()}};
