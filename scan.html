@@ -15,17 +15,18 @@ video#v{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;z-inde
 canvas#c{display:none}
 
 /* HUD Overlay */
-.hud{position:absolute;inset:0;z-index:10;display:flex;flex-direction:column;justify-content:space-between;padding:calc(12px + env(safe-area-inset-top, 0px)) 14px calc(14px + env(safe-area-inset-bottom, 0px));pointer-events:none}
+.hud{position:absolute;inset:0;z-index:10;display:flex;flex-direction:column;justify-content:space-between;padding:calc(10px + env(safe-area-inset-top, 0px)) 12px calc(12px + env(safe-area-inset-bottom, 0px));pointer-events:none}
 .hud *{pointer-events:auto}
 
 /* Top bar */
-.topbar{display:flex;justify-content:space-between;align-items:center;gap:8px}
-.badge{background:rgba(11,15,30,.82);backdrop-filter:blur(10px);color:#fff;padding:6px 14px;border-radius:99px;font-size:13px;font-weight:700;border:1px solid var(--border);display:inline-flex;align-items:center;gap:6px;box-shadow:0 4px 16px rgba(0,0,0,.4)}
-.badge b{color:var(--ok);font-size:16px}
-.ctrls{display:flex;gap:6px}
-.btn-ic{width:40px;height:40px;border-radius:50%;background:rgba(11,15,30,.82);backdrop-filter:blur(10px);border:1px solid var(--border);color:#fff;display:grid;place-items:center;cursor:pointer;font-size:16px;transition:.18s;outline:none}
-.btn-ic:hover{transform:scale(1.08);background:rgba(91,78,240,.85)}
+.topbar{display:flex;justify-content:space-between;align-items:center;gap:6px;width:100%}
+.badge{background:rgba(11,15,30,.85);backdrop-filter:blur(10px);color:#fff;padding:5px 10px;border-radius:99px;font-size:12px;font-weight:700;border:1px solid var(--border);display:inline-flex;align-items:center;gap:5px;box-shadow:0 4px 16px rgba(0,0,0,.4);flex:none}
+.badge b{color:var(--ok);font-size:15px}
+.ctrls{display:flex;gap:5px;align-items:center;flex-shrink:0}
+.btn-ic{width:36px;height:36px;border-radius:50%;background:rgba(11,15,30,.85);backdrop-filter:blur(10px);border:1px solid var(--border);color:#fff;display:grid;place-items:center;cursor:pointer;font-size:15px;transition:.18s;outline:none;flex:none}
+.btn-ic:hover{transform:scale(1.06);background:rgba(91,78,240,.85)}
 .btn-ic.active{background:var(--wn);color:#000;box-shadow:0 0 16px rgba(245,158,11,.7)}
+@media(max-width:380px){.hud{padding:calc(6px + env(safe-area-inset-top, 0px)) 8px calc(8px + env(safe-area-inset-bottom, 0px))}.topbar{gap:4px}.badge{padding:4px 8px;font-size:11px}.ctrls{gap:3px}.btn-ic{width:32px;height:32px;font-size:13px}}
 
 /* Viewfinder Frame */
 .frame-wrap{display:flex;justify-content:center;align-items:center;flex:1}
