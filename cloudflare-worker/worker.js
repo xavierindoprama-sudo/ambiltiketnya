@@ -62,7 +62,11 @@ async function neonQuery(env, sql, params = []) {
   if (!match) throw new Error('Invalid DATABASE_URL format');
   const host = match[1];
 
-  const wrapped = `WITH t AS (${sql}) SELECT coalesce(json_agg(t),'[]'::json) AS j FROM t`;
+  let cleanSql = String(sql || '').trim().replace(/;+$/, '');
+  if (/^\s*(INSERT|UPDATE|DELETE)\b/i.test(cleanSql) && !/\bRETURNING\b/i.test(cleanSql)) {
+    cleanSql += ' RETURNING 1';
+  }
+  const wrapped = `WITH t AS (${cleanSql}) SELECT coalesce(json_agg(t),'[]'::json) AS j FROM t`;
   const body = JSON.stringify({ query: wrapped, params: params });
 
   const resp = await fetch(`https://${host}/sql`, {
@@ -91,10 +95,16 @@ async function neonBatch(env, queries) {
   const host = match[1];
 
   const payload = {
-    queries: queries.map(q => ({
-      query: `WITH t AS (${q.query}) SELECT coalesce(json_agg(t),'[]'::json) AS j FROM t`,
-      params: q.params || []
-    }))
+    queries: queries.map(q => {
+      let cleanSql = String(q.query || '').trim().replace(/;+$/, '');
+      if (/^\s*(INSERT|UPDATE|DELETE)\b/i.test(cleanSql) && !/\bRETURNING\b/i.test(cleanSql)) {
+        cleanSql += ' RETURNING 1';
+      }
+      return {
+        query: `WITH t AS (${cleanSql}) SELECT coalesce(json_agg(t),'[]'::json) AS j FROM t`,
+        params: q.params || []
+      };
+    })
   };
 
   const resp = await fetch(`https://${host}/sql`, {
@@ -718,20 +728,20 @@ export default {
 
         if (action === 'toggleEvent') {
           needRole(3);
-          await neonQuery(env, `UPDATE events SET is_active=$2::bool WHERE id=$1::uuid`, [params.id, !!params.active]);
+          await neonQuery(env, `UPDATE events SET is_active=$2::bool WHERE id=$1::uuid RETURNING id`, [params.id, !!params.active]);
           return json({ ok: true, data: true });
         }
 
         if (action === 'cancelOrder') {
           needRole(3);
-          await neonQuery(env, `UPDATE orders SET status='cancelled',cancelled_at=now() WHERE id=$1::uuid AND status<>'cancelled'`, [params.id]);
+          await neonQuery(env, `UPDATE orders SET status='cancelled',cancelled_at=now() WHERE id=$1::uuid AND status<>'cancelled' RETURNING id`, [params.id]);
           return json({ ok: true, data: true });
         }
 
         if (action === 'setRole') {
           needRole(3);
           if (params.id === u.id) throw new Error('SELF');
-          await neonQuery(env, `UPDATE users SET role=$2 WHERE id=$1::uuid`, [params.id, params.role]);
+          await neonQuery(env, `UPDATE users SET role=$2 WHERE id=$1::uuid RETURNING id`, [params.id, params.role]);
           return json({ ok: true, data: true });
         }
 
