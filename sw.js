@@ -1,11 +1,16 @@
-// AmbilTiketnya Service Worker - v28
-const CACHE = 'atk-v28';
+// AmbilTiketnya Service Worker - v29
+const CACHE = 'atk-v29';
 const STATIC = [
   './',
   './index.html',
   './config.js',
   './scan.html',
-  './offline.html'
+  './offline.html',
+  './favicon.svg',
+  './favicon.png',
+  './favicon.ico',
+  './icons/icon-192.png',
+  './icons/icon-512.png'
 ];
 
 self.addEventListener('install', e => {
