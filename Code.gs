@@ -528,6 +528,11 @@ const ACTIONS = {
   ordersAll:   { min: 2, fn: ordersAll },
   invitations: { min: 2, fn: () => invitations() },
   invitationCreate: { min: 2, fn: invitationCreate },
+  waitingList: { min: 2, fn: waitingList },
+  waitingCreate: { min: 2, fn: waitingCreate },
+  waitingDelete: { min: 2, fn: waitingDelete },
+  waitingPromote: { min: 2, fn: waitingPromote },
+  waitingPromoteAll: { min: 2, fn: waitingPromoteAll },
   getInvConfig: { min: 2, fn: getInvConfig },
   setInvMaxQty: { min: 3, fn: setInvMaxQty },
   checkinOrder:{ min: 2, fn: checkinOrder },
@@ -1268,6 +1273,127 @@ function invitationCreate(u, p) {                // undangan memakai kuota yang 
   if (!row) throw new Error('SOLDOUT');
   return q(INV_SQL + ' WHERE o.id=$1::uuid', [row.id])[0];
 }
+function ensureWaitingSchema() {
+  neon([{ query: CREATE TABLE IF NOT EXISTS invitation_waiting_list (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    event_id uuid NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+    created_by uuid REFERENCES users(id) ON DELETE SET NULL,
+    guest_name text NOT NULL,
+    guest_org text NOT NULL,
+    guest_phone text,
+    guest_age integer,
+    qty integer NOT NULL DEFAULT 1,
+    status text NOT NULL DEFAULT 'waiting',
+    order_id uuid REFERENCES orders(id) ON DELETE SET NULL,
+    promoted_at timestamptz,
+    created_at timestamptz NOT NULL DEFAULT now()
+  ) }]);
+}
+
+function waitingList(u, p) {
+  ensureWaitingSchema();
+  const evId = p && p.eventId ? String(p.eventId).trim() : '';
+  const filterEv = evId ?  AND w.event_id=''::uuid : '';
+  return q(SELECT w.id, w.event_id, w.guest_name, w.guest_org, w.guest_phone, w.guest_age, w.qty, w.status, w.order_id,
+      w.created_at, e.name AS event_name, e.event_date,
+      (e.quota - coalesce((SELECT sum(qty) FROM orders o WHERE o.event_id=e.id AND o.status<>'cancelled' AND o.kind<>'walk_in'),0))::int AS remaining
+    FROM invitation_waiting_list w
+    JOIN events e ON e.id=w.event_id
+    WHERE w.status='waiting' 
+    ORDER BY w.created_at ASC);
+}
+
+function waitingCreate(u, p) {
+  ensureWaitingSchema();
+  const cfg = getInvConfig(u);
+  const maxAllowed = cfg.maxQty || 50;
+  const name = String(p.name || '').trim().slice(0, 120),
+        org = String(p.org || '').trim().slice(0, 120),
+        qty = parseInt(p.qty, 10) || 1;
+  let phone = String(p.phone || '').trim();
+  if (phone) {
+    phone = normPhone(phone);
+    if (!phone) throw new Error('BAD_PHONE');
+  } else {
+    phone = null;
+  }
+  let age = p.age != null && String(p.age).trim() !== '' ? parseInt(p.age, 10) : null;
+  if (age !== null && (isNaN(age) || age < 1 || age > 120)) throw new Error('BAD_AGE');
+
+  if (name.length < 2) throw new Error('BAD_NAME');
+  if (org.length < 2) throw new Error('BAD_ORG');
+  if (!(qty >= 1 && qty <= maxAllowed)) throw new Error('BAD_QTY');
+  const ev = q(SELECT id, name FROM events WHERE id=::uuid, [p.eventId])[0];
+  if (!ev) throw new Error('NOT_FOUND');
+
+  const r = q(INSERT INTO invitation_waiting_list(event_id, created_by, guest_name, guest_org, guest_phone, guest_age, qty, status, created_at)
+    VALUES(::uuid, ::uuid, , , , , , 'waiting', now()) RETURNING id,
+    [ev.id, u.id, name, org, phone, age, qty]);
+  return { id: r[0].id, name: name, qty: qty, eventId: ev.id };
+}
+
+function waitingDelete(u, p) {
+  ensureWaitingSchema();
+  q(DELETE FROM invitation_waiting_list WHERE id=::uuid RETURNING id, [p.id]);
+  return true;
+}
+
+function waitingPromote(u, p) {
+  ensureWaitingSchema();
+  const item = q(SELECT * FROM invitation_waiting_list WHERE id=::uuid AND status='waiting', [p.id])[0];
+  if (!item) throw new Error('NOT_FOUND');
+
+  const invOrder = invitationCreate(u, {
+    eventId: item.event_id,
+    name: item.guest_name,
+    org: item.guest_org,
+    phone: item.guest_phone,
+    age: item.guest_age,
+    qty: item.qty
+  });
+
+  q(UPDATE invitation_waiting_list SET status='promoted', order_id=::uuid, promoted_at=now() WHERE id=::uuid RETURNING id,
+    [invOrder.id, item.id]);
+
+  return invOrder;
+}
+
+function waitingPromoteAll(u, p) {
+  ensureWaitingSchema();
+  const evId = p && p.eventId ? String(p.eventId).trim() : '';
+  const filterEv = evId ?  AND event_id=''::uuid : '';
+  const items = q(SELECT * FROM invitation_waiting_list WHERE status='waiting'  ORDER BY created_at ASC);
+  if (!items.length) return { promoted: 0, failed: 0, items: [] };
+
+  let successCount = 0;
+  let failedCount = 0;
+  const createdOrders = [];
+
+  for (let i = 0; i < items.length; i++) {
+    const item = items[i];
+    try {
+      const invOrder = invitationCreate(u, {
+        eventId: item.event_id,
+        name: item.guest_name,
+        org: item.guest_org,
+        phone: item.guest_phone,
+        age: item.guest_age,
+        qty: item.qty
+      });
+      q(UPDATE invitation_waiting_list SET status='promoted', order_id=::uuid, promoted_at=now() WHERE id=::uuid RETURNING id,
+        [invOrder.id, item.id]);
+      createdOrders.push(invOrder);
+      successCount++;
+    } catch (err) {
+      Logger.log('Promote all error at item ' + item.id + ': ' + err);
+      failedCount++;
+      break; // berhenti jika kuota habis
+    }
+  }
+
+  return { promoted: successCount, failed: failedCount, total: items.length, orders: createdOrders };
+}
+
 function getCheckinPin(u) {
   const r = q(`SELECT value, to_char(updated_at AT TIME ZONE 'Asia/Jakarta', 'YYYY-MM-DD HH24:MI') AS updated_at FROM settings WHERE key='checkin_pin'`)[0];
   const custom = r ? r.value : (P.getProperty('CHECKIN_PIN') || P.getProperty('CHECKIN_PASSWORD') || '');

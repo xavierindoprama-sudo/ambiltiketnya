@@ -234,6 +234,14 @@ off_cached_cnt:['tiket tersimpan di HP','tickets cached on phone'],
 off_sync_btn:['Sinkronkan Antrean','Sync Queue'],
 off_synced:['Tiket offline berhasil disinkronkan ke server!','Offline tickets synced to server!'],
 off_badge:['Mode Offline','Offline Mode'],open_app:['Buka aplikasi','Open the app'],n_inv:['Undangan','Invitations'],inv_title:['Buat Undangan','Create Invitation'],inv_event:['Acara','Event'],inv_name:['Nama yang diundang *','Invited name *'],inv_org:['Instansi *','Organization *'],inv_age:['Usia (opsional)','Age (optional)'],inv_phone:['No. WhatsApp / HP (opsional)','WhatsApp / Phone (optional)'],inv_qty:['Jumlah tiket','Number of tickets'],inv_max_hint:['Maksimal','Maximum'],inv_make:['Buat Undangan','Create Invitation'],inv_list:['Daftar Undangan','Invitation List'],inv_t:['UNDANGAN','INVITATION'],inv_to:['Kepada Yth.','Dear'],inv_badge:['Undangan','Invitation'],inv_quota:['sisa','left'],inv_made:['Undangan berhasil dibuat.','Invitation created.'],inv_pass:['Tiket Undangan','Invitation Ticket'],inv_who:['Tamu','Guest'],inv_cfg_btn:['Batas Tiket','Ticket Limit'],inv_cfg_title:['Pengaturan Batas Tiket Undangan','Invitation Ticket Limit Settings'],inv_cfg_desc:['Tentukan jumlah maksimal tiket yang dapat diterbitkan dalam 1 undangan.','Set the maximum tickets that can be issued in 1 invitation.'],inv_cfg_cur:['Batas saat ini','Current limit'],inv_cfg_max:['Batas Maksimal Tiket per Undangan','Max Tickets per Invitation'],inv_cfg_save:['Simpan Batas Tiket','Save Ticket Limit'],inv_cfg_ok:['Batas tiket undangan berhasil disimpan.','Invitation ticket limit saved.'],e_BAD_MAX_QTY:['Batas tiket harus antara 1 sampai 1000.','Ticket limit must be between 1 and 1000.'],years_old:['thn','yo'],
+inv_tab_issued:['Undangan Terbit','Issued Invitations'],inv_tab_wait:['Daftar Tunggu (Waiting List)','Waiting List'],
+wait_title:['Tambah ke Daftar Tunggu (Waiting List)','Add to Waiting List'],wait_desc:['Tampung calon penerima undangan saat kuota habis. Tiket dapat diterbitkan begitu kuota acara ditambah.','Queue attendees when quota is full. Tickets can be issued once event quota is added.'],
+wait_add_btn:['+ Simpan ke Waiting List','+ Add to Waiting List'],wait_promote_btn:['Buat Undangan','Issue Invitation'],wait_promote_all_btn:['🚀 Buat Semua Undangan','🚀 Issue All Invitations'],
+wait_no_quota:['Kuota Belum Cukup','Insufficient Quota'],wait_confirm_promote:['Buat undangan resmi untuk peserta ini?','Issue official invitation for this attendee?'],
+wait_confirm_promote_all:['Buat tiket undangan untuk SEMUA peserta di daftar tunggu yang kuotanya mencukupi?','Issue invitations for ALL attendees in the waiting list that fit the available quota?'],
+wait_delete_btn:['Hapus','Delete'],wait_confirm_delete:['Hapus peserta ini dari daftar tunggu?','Remove this attendee from the waiting list?'],
+wait_saved:['Data berhasil disimpan ke daftar tunggu!','Added to waiting list successfully!'],wait_promoted:['Undangan berhasil diterbitkan!','Invitation issued successfully!'],
+wait_promoted_all_res:['Penerbitan massal selesai.','Bulk issuance completed.'],
 ci:['Cek in','Check in'],ci_title:['Cek in manual','Manual check-in'],ci_pw:['PIN / Password Check-In','Check-In PIN / Password'],ci_go:['Cek in sekarang','Check in now'],ci_hint:['Masukkan PIN check-in khusus atau password super admin untuk konfirmasi.','Enter dedicated check-in PIN or super admin password to confirm.'],
 ci_pin_title:['PIN Check-In Manual','Manual Check-In PIN'],ci_pin_desc:['PIN khusus untuk konfirmasi check-in manual di daftar pemesan (agar admin/staf tidak perlu mengetahui password super admin).','Dedicated PIN for manual check-in confirmations without exposing the super admin password.'],ci_pin_btn:['Atur PIN Check-In','Set Check-In PIN'],ci_pin_active:['PIN Khusus Aktif','Dedicated PIN Active'],ci_pin_default:['Belum diatur (memakai password Super Admin)','Not set (using Super Admin password)'],ci_pin_save:['Simpan PIN','Save PIN'],ci_pin_reset:['Hapus PIN Khusus','Remove Dedicated PIN'],ci_pin_ph:['Masukkan PIN baru (min. 4 karakter)','Enter new PIN (min. 4 chars)'],ci_pin_ok:['PIN check-in berhasil disimpan.','Check-in PIN saved successfully.'],e_BAD_PIN:['PIN minimal 4 karakter.','PIN must be at least 4 characters.'],
 search_users:['Cari nama, email, WA, gereja...','Search name, email, WA, church...'],all_roles:['Semua Peran','All Roles'],users_cnt:['pengguna','users'],
@@ -626,25 +634,113 @@ addEventListener('message',async e=>{let so;try{so=new URL(B.scanUrl).origin}cat
  if(e.origin!==so||!nonce)return;const d=e.data;if(!d||d.type!=='scan'||d.n!==nonce)return;
  const r=await doValidate(String(d.code||''));
  try{e.source.postMessage({type:'ack',n:d.n,result:r},e.origin)}catch(x){}});
-async function invView(c){try{const r=await Promise.all([api('adminEvents'),api('invitations'),api('getInvConfig').catch(()=>({maxQty:50}))]);S.aev=r[0];S.inv=r[1];S.invCfg=r[2]||{maxQty:50}}catch(e){return fail(e)}mergeInvTix();paintInv()}
+async function invView(c){
+ try{
+  const r=await Promise.all([
+   api('adminEvents'),
+   api('invitations'),
+   api('waitingList').catch(()=>[]),
+   api('getInvConfig').catch(()=>({maxQty:50}))
+  ]);
+  S.aev=r[0];S.inv=r[1];S.waitList=r[2]||[];S.invCfg=r[3]||{maxQty:50};
+  if(!S.invSubTab)S.invSubTab='issued';
+ }catch(e){return fail(e)}
+ mergeInvTix();paintInv();
+}
 function mergeInvTix(){const ids={};S.inv.forEach(i=>ids[i.id]=1);S.tix=(S.tix||[]).filter(x=>!ids[x.id]).concat(S.inv)}
-function paintInv(){const c=$('#ac'),keep=$('#ivev')?$('#ivev').value:'';
+function paintInv(){
+ const c=$('#ac'),keep=$('#ivev')?$('#ivev').value:'';
  const maxQty=(S.invCfg&&S.invCfg.maxQty)||50;
- const opts=S.aev.map(e=>'<option value="'+e.id+'">'+esc(e.name)+' ('+fd(e.event_date,{day:'numeric',month:'short',year:'numeric'})+') - '+t('inv_quota')+' '+Math.max(0,e.quota-e.sold)+'</option>').join('');
- const rows=S.inv.map(o=>{
-  const meta=[];
-  if(o.guest_age)meta.push(esc(o.guest_age)+' '+t('years_old'));
-  if(o.guest_phone)meta.push('+'+esc(o.guest_phone));
-  const metaStr=meta.length?`<div style="font-size:11px;color:var(--mu);margin-top:2px">${meta.join(' · ')}</div>`:'';
-  return `<tr><td data-l="${t('inv_who')}"><b>${esc(o.guest_name)}</b><br><small class="muted">${esc(o.guest_org)}</small>${metaStr}</td><td data-l="${t('c_event')}">${esc(o.name)}</td><td data-l="${t('c_qty')}">${o.qty}</td><td data-l="${t('c_status')}">${stPill(o.status)}</td><td data-l="${t('c_chk')}" class="mono">${o.checked_in}/${o.qty}</td><td><div class="acts" style="margin:0;justify-content:flex-end"><button class="btn sm" data-act="invopen" data-id="${o.id}">${t('view')}</button>${o.status==='confirmed'?`<button class="btn sm wa" data-act="wa" data-id="${o.id}">WhatsApp</button>`:''}${o.status!=='cancelled'&&canEdit()?`<button class="btn sm dg" data-act="cxl" data-id="${o.id}">${t('cancel')}</button>`:''}</div></td></tr>`;
+ const opts=S.aev.map(e=>{
+  const rem=Math.max(0,e.quota-e.sold);
+  return '<option value="'+e.id+'">'+esc(e.name)+' ('+fd(e.event_date,{day:'numeric',month:'short',year:'numeric'})+') - '+t('inv_quota')+' '+rem+'</option>';
  }).join('');
+
  let cfgCard='';
  if(canEdit()){
   cfgCard=`<div class="card" style="padding:12px 16px;margin:8px 0 16px;border-left:4px solid var(--ac);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px"><div><h4 style="margin:0 0 4px;font-size:15px">⚙️ ${t('inv_cfg_title')}</h4><div style="font-size:13px;color:var(--mu)">${t('inv_cfg_desc')} · <b>${t('inv_cfg_cur')}: ${maxQty} ${t('tix')}</b></div></div><button class="btn sm pri" data-act="invCfgModal">⚙️ ${t('inv_cfg_btn')}</button></div>`;
  }
- c.innerHTML=cfgCard+'<div class="card" style="padding:16px;margin:8px 0 18px;border-color:#d4af37"><h3>'+t('inv_title')+'</h3><div class="fg" style="margin-top:6px"><div style="grid-column:1/-1"><label>'+t('inv_event')+'</label><select id="ivev">'+opts+'</select></div><div><label>'+t('inv_name')+'</label><input id="ivnm" autocomplete="off" placeholder="Nama tamu / PIC"></div><div><label>'+t('inv_org')+'</label><input id="ivog" autocomplete="off" placeholder="Instansi / Gereja"></div><div><label>'+t('inv_age')+'</label><input id="ivag" type="number" min="1" max="120" placeholder="Opsional" autocomplete="off"></div><div><label>'+t('inv_phone')+'</label><input id="ivph" type="tel" placeholder="0812xxxxxxxx (opsional)" autocomplete="off"></div><div><label>'+t('inv_qty')+'</label><input id="ivq" type="number" min="1" max="'+maxQty+'" value="1"><small class="muted" style="display:block;margin-top:3px">'+t('inv_max_hint')+' '+maxQty+' '+t('tix')+'</small></div></div><div class="acts"><button class="btn pri" data-act="invmake" style="flex:none">'+t('inv_make')+'</button></div></div>'
- +'<h3>'+t('inv_list')+' ('+S.inv.length+')</h3>'+(S.inv.length?'<div class="tw"><table class="rt"><tr><th>'+t('inv_who')+'</th><th>'+t('c_event')+'</th><th>'+t('c_qty')+'</th><th>'+t('c_status')+'</th><th>'+t('c_chk')+'</th><th></th></tr>'+rows+'</table></div>':'<p class="muted">'+t('none')+'</p>');
- if(keep&&$('#ivev'))$('#ivev').value=keep}
+
+ const curTab=S.invSubTab||'issued';
+ const waitCnt=(S.waitList||[]).length;
+ const subNav=`<div style="display:flex;gap:10px;margin-bottom:14px;border-bottom:1px solid var(--bd);padding-bottom:10px">
+  <button class="btn ${curTab==='issued'?'pri':'sm'}" data-act="invSubTab" data-v="issued" style="font-weight:700">📋 ${t('inv_tab_issued')} (${S.inv.length})</button>
+  <button class="btn ${curTab==='waiting'?'pri':'sm'}" data-act="invSubTab" data-v="waiting" style="font-weight:700">⏳ ${t('inv_tab_wait')} ${waitCnt?`<span class="pill wn" style="font-size:11px;margin-left:4px;vertical-align:middle">${waitCnt}</span>`:''}</button>
+ </div>`;
+
+ let bodyHtml='';
+ if(curTab==='waiting'){
+  const totalWaitQty=(S.waitList||[]).reduce((a,w)=>a+w.qty,0);
+  const waitRows=(S.waitList||[]).map(w=>{
+   const ev=S.aev.find(e=>e.id===w.event_id)||{};
+   const rem=Math.max(0,(ev.quota||0)-(ev.sold||0));
+   const canPromote=rem>=w.qty;
+   const meta=[];
+   if(w.guest_age)meta.push(esc(w.guest_age)+' '+t('years_old'));
+   if(w.guest_phone)meta.push('+'+esc(w.guest_phone));
+   const metaStr=meta.length?`<div style="font-size:11px;color:var(--mu);margin-top:2px">${meta.join(' · ')}</div>`:'';
+   return `<tr>
+    <td data-l="${t('inv_who')}"><b>${esc(w.guest_name)}</b><br><small class="muted">${esc(w.guest_org)}</small>${metaStr}</td>
+    <td data-l="${t('c_event')}">${esc(w.event_name||ev.name||'')}</td>
+    <td data-l="${t('c_qty')}"><b>${w.qty}</b> ${t('tix')}</td>
+    <td data-l="Status Kuota">${canPromote?`<span class="pill ok">✓ Sisa: ${rem}</span>`:`<span class="pill wn">⚠️ Sisa: ${rem} (Kurang)</span>`}</td>
+    <td>
+     <div class="acts" style="margin:0;justify-content:flex-end">
+      <button class="btn sm ${canPromote?'ok':'dis'}" data-act="promoteWait" data-id="${w.id}" ${canPromote?'':'disabled'} title="${canPromote?'Terbitkan undangan resmi':'Sisa kuota reguler belum mencukupi'}">${canPromote?`✓ ${t('wait_promote_btn')}`:t('wait_no_quota')}</button>
+      <button class="btn sm dg" data-act="delWait" data-id="${w.id}">${t('wait_delete_btn')}</button>
+     </div>
+    </td>
+   </tr>`;
+  }).join('');
+
+  const anyCanPromote=(S.waitList||[]).some(w=>{
+   const ev=S.aev.find(e=>e.id===w.event_id)||{};
+   return Math.max(0,(ev.quota||0)-(ev.sold||0))>=w.qty;
+  });
+
+  bodyHtml=`<div class="card" style="padding:16px;margin:8px 0 18px;border-color:var(--wn);border-left:4px solid var(--wn)">
+   <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:10px">
+    <div>
+     <h3 style="margin:0 0 4px">⏳ ${t('wait_title')}</h3>
+     <p class="muted" style="margin:0;font-size:13px">${t('wait_desc')}</p>
+    </div>
+   </div>
+   <div class="fg" style="margin-top:12px">
+    <div style="grid-column:1/-1"><label>${t('inv_event')}</label><select id="wtev">${opts}</select></div>
+    <div><label>${t('inv_name')}</label><input id="wtnm" autocomplete="off" placeholder="Nama tamu / calon peserta"></div>
+    <div><label>${t('inv_org')}</label><input id="wtog" autocomplete="off" placeholder="Instansi / Gereja"></div>
+    <div><label>${t('inv_age')}</label><input id="wtag" type="number" min="1" max="120" placeholder="Opsional" autocomplete="off"></div>
+    <div><label>${t('inv_phone')}</label><input id="wtph" type="tel" placeholder="0812xxxxxxxx (opsional)" autocomplete="off"></div>
+    <div><label>${t('inv_qty')}</label><input id="wtq" type="number" min="1" max="${maxQty}" value="1"></div>
+   </div>
+   <div class="acts">
+    <button class="btn pri" data-act="waitAdd" style="flex:none">${t('wait_add_btn')}</button>
+   </div>
+  </div>
+
+  <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin:20px 0 12px">
+   <h3 style="margin:0">Antrean Waiting List (${S.waitList.length} orang · Total ${totalWaitQty} tiket)</h3>
+   ${S.waitList.length?`<button class="btn ok" data-act="promoteAllWait" ${anyCanPromote?'':'disabled'} style="font-weight:700;display:inline-flex;align-items:center;gap:6px">${t('wait_promote_all_btn')}</button>`:''}
+  </div>
+  ${S.waitList.length?`<div class="tw"><table class="rt"><tr><th>${t('inv_who')}</th><th>${t('c_event')}</th><th>${t('c_qty')}</th><th>Status Kuota</th><th></th></tr>${waitRows}</table></div>`:`<p class="muted" style="padding:20px;text-align:center">Tidak ada peserta dalam daftar tunggu.</p>`}`;
+
+ } else {
+  const rows=S.inv.map(o=>{
+   const meta=[];
+   if(o.guest_age)meta.push(esc(o.guest_age)+' '+t('years_old'));
+   if(o.guest_phone)meta.push('+'+esc(o.guest_phone));
+   const metaStr=meta.length?`<div style="font-size:11px;color:var(--mu);margin-top:2px">${meta.join(' · ')}</div>`:'';
+   return `<tr><td data-l="${t('inv_who')}"><b>${esc(o.guest_name)}</b><br><small class="muted">${esc(o.guest_org)}</small>${metaStr}</td><td data-l="${t('c_event')}">${esc(o.name)}</td><td data-l="${t('c_qty')}">${o.qty}</td><td data-l="${t('c_status')}">${stPill(o.status)}</td><td data-l="${t('c_chk')}" class="mono">${o.checked_in}/${o.qty}</td><td><div class="acts" style="margin:0;justify-content:flex-end"><button class="btn sm" data-act="invopen" data-id="${o.id}">${t('view')}</button>${o.status==='confirmed'?`<button class="btn sm wa" data-act="wa" data-id="${o.id}">WhatsApp</button>`:''}${o.status!=='cancelled'&&canEdit()?`<button class="btn sm dg" data-act="cxl" data-id="${o.id}">${t('cancel')}</button>`:''}</div></td></tr>`;
+  }).join('');
+
+  bodyHtml=`<div class="card" style="padding:16px;margin:8px 0 18px;border-color:#d4af37"><h3>${t('inv_title')}</h3><div class="fg" style="margin-top:6px"><div style="grid-column:1/-1"><label>${t('inv_event')}</label><select id="ivev">${opts}</select></div><div><label>${t('inv_name')}</label><input id="ivnm" autocomplete="off" placeholder="Nama tamu / PIC"></div><div><label>${t('inv_org')}</label><input id="ivog" autocomplete="off" placeholder="Instansi / Gereja"></div><div><label>${t('inv_age')}</label><input id="ivag" type="number" min="1" max="120" placeholder="Opsional" autocomplete="off"></div><div><label>${t('inv_phone')}</label><input id="ivph" type="tel" placeholder="0812xxxxxxxx (opsional)" autocomplete="off"></div><div><label>${t('inv_qty')}</label><input id="ivq" type="number" min="1" max="${maxQty}" value="1"><small class="muted" style="display:block;margin-top:3px">${t('inv_max_hint')} ${maxQty} ${t('tix')}</small></div></div><div class="acts"><button class="btn pri" data-act="invmake" style="flex:none">${t('inv_make')}</button></div></div>
+  <h3>${t('inv_list')} (${S.inv.length})</h3>${S.inv.length?`<div class="tw"><table class="rt"><tr><th>${t('inv_who')}</th><th>${t('c_event')}</th><th>${t('c_qty')}</th><th>${t('c_status')}</th><th>${t('c_chk')}</th><th></th></tr>${rows}</table></div>`:`<p class="muted">${t('none')}</p>`}`;
+ }
+
+ c.innerHTML=cfgCard+subNav+bodyHtml;
+ if(keep&&$('#ivev'))$('#ivev').value=keep;
+ if(keep&&$('#wtev'))$('#wtev').value=keep;
+}
 const LGK={syarat:'lg_terms',privasi:'lg_priv',cookie:'lg_cookie'};
 async function legalView(c){try{S.lg=await api('legalGet')}catch(e){return fail(e)}if(!S.lgk)S.lgk='syarat';paintLegal()}
 function paintLegal(){const c=$('#ac'),d=S.lg.find(x=>x.key===S.lgk),ed=canEdit();
@@ -856,9 +952,60 @@ const NL=String.fromCharCode(10),find=(a,id)=>a.find(x=>x.id===id),A={
  async ciPinReset(){if(!await ask('Hapus PIN khusus check-in dan kembali menggunakan password Super Admin?'))return;try{await api('setCheckinPin',{reset:true},t('loading'));toast(t('saved'),0);usrView($('#ac'))}catch(e){fail(e)}},
  invCfgModal(){const cur=(S.invCfg&&S.invCfg.maxQty)||50;modal('<button class="btn sm x" data-act="cm">&#10005;</button><h2>⚙️ '+t('inv_cfg_title')+'</h2><p class="muted" style="margin:4px 0 14px">'+t('inv_cfg_desc')+'</p><label>'+t('inv_cfg_max')+'</label><input id="new_inv_max" type="number" min="1" max="1000" value="'+cur+'" autocomplete="off" style="font-size:16px;font-weight:700"><small class="muted" style="display:block;margin-top:6px">Rentang batas tiket: 1 sampai 1000 tiket per undangan.</small><div class="acts" style="margin-top:16px"><button class="btn pri" data-act="invCfgSave">'+t('inv_cfg_save')+'</button><button class="btn" data-act="cm">'+t('close')+'</button></div>');setTimeout(()=>{const el=$('#new_inv_max');if(el){el.focus();el.select()}},50)},
  async invCfgSave(){const val=parseInt(($('#new_inv_max')?$('#new_inv_max').value:''),10);if(isNaN(val)||val<1||val>1000)return toast(t('e_BAD_MAX_QTY'),1);try{const res=await api('setInvMaxQty',{maxQty:val},t('loading'));cm();S.invCfg={maxQty:res.maxQty};toast(t('inv_cfg_ok'),0);paintInv()}catch(e){fail(e)}},
- async invmake(){const nm=$('#ivnm').value,og=$('#ivog').value,qy=$('#ivq').value,ev=$('#ivev').value;
-  const ph=($('#ivph')?$('#ivph').value:'').trim(),ag=($('#ivag')?$('#ivag').value:'').trim();
-  try{const o=await api('invitationCreate',{eventId:ev,name:nm,org:og,qty:qy,phone:ph,age:ag},t('loading'));const r=await Promise.all([api('adminEvents'),api('invitations'),api('getInvConfig').catch(()=>({maxQty:50}))]);S.aev=r[0];S.inv=r[1];S.invCfg=r[2]||{maxQty:50};mergeInvTix();paintInv();passModal(o,t('inv_made'))}catch(e){fail(e)}},
+  invSubTab(el){S.invSubTab=el.dataset.v;paintInv()},
+  async invmake(){const nm=$('#ivnm').value,og=$('#ivog').value,qy=$('#ivq').value,ev=$('#ivev').value;
+   const ph=($('#ivph')?$('#ivph').value:'').trim(),ag=($('#ivag')?$('#ivag').value:'').trim();
+   try{const o=await api('invitationCreate',{eventId:ev,name:nm,org:og,qty:qy,phone:ph,age:ag},t('loading'));const r=await Promise.all([api('adminEvents'),api('invitations'),api('waitingList').catch(()=>[]),api('getInvConfig').catch(()=>({maxQty:50}))]);S.aev=r[0];S.inv=r[1];S.waitList=r[2]||[];S.invCfg=r[3]||{maxQty:50};mergeInvTix();paintInv();passModal(o,t('inv_made'))}catch(e){fail(e)}},
+  async waitAdd(){
+   const nm=($('#wtnm')?$('#wtnm').value:'').trim(),
+         og=($('#wtog')?$('#wtog').value:'').trim(),
+         qy=parseInt($('#wtq')?$('#wtq').value:1,10)||1,
+         ev=$('#wtev')?$('#wtev').value:'',
+         ph=($('#wtph')?$('#wtph').value:'').trim(),
+         ag=($('#wtag')?$('#wtag').value:'').trim();
+   if(!ev)return toast('Pilih acara terlebih dahulu',1);
+   if(!nm||nm.length<2)return toast(t('e_BAD_NAME'),1);
+   if(!og||og.length<2)return toast(t('e_BAD_ORG'),1);
+   try{
+     await api('waitingCreate',{eventId:ev,name:nm,org:og,qty:qy,phone:ph,age:ag},t('loading'));
+     toast(t('wait_saved'),0);
+     const r=await Promise.all([api('adminEvents'),api('waitingList')]);
+     S.aev=r[0];S.waitList=r[1]||[];
+     paintInv();
+   }catch(e){fail(e)}
+  },
+  async promoteWait(el){
+   if(!await ask(t('wait_confirm_promote')))return;
+   try{
+     const o=await api('waitingPromote',{id:el.dataset.id},t('loading'));
+     toast(t('wait_promoted'),0);
+     const r=await Promise.all([api('adminEvents'),api('invitations'),api('waitingList')]);
+     S.aev=r[0];S.inv=r[1];S.waitList=r[2]||[];
+     mergeInvTix();
+     paintInv();
+     passModal(o,t('inv_made'));
+   }catch(e){fail(e)}
+  },
+  async promoteAllWait(){
+   if(!await ask(t('wait_confirm_promote_all')))return;
+   try{
+     const res=await api('waitingPromoteAll',{},t('loading'));
+     const r=await Promise.all([api('adminEvents'),api('invitations'),api('waitingList')]);
+     S.aev=r[0];S.inv=r[1];S.waitList=r[2]||[];
+     mergeInvTix();
+     paintInv();
+     toast('✅ '+res.promoted+' undangan berhasil diterbitkan dari waiting list!'+(res.failed?' (Sisa kuota tidak mencukupi untuk '+res.failed+' lainnya)':''),0);
+   }catch(e){fail(e)}
+  },
+  async delWait(el){
+   if(!await ask(t('wait_confirm_delete')))return;
+   try{
+     await api('waitingDelete',{id:el.dataset.id},t('loading'));
+     toast(t('saved'),0);
+     S.waitList=await api('waitingList');
+     paintInv();
+   }catch(e){fail(e)}
+  },
  invopen(el){const o=S.inv.find(x=>x.id===el.dataset.id);if(o)passModal(o)},
  async resend(el){try{await api('resend',{id:el.dataset.id},t('sending'));toast(t('emailed'),0);if(S.ord){const f=S.ord.find(x=>x.id===el.dataset.id);if(f){f.emailed=true;f.emailed_at=new Date().toISOString();f.email_error=null}paintOrders()}}catch(e){fail(e);loadOrders()}},
  async batchEmail(){const pending=S.ord?S.ord.filter(o=>o.status==='confirmed'&&o.kind==='order'&&!o.emailed):[];
