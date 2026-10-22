@@ -66,6 +66,13 @@ label{display:block;font-size:12px;font-weight:600;color:var(--mu);margin:12px 0
 .ring{--p:0;--c:var(--ac);width:54px;height:54px;border-radius:50%;background:conic-gradient(var(--c) calc(var(--p)*1%),var(--bd) 0);display:grid;place-items:center;font-size:11px;font-weight:700}.ring span{background:var(--card);width:42px;height:42px;border-radius:50%;display:grid;place-items:center}
 .charts{display:grid;grid-template-columns:minmax(0,2fr) minmax(0,1fr);gap:14px}.bars{display:flex;align-items:stretch;gap:12px;height:230px;border-bottom:1px solid var(--bd);overflow-x:auto;padding-top:4px}.bc{flex:1;min-width:72px;display:flex;flex-direction:column;text-align:center;font-size:11px;color:var(--mu)}.bc .vl{font-weight:700;color:var(--tx)}.bc .pr{flex:1;min-height:0;display:flex;gap:4px;align-items:flex-end;justify-content:center}.bc .pr i{width:22px;min-height:3px;border-radius:6px 6px 0 0;background:var(--ac);transition:height .6s}.bc .pr i+i{background:var(--ok)}.bl{padding-top:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.lgd{display:flex;gap:14px;flex-wrap:wrap;font-size:12px;color:var(--mu);margin:6px 0}.lgd i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:6px}.stat>div:first-child{min-width:0}.ring{flex:none}.fg{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px}
 .donut{width:170px;height:170px;border-radius:50%;margin:10px auto;display:grid;place-items:center;background:conic-gradient(var(--ok) calc(var(--p)*1%),var(--ac) 0)}.donut span{background:var(--card);width:112px;height:112px;border-radius:50%;display:grid;place-items:center;font:700 26px Outfit;text-align:center;line-height:1.1}
+.ch-bubble-wrap{display:flex;flex-wrap:wrap;justify-content:center;align-items:center;gap:12px;padding:12px 4px;min-height:220px;position:relative}
+.ch-bubble{border-radius:50%;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:6px;cursor:pointer;color:#fff;user-select:none;transition:transform .24s cubic-bezier(.34,1.56,.64,1),box-shadow .24s,filter .24s;position:relative}
+.ch-bubble:hover{transform:translateY(-8px) scale(1.1)!important;z-index:10;filter:brightness(1.15)}
+.ch-bubble.active{box-shadow:0 0 0 3px #fff,0 14px 30px rgba(0,0,0,.65)!important;transform:translateY(-8px) scale(1.08)!important;z-index:11}
+.ch-bubble .name{font-weight:700;line-height:1.2;max-width:90%;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;text-shadow:0 1px 3px rgba(0,0,0,.6);word-break:break-word}
+.ch-bubble .pill-cnt{font-weight:800;background:rgba(0,0,0,.35);padding:2px 7px;border-radius:99px;margin-top:3px;backdrop-filter:blur(4px);white-space:nowrap;box-shadow:0 2px 6px rgba(0,0,0,.25)}
+@keyframes chFloat{0%{transform:translateY(0px)}100%{transform:translateY(-7px)}}
 .tw{overflow-x:auto}table{width:100%;border-collapse:collapse;font-size:13px}th,td{text-align:left;padding:10px 12px;border-bottom:1px solid var(--bd);vertical-align:top;white-space:nowrap}th{color:var(--mu);font-size:12px}
 .bar2{display:flex;gap:10px;flex-wrap:wrap;margin:12px 0}.bar2>*{width:auto;flex:1;min-width:min(100%,150px)}
 .er{display:flex;gap:12px;align-items:center;padding:12px 16px;margin-bottom:10px}.er img{width:64px;height:44px;border-radius:9px;object-fit:cover;background:var(--in)}
@@ -444,8 +451,62 @@ function paintAnalytics(){const c=$('#ac');if(!c)return;const selEv=S.anSelEv||'
  const totalBooked=ords.filter(o=>o.status!=='cancelled').reduce((a,o)=>a+o.qty,0),totalChecked=ords.filter(o=>o.status!=='cancelled').reduce((a,o)=>a+(o.checked_in||0),0),noShow=Math.max(0,totalBooked-totalChecked),rate=totalBooked?Math.round((totalChecked/totalBooked)*100):0,vipCount=ords.filter(o=>o.kind==='invitation'&&o.status!=='cancelled').reduce((a,o)=>a+o.qty,0),regCount=Math.max(0,totalBooked-vipCount);
  const timeBuckets={};ords.filter(o=>o.checked_in_at).forEach(o=>{const d=new Date(o.checked_in_at),m=d.getMinutes()<30?'00':'30',slot=String(d.getHours()).padStart(2,'0')+':'+m;timeBuckets[slot]=(timeBuckets[slot]||0)+(o.checked_in||1)});
  const sortedSlots=Object.keys(timeBuckets).sort(),maxSlotVal=Math.max(1,...Object.values(timeBuckets));
- const churches={};ords.filter(o=>o.church).forEach(o=>{const ch=o.church.trim();if(ch)churches[ch]=(churches[ch]||0)+(o.qty||1)});
- const topChurches=Object.entries(churches).sort((a,b)=>b[1]-a[1]).slice(0,6),maxChVal=Math.max(1,...topChurches.map(x=>x[1]));
+ const churches={};let totalChurchQty=0;
+ ords.filter(o=>o.status!=='cancelled').forEach(o=>{
+  const ch=(o.church||o.guest_org||'').trim();
+  if(ch){const q=o.qty||1;churches[ch]=(churches[ch]||0)+q;totalChurchQty+=q}
+ });
+ const sortedChurches=Object.entries(churches).sort((a,b)=>b[1]-a[1]);
+ const maxChVal=Math.max(1,...sortedChurches.map(x=>x[1]));
+ const chGradients=[
+  {bg:'radial-gradient(circle at 35% 30%,rgba(255,255,255,.45) 0%,rgba(255,255,255,0) 60%),linear-gradient(135deg,#8b5cf6,#5b4ef0)',shadow:'rgba(91,78,240,.45)'},
+  {bg:'radial-gradient(circle at 35% 30%,rgba(255,255,255,.45) 0%,rgba(255,255,255,0) 60%),linear-gradient(135deg,#10b981,#059669)',shadow:'rgba(16,185,129,.45)'},
+  {bg:'radial-gradient(circle at 35% 30%,rgba(255,255,255,.45) 0%,rgba(255,255,255,0) 60%),linear-gradient(135deg,#06b6d4,#0284c7)',shadow:'rgba(6,182,212,.45)'},
+  {bg:'radial-gradient(circle at 35% 30%,rgba(255,255,255,.45) 0%,rgba(255,255,255,0) 60%),linear-gradient(135deg,#f59e0b,#d97706)',shadow:'rgba(245,158,11,.45)'},
+  {bg:'radial-gradient(circle at 35% 30%,rgba(255,255,255,.45) 0%,rgba(255,255,255,0) 60%),linear-gradient(135deg,#ec4899,#be185d)',shadow:'rgba(236,72,153,.45)'},
+  {bg:'radial-gradient(circle at 35% 30%,rgba(255,255,255,.45) 0%,rgba(255,255,255,0) 60%),linear-gradient(135deg,#3b82f6,#1d4ed8)',shadow:'rgba(59,130,246,.45)'},
+  {bg:'radial-gradient(circle at 35% 30%,rgba(255,255,255,.45) 0%,rgba(255,255,255,0) 60%),linear-gradient(135deg,#14b8a6,#0f766e)',shadow:'rgba(20,184,166,.45)'},
+  {bg:'radial-gradient(circle at 35% 30%,rgba(255,255,255,.45) 0%,rgba(255,255,255,0) 60%),linear-gradient(135deg,#6366f1,#4338ca)',shadow:'rgba(99,102,241,.45)'},
+  {bg:'radial-gradient(circle at 35% 30%,rgba(255,255,255,.45) 0%,rgba(255,255,255,0) 60%),linear-gradient(135deg,#f43f5e,#9f1239)',shadow:'rgba(244,63,94,.45)'}
+ ];
+
+ let churchBubbleHtml='';
+ if(!sortedChurches.length){
+  churchBubbleHtml='<p class="muted" style="text-align:center;padding:30px">Belum ada data asal gereja / komunitas.</p>';
+ }else{
+  let bList=[];
+  if(sortedChurches.length<=10){
+   bList=sortedChurches.map(x=>({name:x[0],cnt:x[1]}));
+  }else{
+   bList=sortedChurches.slice(0,9).map(x=>({name:x[0],cnt:x[1]}));
+   const oCnt=sortedChurches.slice(9).reduce((s,x)=>s+x[1],0);
+   bList.push({name:'Lainnya ('+(sortedChurches.length-9)+')',cnt:oCnt,isOther:true});
+  }
+  const maxCnt=Math.max(...bList.map(x=>x.cnt)),minCnt=Math.min(...bList.map(x=>x.cnt));
+  const sqrtMax=Math.sqrt(maxCnt),sqrtMin=Math.sqrt(minCnt);
+  const minD=68,maxD=146;
+
+  churchBubbleHtml=`<div class="ch-bubble-wrap">${bList.map((it,idx)=>{
+   const pct=totalChurchQty?((it.cnt/totalChurchQty)*100).toFixed(1):'0';
+   const pctStr=(parseFloat(pct)%1===0?parseFloat(pct).toFixed(0):pct)+'%';
+   const sqrtVal=Math.sqrt(it.cnt);
+   const ratio=(sqrtMax===sqrtMin)?0.5:(sqrtVal-sqrtMin)/(sqrtMax-sqrtMin);
+   const diam=Math.round(minD+ratio*(maxD-minD));
+   const grad=chGradients[idx%chGradients.length];
+   const nameFs=diam>=125?13:(diam>=95?12:(diam>=80?11:10));
+   const cntFs=diam>=125?12:(diam>=95?11:10);
+   const animDur=(3.2+(idx%3)*0.6).toFixed(1);
+   const animDelay=((idx*0.35)%1.8).toFixed(1);
+
+   return `<div class="ch-bubble" data-ch="${esc(it.name)}" data-cnt="${it.cnt}" data-pct="${pctStr}" style="width:${diam}px;height:${diam}px;background:${grad.bg};box-shadow:0 10px 24px -4px ${grad.shadow},inset 0 2px 5px rgba(255,255,255,.45),inset 0 -3px 6px rgba(0,0,0,.25);animation:chFloat ${animDur}s ease-in-out infinite alternate;animation-delay:${animDelay}s" title="${esc(it.name)}: ${it.cnt} jemaat (${pctStr})"><span class="name" style="font-size:${nameFs}px">${esc(it.name)}</span><span class="pill-cnt" style="font-size:${cntFs}px">${it.cnt} <small style="opacity:.85;font-weight:600">(${pctStr})</small></span></div>`;
+  }).join('')}</div>
+  <div id="ch_detail_box" style="margin-top:10px;padding:9px 14px;border-radius:12px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);font-size:12px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px"><div>⛪ <b>${esc(sortedChurches[0][0])}</b> terbanyak: <b>${sortedChurches[0][1]} jemaat</b> (${totalChurchQty?Math.round(sortedChurches[0][1]/totalChurchQty*100):0}%)</div><small class="muted">Ketuk gelembung untuk rincian</small></div>`;
+ }
+
+ const churchListHtml=sortedChurches.length?sortedChurches.map(([ch,cnt])=>{
+  const pct=totalChurchQty?((cnt/totalChurchQty)*100).toFixed(1):'0';
+  return `<div style="margin-bottom:10px"><div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:3px"><b>${esc(ch)}</b><span><b>${cnt}</b> jemaat <small class="muted">(${pct}%)</small></span></div><div style="height:6px;background:rgba(255,255,255,.1);border-radius:99px;overflow:hidden"><div style="height:100%;width:${cnt/maxChVal*100}%;background:linear-gradient(90deg,#10b981,#34d399);border-radius:99px"></div></div></div>`;
+ }).join(''):'<p class="muted">Belum ada data gereja.</p>';
  const ageBuckets={'<18':0,'18-25':0,'26-35':0,'36-50':0,'>50':0};
  ords.filter(o=>o.age).forEach(o=>{const a=parseInt(o.age,10),q=o.qty||1;if(a<18)ageBuckets['<18']+=q;else if(a<=25)ageBuckets['18-25']+=q;else if(a<=35)ageBuckets['26-35']+=q;else if(a<=50)ageBuckets['36-50']+=q;else ageBuckets['>50']+=q});
  const maxAgeVal=Math.max(1,...Object.values(ageBuckets));
@@ -457,9 +518,21 @@ function paintAnalytics(){const c=$('#ac');if(!c)return;const selEv=S.anSelEv||'
 </div>
 <div class="card" style="padding:18px;margin-bottom:18px"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:8px"><div><h3 style="margin:0;font-size:17px">${t('an_peak')}</h3><small class="muted">Distribusi waktu check-in jemaat per slot 30 menit</small></div>${sortedSlots.length?`<span class="pill ok" style="font-weight:700">🔥 Puncak: ${sortedSlots.reduce((a,b)=>timeBuckets[a]>timeBuckets[b]?a:b)} WIB (${timeBuckets[sortedSlots.reduce((a,b)=>timeBuckets[a]>timeBuckets[b]?a:b)]} orang)</span>`:''}</div>
 ${sortedSlots.length?`<div style="display:flex;align-items:flex-end;gap:12px;height:180px;padding:10px 0 24px;overflow-x:auto">${sortedSlots.map(s=>{const val=timeBuckets[s],pct=Math.round((val/maxSlotVal)*100);return `<div style="flex:1;min-width:44px;display:flex;flex-direction:column;align-items:center;height:100%;justify-content:flex-end;gap:6px"><span style="font-size:11px;font-weight:700;color:var(--ac)">${val}</span><div style="width:100%;background:linear-gradient(180deg,#8b5cf6,#5b4ef0);border-radius:6px 6px 0 0;height:${Math.max(8,pct)}%"></div><span class="mono" style="font-size:10px;opacity:.75;white-space:nowrap">${s}</span></div>`}).join('')}</div>`:'<p class="muted" style="text-align:center;padding:30px">Belum ada data check-in untuk rentang ini.</p>'}</div>
-<div class="two" style="gap:16px"><div class="card" style="padding:18px"><h3 style="margin:0 0 12px;font-size:16px">${t('an_demo_church')}</h3>${topChurches.length?topChurches.map(([ch,cnt])=>`<div style="margin-bottom:10px"><div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:3px"><b>${esc(ch)}</b><span><b>${cnt}</b> jemaat</span></div><div style="height:6px;background:rgba(255,255,255,.1);border-radius:99px;overflow:hidden"><div style="height:100%;width:${cnt/maxChVal*100}%;background:linear-gradient(90deg,#10b981,#34d399);border-radius:99px"></div></div></div>`).join(''):'<p class="muted">Belum ada data gereja.</p>'}</div>
+<div class="two" style="gap:16px"><div class="card" style="padding:18px"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:8px"><div><h3 style="margin:0;font-size:16px">${t('an_demo_church')}</h3><small class="muted" style="font-size:11px">Ukuran gelembung proporsional terhadap persentase jemaat (${totalChurchQty} jemaat / ${sortedChurches.length} asal)</small></div><div style="display:inline-flex;background:rgba(255,255,255,.08);padding:3px;border-radius:9px;border:1px solid rgba(255,255,255,.12);gap:3px"><button class="btn sm" id="ch_toggle_bubble" style="padding:4px 10px;font-size:11px;border-radius:6px;${S.anChMode!=='list'?'background:var(--ac);color:#fff;font-weight:700':''}">🫧 Gelembung</button><button class="btn sm" id="ch_toggle_list" style="padding:4px 10px;font-size:11px;border-radius:6px;${S.anChMode==='list'?'background:var(--ac);color:#fff;font-weight:700':''}">📊 Daftar</button></div></div>${S.anChMode==='list'?churchListHtml:churchBubbleHtml}</div>
 <div class="card" style="padding:18px"><h3 style="margin:0 0 12px;font-size:16px">${t('an_demo_age')}</h3>${Object.entries(ageBuckets).some(x=>x[1]>0)?Object.entries(ageBuckets).map(([ag,cnt])=>`<div style="margin-bottom:10px"><div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:3px"><span>Kelompok Usia <b>${ag} thn</b></span><span><b>${cnt}</b> orang</span></div><div style="height:6px;background:rgba(255,255,255,.1);border-radius:99px;overflow:hidden"><div style="height:100%;width:${cnt/maxAgeVal*100}%;background:linear-gradient(90deg,#f59e0b,#fbbf24);border-radius:99px"></div></div></div>`).join(''):'<p class="muted">Belum ada data usia.</p>'}</div></div>`;
- $('#an_ev').onchange=e=>{S.anSelEv=e.target.value;paintAnalytics()}}
+ $('#an_ev').onchange=e=>{S.anSelEv=e.target.value;paintAnalytics()};
+ const tbBubble=$('#ch_toggle_bubble'),tbList=$('#ch_toggle_list');
+ if(tbBubble)tbBubble.onclick=()=>{S.anChMode='bubble';paintAnalytics()};
+ if(tbList)tbList.onclick=()=>{S.anChMode='list';paintAnalytics()};
+ c.querySelectorAll('.ch-bubble').forEach(b=>{
+  b.onclick=()=>{
+   c.querySelectorAll('.ch-bubble').forEach(x=>x.classList.remove('active'));
+   b.classList.add('active');
+   const ch=b.getAttribute('data-ch')||'',cnt=b.getAttribute('data-cnt')||'',pct=b.getAttribute('data-pct')||'';
+   const box=$('#ch_detail_box');
+   if(box)box.innerHTML=`<div>⛪ <b>${esc(ch)}</b>: <b>${cnt} jemaat</b> (${pct} dari total ${totalChurchQty})</div><small class="muted" style="color:var(--ok)">✓ Terpilih</small>`;
+  };
+ });}
 
 function exportOrdersCsv(targetEventId){const evId=targetEventId||($('#of')&&$('#of').value)||($('#an_ev')&&$('#an_ev').value)||'';
  const orders=(S.anOrds||S.ord||[]).filter(o=>!evId||o.event_id===evId);if(!orders.length)return toast('Tidak ada data pesanan untuk diekspor.',1);
