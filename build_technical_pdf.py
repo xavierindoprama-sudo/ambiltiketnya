@@ -1,0 +1,882 @@
+# -*- coding: utf-8 -*-
+"""
+Generator Dokumen Panduan Teknis & Skema Arsitektur Sistem AmbilTiketnya
+Menghasilkan dokumen PDF berstandar profesional via Headless Chrome.
+"""
+
+import os
+import subprocess
+import sys
+
+HTML_FILE = "panduan_teknis_ambiltiketnya.html"
+PDF_FILE = "Panduan_Teknis_dan_Skema_AmbilTiketnya.pdf"
+
+html_content = """<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<title>Panduan Teknis & Skema Arsitektur Sistem - AmbilTiketnya</title>
+<style>
+  @page {
+    size: A4 portrait;
+    margin: 16mm 18mm 18mm 18mm;
+    @bottom-right {
+      content: "Halaman " counter(page);
+      font-size: 9pt;
+      color: #64748b;
+      font-family: system-ui, -apple-system, sans-serif;
+    }
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    color: #1e293b;
+    line-height: 1.55;
+    font-size: 10pt;
+    margin: 0;
+    padding: 0;
+    background: #ffffff;
+  }
+
+  /* Cover Page */
+  .cover {
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    padding: 40px 10px 20px 10px;
+    page-break-after: always;
+    border-bottom: 3px solid #5b4ef0;
+  }
+  .cover-badge {
+    display: inline-block;
+    background: #ede9fe;
+    color: #5b4ef0;
+    padding: 6px 14px;
+    border-radius: 99px;
+    font-size: 9pt;
+    font-weight: 700;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+  }
+  .cover-title {
+    font-size: 26pt;
+    font-weight: 800;
+    color: #0f172a;
+    line-height: 1.15;
+    margin: 20px 0 10px 0;
+  }
+  .cover-title span {
+    color: #5b4ef0;
+  }
+  .cover-subtitle {
+    font-size: 13pt;
+    color: #475569;
+    line-height: 1.4;
+    margin-bottom: 25px;
+  }
+  .cover-card {
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-left: 5px solid #5b4ef0;
+    border-radius: 12px;
+    padding: 16px 20px;
+    margin-top: 20px;
+  }
+  .cover-card table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 9.5pt;
+  }
+  .cover-card td {
+    padding: 6px 0;
+    vertical-align: top;
+  }
+  .cover-card td:first-child {
+    width: 140px;
+    font-weight: 700;
+    color: #475569;
+  }
+  .cover-card td:last-child {
+    color: #0f172a;
+  }
+  .cover-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-top: 1px solid #e2e8f0;
+    padding-top: 15px;
+    font-size: 9pt;
+    color: #64748b;
+  }
+
+  /* Headings */
+  h1 {
+    font-size: 15pt;
+    font-weight: 800;
+    color: #0f172a;
+    border-bottom: 2px solid #5b4ef0;
+    padding-bottom: 6px;
+    margin: 26px 0 14px 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    page-break-after: avoid;
+  }
+  h2 {
+    font-size: 12pt;
+    font-weight: 700;
+    color: #1e1b4b;
+    margin: 18px 0 8px 0;
+    page-break-after: avoid;
+  }
+  h3 {
+    font-size: 10pt;
+    font-weight: 700;
+    color: #334155;
+    margin: 14px 0 6px 0;
+    page-break-after: avoid;
+  }
+
+  p { margin: 0 0 10px 0; }
+  ul, ol { margin: 0 0 12px 0; padding-left: 20px; }
+  li { margin-bottom: 4px; }
+
+  /* Break rules */
+  .page-break { page-break-before: always; }
+  .no-break { page-break-inside: avoid; }
+
+  /* Tables */
+  table.data-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 8.5pt;
+    margin: 10px 0 16px 0;
+    page-break-inside: avoid;
+  }
+  table.data-table th {
+    background: #0f172a;
+    color: #ffffff;
+    padding: 8px 10px;
+    text-align: left;
+    font-weight: 700;
+    border: 1px solid #0f172a;
+  }
+  table.data-table td {
+    padding: 7px 10px;
+    border: 1px solid #cbd5e1;
+    vertical-align: top;
+  }
+  table.data-table tr:nth-child(even) td {
+    background: #f8fafc;
+  }
+
+  /* Callout boxes */
+  .callout {
+    border-radius: 8px;
+    padding: 10px 14px;
+    margin: 12px 0;
+    font-size: 9pt;
+    page-break-inside: avoid;
+  }
+  .callout.info {
+    background: #eff6ff;
+    border-left: 4px solid #3b82f6;
+    color: #1e3a8a;
+  }
+  .callout.success {
+    background: #ecfdf5;
+    border-left: 4px solid #10b981;
+    color: #064e3b;
+  }
+  .callout.warning {
+    background: #fffbeb;
+    border-left: 4px solid #f59e0b;
+    color: #78350f;
+  }
+  .callout.security {
+    background: #faf5ff;
+    border-left: 4px solid #8b5cf6;
+    color: #4c1d95;
+  }
+
+  /* Code block */
+  pre {
+    background: #0f172a;
+    color: #e2e8f0;
+    padding: 10px 14px;
+    border-radius: 8px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-size: 8pt;
+    line-height: 1.45;
+    overflow-x: hidden;
+    white-space: pre-wrap;
+    word-break: break-all;
+    margin: 8px 0 12px 0;
+    page-break-inside: avoid;
+  }
+  code {
+    background: #f1f5f9;
+    color: #5b4ef0;
+    padding: 1px 5px;
+    border-radius: 4px;
+    font-family: ui-monospace, Menlo, monospace;
+    font-size: 8.5pt;
+  }
+
+  /* Pill tags */
+  .pill {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 99px;
+    font-size: 7.5pt;
+    font-weight: 700;
+    margin-right: 4px;
+  }
+  .pill.pri { background: #5b4ef0; color: #fff; }
+  .pill.ok  { background: #10b981; color: #fff; }
+  .pill.wn  { background: #f59e0b; color: #000; }
+  .pill.er  { background: #ef4444; color: #fff; }
+  .pill.neu { background: #e2e8f0; color: #334155; }
+
+  /* Diagram SVGs */
+  .diagram-wrap {
+    margin: 14px 0;
+    padding: 12px;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    text-align: center;
+    page-break-inside: avoid;
+  }
+  .diagram-wrap svg {
+    max-width: 100%;
+    height: auto;
+  }
+  .diagram-caption {
+    font-size: 8.5pt;
+    font-weight: 600;
+    color: #64748b;
+    margin-top: 8px;
+  }
+
+  /* Grid layout for cards */
+  .grid-2 {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    margin: 10px 0;
+    page-break-inside: avoid;
+  }
+  .card-box {
+    border: 1px solid #e2e8f0;
+    background: #f8fafc;
+    border-radius: 8px;
+    padding: 10px 14px;
+    font-size: 9pt;
+  }
+  .card-box b { color: #0f172a; }
+</style>
+</head>
+<body>
+
+<!-- ==================== HALAMAN 1: COVER ==================== -->
+<div class="cover">
+  <div>
+    <div class="cover-badge">Dokumentasi Resmi & Panduan Arsitektur Sistem</div>
+    <div class="cover-title">
+      PANDUAN TEKNIS & CETAK BIRU ARSITEKTUR<br>
+      <span>AMBILTIKETNYA.ONLINE</span>
+    </div>
+    <div class="cover-subtitle">
+      Platform Manajemen Acara, Registrasi Tiket Mandiri, Penerbitan E-Tiket PDF A4 Resmi, dan Pemindai Presisi Kehadiran Real-Time.
+    </div>
+
+    <div class="cover-card">
+      <table>
+        <tr>
+          <td>Domain Resmi</td>
+          <td><b>https://ambiltiketnya.online</b> (Cloudflare Pages Custom Domain)</td>
+        </tr>
+        <tr>
+          <td>Backend API</td>
+          <td><b>https://ambiltiketnya-api.xavierindoprama.workers.dev/</b> (Cloudflare Workers)</td>
+        </tr>
+        <tr>
+          <td>Database Engine</td>
+          <td><b>Neon Serverless PostgreSQL</b> (Connection Pooling over HTTPS)</td>
+        </tr>
+        <tr>
+          <td>Email Service</td>
+          <td><b>Resend REST API</b> (Transactional E-Ticket & OTP Delivery)</td>
+        </tr>
+        <tr>
+          <td>Autentikasi</td>
+          <td>Email & Salted SHA-256 Hashing + Google Identity Services (OAuth 2.0)</td>
+        </tr>
+        <tr>
+          <td>Arsitektur Aplikasi</td>
+          <td>Progressive Web App (PWA), Serverless Edge Computing, Zero Third-Party Dependency Cost</td>
+        </tr>
+        <tr>
+          <td>Versi Dokumen</td>
+          <td>2.4.0 (Terintegrasi Viewfinder Precision ROI, Bubble Analytics & Extended Age Brackets)</td>
+        </tr>
+        <tr>
+          <td>Tanggal Rilis</td>
+          <td>Oktober 2026</td>
+        </tr>
+      </table>
+    </div>
+  </div>
+
+  <div class="cover-footer">
+    <div><strong>Platform AmbilTiketnya</strong> &mdash; Sistem Mandiri Gereja & Komunitas</div>
+    <div>Sifat Dokumen: <strong>Rahasia & Arsip Pengembang (Confidential)</strong></div>
+  </div>
+</div>
+
+<!-- ==================== HALAMAN 2: RINGKASAN & SKEMA GLOBAL ==================== -->
+<h1>1. Ringkasan Eksekutif & Gambaran Proyek</h1>
+
+<p>
+  <strong>AmbilTiketnya</strong> adalah platform manajemen tiket acara modern yang dirancang khusus untuk gereja, seminar, konser rohani, dan komunitas. Platform ini membebaskan penyelenggara dari biaya komisi pihak ketiga (*zero third-party ticketing fee*), menyediakan alur reservasi cepat, menerbitkan e-tiket resmi berformat PDF A4 ber-QR Code dengan Syarat & Ketentuan Kustom, serta menyediakan sistem check-in kamera berkelanjutan (*continuous scanner*) yang presisi dan cepat di pintu masuk (*gate entrance*).
+</p>
+
+<h2>1.1. Prinsip Utama Desain Sistem</h2>
+<ul>
+  <li><strong>Serverless & Zero Maintenance:</strong> Seluruh infrastruktur berjalan di edge network Cloudflare dan Neon Database serverless tanpa server fisik (VPS) yang perlu di-patch atau di-restart. Biaya operasional 100% efisien.</li>
+  <li><strong>Offline Resilient (PWA):</strong> Berjalan sebagai Progressive Web App dengan Service Worker (<code>sw.js</code>). Petugas gerbang tetap dapat memindai tiket sekalipun sinyal internet venue sempat putus berkat modul sinkronisasi offline.</li>
+  <li><strong>Viewfinder Precision Scanning:</strong> Kamera pemindai hanya mendeteksi kode QR yang berada tepat di dalam kotak bidik laser (mencegah pemindaian tidak sengaja dari sudut jauh).</li>
+  <li><strong>Continuous Anti-Duplicate Lock:</strong> Mencegah tiket yang sama terpindai dua kali secara berurutan (*double check-in*) dengan mekanisme penahan 10 detik otomatis selama tiket masih terlihat di kamera.</li>
+  <li><strong>Interactive Demographics:</strong> Dasbor analitik dengan kurva kedatangan check-in, diagram gelembung interaktif asal gereja, dan klasifikasi usia lengkap hingga lansia.</li>
+</ul>
+
+<h1>2. Cetak Biru Arsitektur Global (System Architecture)</h1>
+<p>
+  Sistem AmbilTiketnya mengadopsi pola <strong>JAMstack + Edge Microservices</strong> yang memisahkan frontend statis dengan backend serverless compute dan database pooling.
+</p>
+
+<div class="diagram-wrap">
+  <svg viewBox="0 0 760 320" xmlns="http://www.w3.org/2000/svg">
+    <!-- Defs -->
+    <defs>
+      <linearGradient id="g1" x1="0%" y1="0%" x2="100%" y2="100%">
+        <stop offset="0%" stop-color="#5b4ef0"/>
+        <stop offset="100%" stop-color="#8b5cf6"/>
+      </linearGradient>
+    </defs>
+
+    <!-- Client Layer -->
+    <rect x="20" y="30" width="160" height="260" rx="12" fill="#f8fafc" stroke="#cbd5e1" stroke-width="2"/>
+    <text x="100" y="55" font-family="sans-serif" font-size="12" font-weight="bold" text-anchor="middle" fill="#0f172a">CLIENT APPS</text>
+    
+    <rect x="35" y="75" width="130" height="48" rx="8" fill="#ffffff" stroke="#94a3b8"/>
+    <text x="100" y="96" font-family="sans-serif" font-size="10" font-weight="bold" text-anchor="middle" fill="#1e293b">Peserta (User)</text>
+    <text x="100" y="112" font-family="sans-serif" font-size="8.5" text-anchor="middle" fill="#64748b">Pesan & Unduh Tiket</text>
+
+    <rect x="35" y="135" width="130" height="48" rx="8" fill="#ffffff" stroke="#94a3b8"/>
+    <text x="100" y="156" font-family="sans-serif" font-size="10" font-weight="bold" text-anchor="middle" fill="#1e293b">Petugas Gerbang</text>
+    <text x="100" y="172" font-family="sans-serif" font-size="8.5" text-anchor="middle" fill="#64748b">Continuous Scanner</text>
+
+    <rect x="35" y="195" width="130" height="48" rx="8" fill="#ffffff" stroke="#94a3b8"/>
+    <text x="100" y="216" font-family="sans-serif" font-size="10" font-weight="bold" text-anchor="middle" fill="#1e293b">Admin / Panitia</text>
+    <text x="100" y="232" font-family="sans-serif" font-size="8.5" text-anchor="middle" fill="#64748b">Manajemen & Laporan</text>
+
+    <!-- Arrow Client -> CDN -->
+    <path d="M 180 160 L 230 160" stroke="#5b4ef0" stroke-width="3" fill="none"/>
+
+    <!-- Cloudflare Edge Layer -->
+    <rect x="230" y="30" width="220" height="260" rx="12" fill="#eff6ff" stroke="#3b82f6" stroke-width="2"/>
+    <text x="340" y="55" font-family="sans-serif" font-size="12" font-weight="bold" text-anchor="middle" fill="#1e3a8a">CLOUDFLARE EDGE</text>
+
+    <rect x="245" y="75" width="190" height="65" rx="8" fill="#ffffff" stroke="#60a5fa"/>
+    <text x="340" y="98" font-family="sans-serif" font-size="10" font-weight="bold" text-anchor="middle" fill="#1d4ed8">Cloudflare Pages (Static)</text>
+    <text x="340" y="114" font-family="sans-serif" font-size="8.5" text-anchor="middle" fill="#475569">ambiltiketnya.online</text>
+    <text x="340" y="128" font-family="sans-serif" font-size="7.5" text-anchor="middle" fill="#94a3b8">HTML, CSS, JS, PWA Cache</text>
+
+    <rect x="245" y="160" width="190" height="110" rx="8" fill="url(#g1)"/>
+    <text x="340" y="185" font-family="sans-serif" font-size="11" font-weight="bold" text-anchor="middle" fill="#ffffff">Cloudflare Worker API</text>
+    <text x="340" y="202" font-family="sans-serif" font-size="8.5" text-anchor="middle" fill="#e0e7ff">ambiltiketnya-api (V8 Edge)</text>
+    <text x="340" y="222" font-family="sans-serif" font-size="8" text-anchor="middle" fill="#ffffff">&bull; Auth, OTP &amp; Role Guard</text>
+    <text x="340" y="238" font-family="sans-serif" font-size="8" text-anchor="middle" fill="#ffffff">&bull; Ticket Booking &amp; Gate Check-In</text>
+    <text x="340" y="254" font-family="sans-serif" font-size="8" text-anchor="middle" fill="#ffffff">&bull; Analytics &amp; Demographics Aggregation</text>
+
+    <!-- Arrow Worker -> DB -->
+    <path d="M 435 215 L 495 215" stroke="#10b981" stroke-width="3" fill="none"/>
+
+    <!-- Database Layer -->
+    <rect x="495" y="145" width="245" height="145" rx="12" fill="#ecfdf5" stroke="#10b981" stroke-width="2"/>
+    <text x="617" y="170" font-family="sans-serif" font-size="12" font-weight="bold" text-anchor="middle" fill="#064e3b">NEON SERVERLESS POSTGRES</text>
+
+    <rect x="510" y="185" width="215" height="90" rx="8" fill="#ffffff" stroke="#34d399"/>
+    <text x="617" y="205" font-family="sans-serif" font-size="9.5" font-weight="bold" text-anchor="middle" fill="#065f46">HTTPS Connection Pool</text>
+    <text x="617" y="223" font-family="sans-serif" font-size="8" text-anchor="middle" fill="#334155">Tabel: users, events, orders,</text>
+    <text x="617" y="238" font-family="sans-serif" font-size="8" text-anchor="middle" fill="#334155">sessions, password_resets, settings</text>
+    <text x="617" y="258" font-family="sans-serif" font-size="8" font-weight="bold" text-anchor="middle" fill="#10b981">Auto-scaling &bull; Instant Sleep &bull; Zero Cold Start</text>
+
+    <!-- External Services Layer -->
+    <rect x="495" y="30" width="245" height="95" rx="12" fill="#fffbeb" stroke="#f59e0b" stroke-width="2"/>
+    <text x="617" y="52" font-family="sans-serif" font-size="11" font-weight="bold" text-anchor="middle" fill="#92400e">INTEGRASI PIHAK KE-3</text>
+    
+    <text x="515" y="75" font-family="sans-serif" font-size="8.5" fill="#78350f"><b>&bull; Resend API:</b> Pengiriman email e-tiket &amp; OTP</text>
+    <text x="515" y="93" font-family="sans-serif" font-size="8.5" fill="#78350f"><b>&bull; Google OAuth:</b> Login satu klik (GSI)</text>
+    <text x="515" y="111" font-family="sans-serif" font-size="8.5" fill="#78350f"><b>&bull; WhatsApp Direct:</b> Tautan instan wa.me</text>
+
+    <!-- Arrow Worker -> Ext -->
+    <path d="M 435 180 L 465 180 L 465 80 L 495 80" stroke="#f59e0b" stroke-width="2" stroke-dasharray="4" fill="none"/>
+  </svg>
+  <div class="diagram-caption">Gambar 1: Topologi Arsitektur Multi-Tier AmbilTiketnya.online</div>
+</div>
+
+<!-- ==================== HALAMAN 3: SKEMA BASIS DATA & ERD ==================== -->
+<div class="page-break"></div>
+<h1>3. Skema Basis Data & Entity Relationship Diagram (ERD)</h1>
+
+<p>
+  Basis data menggunakan <strong>Neon PostgreSQL</strong> dengan relasi integritas referensial (Foreign Keys) dan indeks performa tinggi.
+</p>
+
+<div class="diagram-wrap">
+  <svg viewBox="0 0 720 280" xmlns="http://www.w3.org/2000/svg">
+    <!-- USERS -->
+    <rect x="20" y="20" width="190" height="240" rx="8" fill="#ffffff" stroke="#5b4ef0" stroke-width="2"/>
+    <rect x="20" y="20" width="190" height="32" rx="8" fill="#5b4ef0"/>
+    <text x="115" y="42" font-family="sans-serif" font-size="11" font-weight="bold" fill="#ffffff" text-anchor="middle">USERS</text>
+    <text x="30" y="72" font-family="monospace" font-size="8.5" fill="#0f172a"><b>PK id</b> (uuid)</text>
+    <text x="30" y="90" font-family="monospace" font-size="8.5" fill="#334155">name (text)</text>
+    <text x="30" y="108" font-family="monospace" font-size="8.5" fill="#334155">email (text, UQ)</text>
+    <text x="30" y="126" font-family="monospace" font-size="8.5" fill="#334155">whatsapp (text)</text>
+    <text x="30" y="144" font-family="monospace" font-size="8.5" fill="#334155">age (int)</text>
+    <text x="30" y="162" font-family="monospace" font-size="8.5" fill="#334155">church (text)</text>
+    <text x="30" y="180" font-family="monospace" font-size="8.5" fill="#334155">password_hash (text)</text>
+    <text x="30" y="198" font-family="monospace" font-size="8.5" fill="#334155">role (text: attendee..)</text>
+    <text x="30" y="216" font-family="monospace" font-size="8.5" fill="#334155">google_sub (text)</text>
+    <text x="30" y="234" font-family="monospace" font-size="8.5" fill="#334155">locked_until (timestamptz)</text>
+    <text x="30" y="250" font-family="monospace" font-size="8.5" fill="#64748b">created_at (timestamptz)</text>
+
+    <!-- ORDERS -->
+    <rect x="265" y="20" width="200" height="240" rx="8" fill="#ffffff" stroke="#10b981" stroke-width="2"/>
+    <rect x="265" y="20" width="200" height="32" rx="8" fill="#10b981"/>
+    <text x="365" y="42" font-family="sans-serif" font-size="11" font-weight="bold" fill="#ffffff" text-anchor="middle">ORDERS (TIKET)</text>
+    <text x="275" y="72" font-family="monospace" font-size="8.5" fill="#0f172a"><b>PK id</b> (uuid)</text>
+    <text x="275" y="90" font-family="monospace" font-size="8.5" fill="#0f172a"><b>ticket_code</b> (text, UQ)</text>
+    <text x="275" y="108" font-family="monospace" font-size="8.5" fill="#0f172a">order_code (text, UQ)</text>
+    <text x="275" y="126" font-family="monospace" font-size="8.5" fill="#5b4ef0"><b>FK user_id</b> &rarr; users</text>
+    <text x="275" y="144" font-family="monospace" font-size="8.5" fill="#0284c7"><b>FK event_id</b> &rarr; events</text>
+    <text x="275" y="162" font-family="monospace" font-size="8.5" fill="#334155">qty, total (int)</text>
+    <text x="275" y="180" font-family="monospace" font-size="8.5" fill="#334155">status (confirmed..)</text>
+    <text x="275" y="198" font-family="monospace" font-size="8.5" fill="#334155">kind (order/inv/walk_in)</text>
+    <text x="275" y="216" font-family="monospace" font-size="8.5" fill="#065f46"><b>checked_in</b> (int)</text>
+    <text x="275" y="234" font-family="monospace" font-size="8.5" fill="#065f46">checked_in_at (timestamptz)</text>
+    <text x="275" y="250" font-family="monospace" font-size="8.5" fill="#334155">guest_name, org, phone</text>
+
+    <!-- EVENTS -->
+    <rect x="515" y="20" width="185" height="240" rx="8" fill="#ffffff" stroke="#0284c7" stroke-width="2"/>
+    <rect x="515" y="20" width="185" height="32" rx="8" fill="#0284c7"/>
+    <text x="607" y="42" font-family="sans-serif" font-size="11" font-weight="bold" fill="#ffffff" text-anchor="middle">EVENTS</text>
+    <text x="525" y="72" font-family="monospace" font-size="8.5" fill="#0f172a"><b>PK id</b> (uuid)</text>
+    <text x="525" y="90" font-family="monospace" font-size="8.5" fill="#334155">name (text)</text>
+    <text x="525" y="108" font-family="monospace" font-size="8.5" fill="#334155">category (text)</text>
+    <text x="525" y="126" font-family="monospace" font-size="8.5" fill="#334155">event_date (date)</text>
+    <text x="525" y="144" font-family="monospace" font-size="8.5" fill="#334155">start_time, end_time</text>
+    <text x="525" y="162" font-family="monospace" font-size="8.5" fill="#334155">location (text)</text>
+    <text x="525" y="180" font-family="monospace" font-size="8.5" fill="#0284c7"><b>quota</b> (int, kuota reguler)</text>
+    <text x="525" y="198" font-family="monospace" font-size="8.5" fill="#0284c7"><b>walkin_quota</b> (int)</text>
+    <text x="525" y="216" font-family="monospace" font-size="8.5" fill="#334155">terms (text, S&amp;K acara)</text>
+    <text x="525" y="234" font-family="monospace" font-size="8.5" fill="#334155">is_active (boolean)</text>
+    <text x="525" y="250" font-family="monospace" font-size="8.5" fill="#334155">is_paid, price (int)</text>
+
+    <!-- Connecting lines -->
+    <path d="M 210 126 L 265 126" stroke="#5b4ef0" stroke-width="2" fill="none"/>
+    <circle cx="215" cy="126" r="3" fill="#5b4ef0"/>
+    <circle cx="260" cy="126" r="3" fill="#5b4ef0"/>
+
+    <path d="M 465 144 L 515 144" stroke="#0284c7" stroke-width="2" fill="none"/>
+    <circle cx="470" cy="144" r="3" fill="#0284c7"/>
+    <circle cx="510" cy="144" r="3" fill="#0284c7"/>
+  </svg>
+  <div class="diagram-caption">Gambar 2: Entity Relationship Diagram (ERD) Inti Sistem AmbilTiketnya</div>
+</div>
+
+<h2>3.1. Spesifikasi Rinci Tabel</h2>
+<table class="data-table">
+  <tr>
+    <th style="width:110px">Nama Tabel</th>
+    <th style="width:140px">Kunci Utama / UQ</th>
+    <th>Fungsi Teknis & Catatan Integritas</th>
+  </tr>
+  <tr>
+    <td><code>users</code></td>
+    <td><code>id</code> (PK, UUID)<br><code>email</code> (UQ, Lower)</td>
+    <td>
+      Menyimpan akun pengguna. Mendukung pendaftaran reguler (email/password) dan Google Sign-In (<code>google_sub</code>). 
+      Kolom <code>role</code> memiliki hierarki: <code>attendee</code> (0) &lt; <code>gate_staff</code> (1) &lt; <code>admin</code> (2) &lt; <code>super_admin</code> (3).
+      Dilengkapi penghitung <code>failed_attempts</code> dan <code>locked_until</code> (proteksi Brute-Force).
+    </td>
+  </tr>
+  <tr>
+    <td><code>events</code></td>
+    <td><code>id</code> (PK, UUID)</td>
+    <td>
+      Master data acara. Menyimpan kuota reguler (<code>quota</code>) dan kuota terpisah di tempat (<code>walkin_quota</code>). Kolom <code>terms</code> menyimpan Syarat & Ketentuan Kustom khusus acara tersebut yang dicetak di halaman E-Tiket PDF A4. Kolom <code>is_active</code> mengatur kemunculan acara di katalog publik.
+    </td>
+  </tr>
+  <tr>
+    <td><code>orders</code></td>
+    <td><code>id</code> (PK, UUID)<br><code>ticket_code</code> (UQ)<br><code>order_code</code> (UQ)</td>
+    <td>
+      Transaksional tiket. Kolom <code>kind</code> membedakan tiket: <code>order</code> (pemesan mandiri), <code>invitation</code> (tamu VIP oleh admin), dan <code>walk_in</code> (pendaftaran langsung di venue). Kolom <code>checked_in</code> melacak jumlah orang yang telah masuk (0 &le; <code>checked_in</code> &le; <code>qty</code>).
+    </td>
+  </tr>
+  <tr>
+    <td><code>sessions</code></td>
+    <td><code>token_hash</code> (PK)</td>
+    <td>
+      Session storage terdistribusi. Token sesi acak di-hash dengan SHA-256 sebelum disimpan ke DB (keamanan token-at-rest). Masa berlaku diatur pada kolom <code>expires_at</code> (otomatis kedaluwarsa).
+    </td>
+  </tr>
+  <tr>
+    <td><code>password_resets</code></td>
+    <td><code>user_id</code> (PK, FK)</td>
+    <td>
+      Penyimpanan OTP lupa password (6-digit angka). Disimpan dalam format hash SHA-256 dengan masa aktif 10 menit dan batas percobaan maksimal 5 kali.
+    </td>
+  </tr>
+  <tr>
+    <td><code>settings</code></td>
+    <td><code>key</code> (PK, text)</td>
+    <td>
+      Konfigurasi dinamis platform dan naskah dokumen hukum (<code>legal_syarat</code>, <code>legal_privasi</code>, <code>legal_cookie</code>) yang dapat diedit langsung dari dashboard admin.
+    </td>
+  </tr>
+</table>
+
+<!-- ==================== HALAMAN 4: ALUR KERJA TEKNIS ==================== -->
+<div class="page-break"></div>
+<h1>4. Alur Kerja Inti & Mekanisme Teknis (Core Workflows)</h1>
+
+<h2>4.1. Alur Autentikasi Ganda: Native vs Google Sign-In</h2>
+<p>
+  AmbilTiketnya mendukung dua metode autentikasi yang aman dan terpadu:
+</p>
+<ol>
+  <li>
+    <strong>Native Email & Password Hashing:</strong>
+    Kata sandi diproses dengan algoritma <em>Iterative Salted SHA-256</em> (1.500 putaran kriptografi). Format tersimpan: <code>{iterasi}${salt}${hash}</code>. Sistem memblokir akun sementara selama 15 menit jika terjadi 5 kali kegagalan login berturut-turut.
+  </li>
+  <li>
+    <strong>Google Sign-In (OAuth 2.0 Identity Services):</strong>
+    Frontend menginisialisasi Google One-Tap/Button SDK dengan Client ID <code>866753632616-opg57movh0h0th1av7b927d7fvrg3n6e...</code>. 
+    Kredensial ID Token dikirim ke Cloudflare Worker untuk divalidasi ke endpoint Google (<code>https://oauth2.googleapis.com/tokeninfo</code>). Jika akun belum terdaftar, pengguna baru dibuat otomatis dan diarahkan untuk melengkapi nomor WhatsApp, usia, dan asal gereja.
+  </li>
+</ol>
+
+<h2>4.2. Penerbitan E-Tiket PDF A4 & Syarat Ketentuan Kustom</h2>
+<p>
+  Berbeda dari tiket gambar biasa, AmbilTiketnya menghasilkan <strong>dokumen PDF berformat resmi A4</strong> beresolusi tinggi langsung di sisi klien (*client-side rendering*) via pustaka <code>jsPDF</code> (2.5.1):
+</p>
+<ul>
+  <li><strong>Header Dokumen:</strong> Kop resmi, pita status (Valid / Belum Bayar), dan nomor pesanan unik.</li>
+  <li><strong>Badge Status Kehadiran:</strong> Menampilkan jumlah jemaat, jenis tiket (Reguler, VIP Invitation, Walk-In), dan tanggal acara.</li>
+  <li><strong>QR Code Verifikasi Gerbang:</strong> Dirender secara presisi berbasis matriks modul hitam pekat tajam tanpa distorsi pikselasi.</li>
+  <li><strong>Syarat & Ketentuan Acara Kustom:</strong> Teks S&K yang diatur oleh Admin pada masing-masing acara dicetak rapi di bagian bawah tiket dengan pembungkusan teks otomatis (*word wrapping*), sehingga peserta memahami aturan spesifik acara (misal: pakaian bebas rapi, dilarang membawa makanan/minuman, batas jam gerbang ditutup).</li>
+</ul>
+
+<h2>4.3. Notifikasi Pengiriman Tiket Ganda (Email & WhatsApp)</h2>
+<div class="grid-2">
+  <div class="card-box">
+    <b>📧 Notifikasi Email (Resend REST API)</b>
+    <p style="margin-top:6px;font-size:8.5pt">
+      Begitu tiket terbit atau pesanan dikonfirmasi admin, Cloudflare Worker memanggil Resend API dengan payload HTML responsif. Email berisi ringkasan acara, barcode tiket, dan tombol langsung menuju halaman e-tiket resmi.
+    </p>
+  </div>
+  <div class="card-box">
+    <b>💬 Notifikasi WhatsApp (Direct Link)</b>
+    <p style="margin-top:6px;font-size:8.5pt">
+      Platform menyusun pesan teks terformat rapi dan membuka tautan <code>https://wa.me/{nomor}?text=...</code> secara otomatis, mengarahkan peserta membuka tautan resmi <code>https://ambiltiketnya.online/?tiket=TKT-...</code> pada domain kustom.
+    </p>
+  </div>
+</div>
+
+<h2>4.4. Pemindai Kamera Berkelanjutan (*Continuous Camera Scanner*)</h2>
+<p>
+  Fitur pemindai dirancang khusus untuk menangani antrean ribuan jemaat dalam waktu singkat di pintu masuk gerbang dengan performa tinggi dan nol kesalahan baca.
+</p>
+
+<div class="callout security">
+  <strong>Mekanisme Presisi Viewfinder ROI (Mencegah Deteksi di Luar Kotak):</strong><br>
+  Secara default, algoritma kamera mendeteksi seluruh bidang tangkapan lensa (*full sensor*), sehingga tiket yang masih berada di sudut/pinggir layar dapat langsung terbaca sebelum tamu siap. AmbilTiketnya mengatasi masalah ini dengan memproyeksikan koordinat CSS kotak bidik (<code>#sc_frame</code>) ke koordinat piksel video murni menggunakan fungsi <code>getFrameRoi()</code>. Jika titik tengah kode QR berada di luar kotak bidik laser, pembacaan <em>seketika diabaikan</em> hingga QR diarahkan tepat ke dalam kotak.
+</div>
+
+<div class="callout warning">
+  <strong>Pencegahan Rescan Berulang (10-Second Silent Anti-Duplicate Lock):</strong><br>
+  Bila seorang tamu menyodorkan tiketnya, tiket akan diverifikasi seketika (hijau & suara nada naik). Selama tiket yang sama masih dipegang di depan lensa kamera, timer penahan akan terus di-reset secara otomatis tanpa bunyi error (*silent suppression*). Tiket yang sama tidak akan pernah terscan ulang secara tidak sengaja hingga tiket dijauhkan dari lensa selama lebih dari 10 detik. Namun, bila tamu berikutnya menyodorkan tiket baru yang berbeda, pemindai langsung membacanya seketika dalam 1,5 detik!
+</div>
+
+<!-- ==================== HALAMAN 5: ANALITIK, WALK-IN & DEVOPS ==================== -->
+<div class="page-break"></div>
+<h1>5. Dasbor Laporan & Analisis Data Terpadu</h1>
+
+<p>
+  Menu <strong>Laporan & Analisis</strong> memberikan wawasan komprehensif bagi panitia dan pimpinan gereja untuk evaluasi acara:
+</p>
+
+<div class="grid-2">
+  <div class="card-box">
+    <b>🏛️ Metrik Total Asal Gereja & Bubble Cloud</b>
+    <p style="margin-top:6px;font-size:8.5pt">
+      Menampilkan kartu ringkasan total gereja/komunitas yang terdaftar. Data divisualisasikan dalam <strong>Diagram Gelembung Dinamis (*Interactive Bubble Cloud*)</strong> di mana diameter gelembung diskalakan secara matematis proporsional terhadap akar kuadrat persentase jumlah jemaat (&prop; &radic;N). Dilengkapi animasi melayang 3D sphere dan tombol beralih ke grafik batang (*List Mode*).
+    </p>
+  </div>
+  <div class="card-box">
+    <b>👥 6 Kelompok Rentang Usia & Kurva Check-In</b>
+    <p style="margin-top:6px;font-size:8.5pt">
+      Menyajikan demografi usia lengkap: <code>&lt;18 thn</code> (Anak/Remaja), <code>18-25 thn</code> (Pemuda), <code>26-35 thn</code> (Dewasa Muda), <code>36-50 thn</code> (Dewasa), <code>51-60 thn</code> (Pra-Senior), dan <code>&gt;60 thn</code> (Lansia/Senior). Dilengkapi kurva jam puncak kedatangan jemaat per slot 30 menit untuk evaluasi beban gate.
+    </p>
+  </div>
+</div>
+
+<h1>6. Panduan Operasional, Deployment & Pemeliharaan</h1>
+
+<h2>6.1. Variabel Lingkungan & Rahasia (Environment Variables)</h2>
+<table class="data-table">
+  <tr>
+    <th style="width:160px">Nama Variabel</th>
+    <th style="width:120px">Lokasi</th>
+    <th>Deskripsi & Nilai Rujukan</th>
+  </tr>
+  <tr>
+    <td><code>DATABASE_URL</code></td>
+    <td>Cloudflare Worker Secrets</td>
+    <td>Connection string PostgreSQL Neon (Pooled mode dengan parameter <code>?sslmode=require</code>). Wajib dirahasiakan.</td>
+  </tr>
+  <tr>
+    <td><code>RESEND_API_KEY</code></td>
+    <td>Cloudflare Worker Secrets</td>
+    <td>API Key dari platform Resend (<code>re_...</code>) untuk pengiriman email transaksional e-tiket dan kode OTP.</td>
+  </tr>
+  <tr>
+    <td><code>ADMIN_SECRET</code></td>
+    <td>Cloudflare Worker Secrets</td>
+    <td>Kata sandi darurat / seed inisialisasi akun Super Admin pertama kali.</td>
+  </tr>
+  <tr>
+    <td><code>window.APP_API_URL</code></td>
+    <td><code>config.js</code> (Frontend)</td>
+    <td>Endpoint Worker: <code>https://ambiltiketnya-api.xavierindoprama.workers.dev/</code></td>
+  </tr>
+  <tr>
+    <td><code>window.GOOGLE_CLIENT_ID</code></td>
+    <td><code>config.js</code> (Frontend)</td>
+    <td>OAuth 2.0 Web Client ID Google Cloud Console untuk otentikasi Sign-in with Google.</td>
+  </tr>
+</table>
+
+<h2>6.2. Alur Deployment Otomatis (CI/CD)</h2>
+<ol>
+  <li>
+    <strong>Frontend (Cloudflare Pages):</strong>
+    Setiap perubahan yang di-commit dan di-push ke branch <code>main</code> di repositori GitHub (<code>xavierindoprama-sudo/ambiltiketnya</code>) akan secara otomatis memicu build dan deploy instan di Cloudflare Pages dalam waktu ~15 detik. Custom domain <code>https://ambiltiketnya.online</code> otomatis terbarui.
+  </li>
+  <li>
+    <strong>Service Worker Cache Bumping (Penting!):</strong>
+    Jika Anda memperbarui file frontend (<code>index.html</code>, <code>scan.html</code>, atau <code>config.js</code>), <strong>pastikan untuk menaikkan versi konstanta cache di <code>sw.js</code></strong> (contoh: dari <code>atk-v34</code> menjadi <code>atk-v35</code>). Hal ini memaksa browser pengguna dan PWA membersihkan cache lama dan mengambil aset terbaru seketika.
+  </li>
+  <li>
+    <strong>Backend (Cloudflare Worker):</strong>
+    Jika Anda mengubah file <code>cloudflare-worker/worker.js</code>, Anda dapat mem-paste kodenya ke editor Cloudflare Dashboard Worker atau menggunakan command line Wrangler:
+    <pre>npx wrangler deploy cloudflare-worker/worker.js --name ambiltiketnya-api</pre>
+  </li>
+  <li>
+    <strong>Migrasi Database (Neon SQL):</strong>
+    Bila ada penambahan kolom/tabel baru, buka <em>Neon Console &rarr; SQL Editor</em> dan jalankan skrip migrasi terkait (seperti <code>migrate-walkin.sql</code> atau <code>migrate-oauth.sql</code>).
+  </li>
+</ol>
+
+<h2>6.3. Matriks Peran & Hak Akses Pengguna (RBAC)</h2>
+<table class="data-table">
+  <tr>
+    <th>Peran (Role)</th>
+    <th>Pesan Tiket</th>
+    <th>Scan QR di Gate</th>
+    <th>Kelola Acara</th>
+    <th>Laporan & Undangan VIP</th>
+    <th>Kelola User & Admin</th>
+  </tr>
+  <tr>
+    <td><code>attendee</code> (Peserta)</td>
+    <td>✅ Ya</td>
+    <td>❌ Tidak</td>
+    <td>❌ Tidak</td>
+    <td>❌ Tidak</td>
+    <td>❌ Tidak</td>
+  </tr>
+  <tr>
+    <td><code>gate_staff</code> (Petugas Gate)</td>
+    <td>✅ Ya</td>
+    <td>✅ Ya (Scanner)</td>
+    <td>❌ Tidak</td>
+    <td>❌ Tidak</td>
+    <td>❌ Tidak</td>
+  </tr>
+  <tr>
+    <td><code>admin</code> (Panitia Acara)</td>
+    <td>✅ Ya</td>
+    <td>✅ Ya</td>
+    <td>✅ Ya (Lihat/Edit)</td>
+    <td>✅ Ya (Laporan & Undangan)</td>
+    <td>❌ Tidak</td>
+  </tr>
+  <tr>
+    <td><code>super_admin</code> (Pimpinan/Owner)</td>
+    <td>✅ Ya</td>
+    <td>✅ Ya</td>
+    <td>✅ Penuh</td>
+    <td>✅ Penuh (Semua Acara)</td>
+    <td>✅ Penuh (Role & Pengaturan)</td>
+  </tr>
+</table>
+
+<div class="callout info">
+  <strong>Fitur Tautan Langsung Petugas Gate (*Direct Gate Pass Link*):</strong><br>
+  Super Admin dapat menyalin tautan khusus relawan gerbang dari menu <em>Petugas Gerbang</em>. Relawan / usher cukup membuka tautan tersebut di ponsel mereka untuk langsung mengaktifkan kamera pemindai tanpa perlu membuat akun atau memasukkan password admin!
+</div>
+
+<!-- ==================== HALAMAN 6: TROUBLESHOOTING & DAFTAR API ==================== -->
+<div class="page-break"></div>
+<h1>7. Panduan Pemecahan Masalah (Troubleshooting & FAQ)</h1>
+
+<table class="data-table">
+  <tr>
+    <th style="width:160px">Gejala Masalah</th>
+    <th style="width:200px">Kemungkinan Penyebab</th>
+    <th>Solusi Cepat</th>
+  </tr>
+  <tr>
+    <td>Kamera scanner hitam atau izin ditolak di HP.</td>
+    <td>Browser memblokir izin kamera atau situs belum menggunakan HTTPS.</td>
+    <td>Pastikan URL dibuka via <code>https://ambiltiketnya.online</code>. Buka pengaturan browser smartphone &rarr; Izin Situs &rarr; Izinkan Kamera.</td>
+  </tr>
+  <tr>
+    <td>Email konfirmasi e-tiket tidak sampai ke tamu.</td>
+    <td>Kuota harian akun Resend habis atau email masuk ke folder Spam/Promotions.</td>
+    <td>Periksa log di dashboard Resend.com. Minta jemaat memeriksa folder Spam atau gunakan tombol alternatif <em>Buka WhatsApp</em> untuk mengirim link tiket via WA.</td>
+  </tr>
+  <tr>
+    <td>Tombol atau tampilan di HP masih versi lama.</td>
+    <td>Service worker atau browser menyimpan cache versi sebelumnya.</td>
+    <td>Lakukan Hard Refresh (Ctrl+F5) atau tutup tab dan buka kembali. Pastikan versi cache di <code>sw.js</code> sudah dinaikkan saat deploy.</td>
+  </tr>
+  <tr>
+    <td>Akun Admin terkunci (*Locked Account*).</td>
+    <td>Gagal memasukkan password lebih dari 5 kali berturut-turut.</td>
+    <td>Tunggu 15 menit hingga kunci akun terbuka otomatis, atau gunakan menu <em>Lupa Password</em> untuk verifikasi kode OTP ke email.</td>
+  </tr>
+</table>
+
+<h1>8. Referensi Endpoint API Cloudflare Worker</h1>
+<p>
+  Seluruh request dikirim via metode <code>POST</code> ke <code>https://ambiltiketnya-api.xavierindoprama.workers.dev/</code> dengan format body JSON: <code>{"action": "...", "token": "...", ...}</code>.
+</p>
+
+<table class="data-table">
+  <tr>
+    <th style="width:130px">Action API</th>
+    <th style="width:110px">Minimal Role</th>
+    <th>Parameter Kunci & Deskripsi Respon</th>
+  </tr>
+  <tr>
+    <td><code>register</code></td>
+    <td>Publik</td>
+    <td><code>name, email, password, whatsapp, age, church</code> &rarr; Mendaftarkan user baru.</td>
+  </tr>
+  <tr>
+    <td><code>login</code></td>
+    <td>Publik</td>
+    <td><code>email, password</code> &rarr; Mengembalikan session token dan profil pengguna.</td>
+  </tr>
+  <tr>
+    <td><code>googleAuth</code></td>
+    <td>Publik</td>
+    <td><code>credential</code> (Google ID Token) &rarr; Verifikasi Google & terbitkan session token.</td>
+  </tr>
+  <tr>
+    <td><code>book</code></td>
+    <td><code>attendee</code></td>
+    <td><code>event_id, qty</code> &rarr; Validasi kuota & terbitkan kode tiket (<code>TKT-XXXX-XXXXXX</code>).</td>
+  </tr>
+  <tr>
+    <td><code>validate</code></td>
+    <td><code>gate_staff</code></td>
+    <td><code>code</code> (Kode Tiket) &rarr; Melakukan check-in instan, validasi kehadiran & status kuota.</td>
+  </tr>
+  <tr>
+    <td><code>walkinRegister</code></td>
+    <td><code>gate_staff</code></td>
+    <td><code>event_id, name, org, phone, email, instant_checkin</code> &rarr; Pendaftaran langsung di venue.</td>
+  </tr>
+  <tr>
+    <td><code>adminEvents</code></td>
+    <td><code>admin</code></td>
+    <td>Mengambil seluruh data acara beserta status ketersediaan tiket & kehadiran.</td>
+  </tr>
+  <tr>
+    <td><code>adminSaveEvent</code></td>
+    <td><code>super_admin</code></td>
+    <td>Membuat atau memperbarui detail acara, kuota, S&K kustom, banner, dan status aktif.</td>
+  </tr>
+  <tr>
+    <td><code>ordersAll</code></td>
+    <td><code>admin</code></td>
+    <td>Mengambil rekap data seluruh pesanan untuk kebutuhan ekspor CSV & dasbor analitik.</td>
+  </tr>
+  <tr>
+    <td><code>createInvitation</code></td>
+    <td><code>super_admin</code></td>
+    <td>Menerbitkan tiket VIP / undangan khusus instansi tanpa batas akun.</td>
+  </tr>
+</table>
+
+<div style="margin-top:30px;padding-top:15px;border-top:1px solid #cbd5e1;text-align:center;font-size:8.5pt;color:#64748b">
+  Dokumen Panduan Teknis & Skema Arsitektur &bull; <strong>AmbilTiketnya.online</strong> &bull; Hak Cipta &copy; 2026. Seluruh hak cipta dilindungi.
+</div>
+
+</body>
+</html>
+"""
+
+with open(HTML_FILE, "w", encoding="utf-8") as f:
+    f.write(html_content)
+
+print(f"File HTML panduan teknis berhasil dibuat: {HTML_FILE}")
+
+# Path ke Google Chrome
+chrome_path = r"C:\Program Files\Google\Chrome\Application\chrome.exe"
+if not os.path.exists(chrome_path):
+    chrome_path = r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe"
+
+abs_html = os.path.abspath(HTML_FILE).replace('\\', '/')
+file_url = f"file:///{abs_html}"
+abs_pdf = os.path.abspath(PDF_FILE)
+
+cmd = [
+    chrome_path,
+    "--headless=new",
+    "--disable-gpu",
+    "--no-pdf-header-footer",
+    "--run-all-compositor-stages-before-draw",
+    f"--print-to-pdf={abs_pdf}",
+    file_url
+]
+
+print("Menjalankan kompilasi PDF via Headless Chrome...")
+res = subprocess.run(cmd, capture_output=True, text=True)
+
+if os.path.exists(PDF_FILE):
+    size_kb = os.path.getsize(PDF_FILE) / 1024
+    print(f"SUKSES! Dokumen PDF berhasil dibuat: {PDF_FILE} ({size_kb:.1f} KB)")
+else:
+    print(f"Gagal membuat PDF. Output: {res.stderr}")
+    sys.exit(1)
