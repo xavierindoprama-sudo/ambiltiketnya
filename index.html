@@ -313,14 +313,32 @@ function ticketBase(){if(window.google&&google.script&&google.script.run)return(
 function waitQr(n){return new Promise(r=>{const f=()=>{if(typeof qrcode!=='undefined'||n--<=0)r();else setTimeout(f,100)};f()})}
 async function ticketView(code){
  const shell=b=>'<div class="gate"><div class="card tkc">'+b+'</div></div>';
- $('#app').innerHTML=shell('<div class="tkh"><small>E-TIKET - AMBILTIKETNYA</small><h1>&nbsp;</h1></div><div class="tkq"><p class="muted">'+t('loading')+'</p></div>');
+ $('#app').innerHTML=shell('<div class="tkh"><small style="letter-spacing:3px;font-size:11px;font-weight:700">E-TIKET</small><h1>&nbsp;</h1></div><div class="tkq"><p class="muted">'+t('loading')+'</p></div>');
  let r=null;try{r=await pub('ticketPublic',{code:code})}catch(e){r=null}
  const back='<div class="tkb"><div class="acts"><a class="btn pri" style="text-decoration:none;text-align:center" href="'+esc(location.pathname)+'">'+t('open_app')+'</a></div></div>';
- if(!r||!r.found){$('#app').innerHTML=shell('<div class="tkh"><small>E-TIKET - AMBILTIKETNYA</small><h1>E-Tiket</h1></div><div class="tkm">'+t(r?'tk_NOT_FOUND':'e_E_GENERIC')+'</div><div style="height:12px"></div>'+back);return}
+ if(!r||!r.found){$('#app').innerHTML=shell('<div class="tkh"><small style="letter-spacing:3px;font-size:11px;font-weight:700">E-TIKET</small><h1>E-Tiket</h1></div><div class="tkm">'+t(r?'tk_NOT_FOUND':'e_E_GENERIC')+'</div><div style="height:12px"></div>'+back);return}
  const showQr=r.status==='OK'||r.status==='USED';if(showQr)await waitQr(30);
  const f=(l,v)=>'<div><small>'+l+'</small><b>'+esc(v)+'</b></div>';
- $('#app').innerHTML=shell('<div class="tkh'+(r.kind==='invitation'?' inv':'')+'"><small>'+(r.kind==='invitation'?t('inv_t')+' - ':'E-TIKET - ')+'AMBILTIKETNYA</small><h1>'+esc(r.name)+'</h1></div>'
-  +(showQr?'<div class="tkq"><div class="qr">'+(typeof qrcode!=='undefined'?qr(r.code):'')+'</div><div class="mono">'+esc(r.code)+'</div><small>'+t('scanhint')+'</small></div>':'')
+ const isInv=r.kind==='invitation',isWlk=r.kind==='walk_in';
+ const headBadge=isInv
+  ?'<div style="color:#d4af37;letter-spacing:6px;font-size:18px;font-weight:900;text-transform:uppercase;margin-bottom:6px">'+t('inv_t')+'</div>'
+  :isWlk
+  ?'<div style="color:#34d399;letter-spacing:4px;font-size:12px;font-weight:700;text-transform:uppercase;margin-bottom:6px">E-TIKET WALK-IN</div>'
+  :'<div style="color:#9a8cff;letter-spacing:3px;font-size:12px;font-weight:700;text-transform:uppercase;margin-bottom:6px">E-TIKET RESMI</div>';
+ const gName=r.guest_name||'',gOrg=r.guest_org||'';
+ const recipientHtml=isInv?`
+  <div style="margin:4px auto 18px;padding:12px 16px;background:linear-gradient(180deg,rgba(212,175,55,.12),rgba(212,175,55,.03));border:1.5px solid rgba(212,175,55,.32);border-radius:14px;text-align:center;box-sizing:border-box">
+   <div style="font-size:11px;color:#b8921f;letter-spacing:2px;font-weight:700;text-transform:uppercase;margin-bottom:4px">Kepada Yth.</div>
+   <div style="font-size:19px;font-weight:800;color:var(--tx,#0b1026);line-height:1.25">${esc(gName||'Tamu Undangan')}</div>
+   ${gOrg?`<div style="font-size:13px;color:var(--mu,#555566);font-weight:600;margin-top:4px">${esc(gOrg)}</div>`:''}
+  </div>`:((gName||gOrg)?`
+  <div style="margin:4px auto 18px;padding:10px 16px;background:var(--in,rgba(0,0,0,.03));border:1px solid var(--bd,rgba(0,0,0,.08));border-radius:14px;text-align:center;box-sizing:border-box">
+   <div style="font-size:11px;color:var(--mu,#777);letter-spacing:2px;font-weight:700;text-transform:uppercase;margin-bottom:4px">${isWlk?'Peserta Walk-In':'Pemegang Tiket'}</div>
+   <div style="font-size:18px;font-weight:800;color:var(--tx,#0b1026);line-height:1.25">${esc(gName)}</div>
+   ${gOrg?`<div style="font-size:13px;color:var(--mu,#555566);font-weight:600;margin-top:4px">${esc(gOrg)}</div>`:''}
+  </div>`:'');
+ $('#app').innerHTML=shell('<div class="tkh'+(isInv?' inv':isWlk?' wlk':'')+'">'+headBadge+'<h1>'+esc(r.name)+'</h1></div>'
+  +(showQr?'<div class="tkq">'+recipientHtml+'<div class="qr">'+(typeof qrcode!=='undefined'?qr(r.code):'')+'</div><div class="mono">'+esc(r.code)+'</div><small>'+t('scanhint')+'</small></div>':'')
   +(r.status!=='OK'?'<div class="tkm">'+t('tk_'+r.status)+'</div>':'')
   +'<div class="tkb"><div class="info">'+f(t('date'),fd(r.edate,{weekday:'long',day:'numeric',month:'long',year:'numeric'}))+f(t('time'),r.stime+' WIB')+f(t('place'),r.location)+f(t('qty'),r.qty+' '+t('tix'))+'</div></div>'+back)}
 async function boot(){applyTheme();const tkc=ticketParam();if(tkc)return ticketView(tkc);
@@ -417,7 +435,7 @@ function printHtml(o){const inv=o.kind==='invitation',wlk=o.kind==='walk_in';
  const terms=o.terms||ev.terms||'';
  const css='*{-webkit-print-color-adjust:exact;print-color-adjust:exact}body{margin:0;font-family:Arial,sans-serif;color:#0f1222}.h{background:#0f1222;color:#fff;padding:26px 32px}.h small{letter-spacing:3px;color:#9a8cff;font-size:11px}.h h1{margin:6px 0 0;font-size:26px}.h.inv{background:#0b1026;border-bottom:6px solid #d4af37}.h.inv small{color:#d4af37;letter-spacing:7px;font-weight:bold;font-size:13px}.to{margin:20px 32px 0}.to small{display:block;color:#b8921f;letter-spacing:3px;font-size:10px}.to b{font-size:24px;display:block;margin-top:4px}.to span{color:#555}.b{display:flex;gap:28px;padding:24px 32px;align-items:flex-start}.q{width:220px;flex:none;text-align:center}.q svg{width:220px;height:220px;display:block}.q.inv svg{border:3px solid #d4af37;padding:6px;box-sizing:border-box}.c{font:700 15px monospace;margin-top:8px}.q small{color:#778;font-size:11px}.f small{display:block;color:#778;font-size:10px;letter-spacing:1px;text-transform:uppercase;margin-top:14px}.f b{font-size:16px}.n{margin:0 32px;padding:12px 16px;background:#f1f0ff;border-radius:8px;font-size:12px}.n.inv{background:#fffaf0;border:1px solid #d4af37}.pb{margin:20px 32px}.pb button{padding:10px 18px;font-size:14px}@page{margin:10mm}@media print{.pb{display:none}}';
  return '<!DOCTYPE html><html><head><meta charset="utf-8"><title>'+esc(o.ticket_code)+'</title><style>'+css+'</style></head><body>'
- +(inv?'<div class="h inv"><small>'+t('inv_t')+'</small><h1>'+esc(o.name)+'</h1></div><div class="to"><small>'+t('inv_to').toUpperCase()+'</small><b>'+esc(o.guest_name)+'</b><span>'+esc(o.guest_org)+'</span></div>':wlk?'<div class="h" style="background:#064e3b;border-bottom:5px solid #10b981"><small style="color:#34d399;letter-spacing:4px">E-TIKET WALK-IN (DI TEMPAT)</small><h1>'+esc(o.name)+'</h1></div><div class="to"><small style="color:#059669;letter-spacing:2px">PESERTA WALK-IN</small><b>'+esc(o.guest_name||o.name)+'</b><span>'+esc(o.guest_org||o.church||'-')+(o.guest_phone?' &#183; +'+esc(o.guest_phone):'')+'</span></div>':'<div class="h"><small>E-TIKET RESMI - AMBILTIKETNYA</small><h1>'+esc(o.name)+'</h1></div>')
+ +(inv?'<div class="h inv"><div style="color:#d4af37;letter-spacing:5px;font-weight:bold;font-size:16px;text-transform:uppercase;margin-bottom:6px">'+t('inv_t')+'</div><h1>'+esc(o.name)+'</h1></div><div class="to"><small>'+t('inv_to').toUpperCase()+'</small><b>'+esc(o.guest_name)+'</b><span>'+esc(o.guest_org)+'</span></div>':wlk?'<div class="h" style="background:#064e3b;border-bottom:5px solid #10b981"><small style="color:#34d399;letter-spacing:4px">E-TIKET WALK-IN (DI TEMPAT)</small><h1>'+esc(o.name)+'</h1></div><div class="to"><small style="color:#059669;letter-spacing:2px">PESERTA WALK-IN</small><b>'+esc(o.guest_name||o.name)+'</b><span>'+esc(o.guest_org||o.church||'-')+(o.guest_phone?' &#183; +'+esc(o.guest_phone):'')+'</span></div>':'<div class="h"><small>E-TIKET RESMI</small><h1>'+esc(o.name)+'</h1></div>')
  +'<div class="b"><div class="q'+(inv?' inv':'')+'">'+qr(o.ticket_code)+'<div class="c">'+esc(o.ticket_code)+'</div><small>'+t('scanhint')+'</small></div><div class="f">'
  +f(t('date'),fd(o.event_date,{weekday:'long',day:'numeric',month:'long',year:'numeric'}))+f(t('time'),tm(o))+f(t('place'),o.location)+(inv?'':f(t('f_fname'),nm))+f(t('qty'),o.qty+' '+t('tix'))+f(inv?'No. Undangan':wlk?'Tiket Walk-In':t('order_no'),o.order_code)+'</div></div>'
  +(inv?'<div class="n inv" style="border:1px solid #d4af37;background:#fffdf5;color:#6b5300;padding:12px 16px;border-radius:8px;font-size:12px;margin:16px 32px;line-height:1.5">&#9432; <b>Catatan:</b> Satu kode QR ini berlaku untuk '+o.qty+' orang. Mohon hadir dan masuk bersamaan di gerbang masuk karena tiket hanya dapat dipindai 1 kali.</div>':wlk?'<div class="n" style="border:1px solid #10b981;background:#ecfdf5;color:#065f46;padding:12px 16px;border-radius:8px;font-size:12px;margin:16px 32px;line-height:1.5">&#10003; <b>Pendaftaran di Tempat (Walk-In):</b> Tiket ini diterbitkan di gerbang/venue dan telah terverifikasi untuk masuk acara.</div>':(o.announcement?'<div class="n">'+esc(o.announcement)+'</div>':''))
@@ -918,18 +936,18 @@ function ticketImg(o){return new Promise(res=>{try{if(typeof qrcode==='undefined
  x.fillStyle=inv?'#fffdf7':wlk?'#f0fdf4':'#ffffff';x.fillRect(0,0,W,H);
  let y0;
  if(inv){x.fillStyle='#0b1026';x.fillRect(0,0,W,190);x.fillStyle=G;x.fillRect(0,190,W,6);
-  x.fillStyle=G;x.font='bold 24px sans-serif';x.fillText('U N D A N G A N',40,52);x.fillStyle='#c9b873';x.font='13px sans-serif';x.fillText('E-TIKET UNDANGAN - AMBILTIKETNYA',40,76);
+  x.fillStyle=G;x.font='bold 28px sans-serif';x.fillText('U N D A N G A N',40,56);x.fillStyle='#c9b873';x.font='13px sans-serif';x.fillText('E-TIKET UNDANGAN RESMI',40,78);
   x.fillStyle='#ffffff';x.font='bold 34px sans-serif';wrapText(x,o.name,40,122,640,42,2);
   x.fillStyle='#b8921f';x.font='bold 15px sans-serif';x.fillText('KEPADA YTH.',40,240);
   x.fillStyle='#0b1026';x.font='bold 34px sans-serif';let yy=282;yy+=wrapText(x,o.guest_name,40,yy,640,40,2)*40;
   x.fillStyle='#555555';x.font='22px sans-serif';yy+=wrapText(x,o.guest_org,40,yy,640,28,2)*28+26;y0=yy}
  else if(wlk){x.fillStyle='#064e3b';x.fillRect(0,0,W,190);x.fillStyle=G;x.fillRect(0,190,W,6);
-  x.fillStyle='#34d399';x.font='bold 24px sans-serif';x.fillText('W A L K - I N',40,52);x.fillStyle='#a7f3d0';x.font='13px sans-serif';x.fillText('E-TIKET WALK-IN (DI TEMPAT) - AMBILTIKETNYA',40,76);
+  x.fillStyle='#34d399';x.font='bold 24px sans-serif';x.fillText('W A L K - I N',40,52);x.fillStyle='#a7f3d0';x.font='13px sans-serif';x.fillText('E-TIKET WALK-IN (DI TEMPAT)',40,76);
   x.fillStyle='#ffffff';x.font='bold 34px sans-serif';wrapText(x,o.name,40,122,640,42,2);
   x.fillStyle='#059669';x.font='bold 15px sans-serif';x.fillText('PESERTA WALK-IN',40,240);
   x.fillStyle='#064e3b';x.font='bold 34px sans-serif';let yy=282;yy+=wrapText(x,o.guest_name||o.name,40,yy,640,40,2)*40;
   x.fillStyle='#555555';x.font='22px sans-serif';yy+=wrapText(x,o.guest_org||o.church||'-',40,yy,640,28,2)*28+26;y0=yy}
- else{x.fillStyle='#0f1222';x.fillRect(0,0,W,170);x.fillStyle='#9a8cff';x.font='bold 18px sans-serif';x.fillText('E-TIKET RESMI - AMBILTIKETNYA',40,50);
+ else{x.fillStyle='#0f1222';x.fillRect(0,0,W,170);x.fillStyle='#9a8cff';x.font='bold 18px sans-serif';x.fillText('E-TIKET RESMI',40,50);
   x.fillStyle='#ffffff';x.font='bold 36px sans-serif';wrapText(x,o.name,40,100,640,44,2);y0=205}
  const q=qrcode(0,'M');q.addData(o.ticket_code);q.make();const n=q.getModuleCount(),m=Math.floor(440/(n+8)),tot=(n+8)*m,x0=Math.floor((W-tot)/2);
  x.fillStyle='#ffffff';x.fillRect(x0,y0,tot,tot);x.fillStyle='#000000';for(let r=0;r<n;r++)for(let k=0;k<n;k++)if(q.isDark(r,k))x.fillRect(x0+(k+4)*m,y0+(r+4)*m,m,m);
@@ -981,8 +999,8 @@ async function generateTicketPdf(o) {
     pdf.rect(0, 75, pw, 4, 'F');
     pdf.setTextColor(212, 175, 55);
     pdf.setFont('helvetica', 'bold');
-    pdf.setFontSize(10);
-    pdf.text('U N D A N G A N   R E S M I   ·   A M B I L T I K E T N Y A', mx, 28);
+    pdf.setFontSize(12);
+    pdf.text('U N D A N G A N', mx, 28);
     pdf.setTextColor(255, 255, 255);
     pdf.setFontSize(18);
     pdf.text(pdf.splitTextToSize(o.name || o.event_name || 'E-Tiket Undangan', cw), mx, 52);
@@ -994,7 +1012,7 @@ async function generateTicketPdf(o) {
     pdf.setTextColor(52, 211, 153);
     pdf.setFont('helvetica', 'bold');
     pdf.setFontSize(10);
-    pdf.text('E - T I K E T   W A L K - I N   (D I   T E M P A T)   ·   A M B I L T I K E T N Y A', mx, 28);
+    pdf.text('E - T I K E T   W A L K - I N   (D I   T E M P A T)', mx, 28);
     pdf.setTextColor(255, 255, 255);
     pdf.setFontSize(18);
     pdf.text(pdf.splitTextToSize(o.name || o.event_name || 'E-Tiket Walk-In', cw), mx, 52);
@@ -1006,7 +1024,7 @@ async function generateTicketPdf(o) {
     pdf.setTextColor(154, 140, 255);
     pdf.setFont('helvetica', 'bold');
     pdf.setFontSize(10);
-    pdf.text('E - T I K E T   R E S M I   ·   A M B I L T I K E T N Y A', mx, 28);
+    pdf.text('E - T I K E T   R E S M I', mx, 28);
     pdf.setTextColor(255, 255, 255);
     pdf.setFontSize(18);
     pdf.text(pdf.splitTextToSize(o.name || o.event_name || 'E-Tiket Resmi', cw), mx, 52);

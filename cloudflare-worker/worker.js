@@ -437,8 +437,11 @@ export default {
       if (fn === 'ticketPublic') {
         const [p] = args;
         const code = String(p.code || '').trim().toUpperCase();
-        const rows = await neonQuery(env, `SELECT o.ticket_code AS code,o.qty,o.status,o.checked_in,o.kind,e.id AS event_id,e.name,e.event_date::text AS edate,to_char(e.start_time,'HH24:MI') AS stime,e.location,e.terms
-          FROM orders o JOIN events e ON e.id=o.event_id WHERE o.ticket_code=$1`, [code]);
+        const rows = await neonQuery(env, `SELECT o.ticket_code AS code,o.qty,o.status,o.checked_in,o.kind,
+          CASE WHEN o.kind IN ('invitation','walk_in') THEN o.guest_name ELSE u.name END AS guest_name,
+          CASE WHEN o.kind IN ('invitation','walk_in') THEN o.guest_org ELSE u.church END AS guest_org,
+          e.id AS event_id,e.name,e.event_date::text AS edate,to_char(e.start_time,'HH24:MI') AS stime,e.location,e.terms
+          FROM orders o JOIN events e ON e.id=o.event_id LEFT JOIN users u ON u.id=o.user_id WHERE o.ticket_code=$1`, [code]);
         if (!rows.length) return json({ ok: true, data: { found: false } });
         const o = rows[0];
         const st = o.status === 'cancelled' ? 'CANCELLED' : o.status === 'pending_payment' ? 'UNPAID' : o.checked_in >= o.qty ? 'USED' : 'OK';

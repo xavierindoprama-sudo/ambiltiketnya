@@ -50,8 +50,8 @@ function ticketInfo(raw) {                       // dipakai halaman tiket (/exec
   const code = String(raw || '').trim().toUpperCase();
   let o = null;
   if (/^TKT-[A-Z]{1,4}-[A-Z0-9]{6}$/.test(code)) {
-    try { o = q(`SELECT o.ticket_code,o.qty,o.status,o.checked_in,o.kind,e.name,e.event_date::text AS edate,to_char(e.start_time,'HH24:MI') AS stime,e.location
-      FROM orders o JOIN events e ON e.id=o.event_id WHERE o.ticket_code=$1`, [code])[0]; } catch (err) { Logger.log(err); }
+    try { o = q(`SELECT o.ticket_code,o.qty,o.status,o.checked_in,o.kind,CASE WHEN o.kind IN ('invitation','walk_in') THEN o.guest_name ELSE u.name END AS guest_name,CASE WHEN o.kind IN ('invitation','walk_in') THEN o.guest_org ELSE u.church END AS guest_org,e.name,e.event_date::text AS edate,to_char(e.start_time,'HH24:MI') AS stime,e.location
+      FROM orders o JOIN events e ON e.id=o.event_id LEFT JOIN users u ON u.id=o.user_id WHERE o.ticket_code=$1`, [code])[0]; } catch (err) { Logger.log(err); }
   }
   const st = !o ? 'NOT_FOUND' : o.status === 'cancelled' ? 'CANCELLED' : o.status === 'pending_payment' ? 'UNPAID' : o.checked_in >= o.qty ? 'USED' : 'OK';
   return { code: code, o: o, st: st };
@@ -60,14 +60,14 @@ function ticketInfo(raw) {                       // dipakai halaman tiket (/exec
 function ticketPublic(p) { return pubRun(ticketPublicImpl, p); }
 function ticketPublicImpl(p) {
   const ti = ticketInfo(p && p.code), o = ti.o;
-  return o ? { found: true, kind: o.kind, status: ti.st, code: o.ticket_code, name: o.name, edate: o.edate, stime: o.stime, location: o.location, qty: o.qty } : { found: false };
+  return o ? { found: true, kind: o.kind, status: ti.st, code: o.ticket_code, name: o.name, edate: o.edate, stime: o.stime, location: o.location, qty: o.qty, guest_name: o.guest_name, guest_org: o.guest_org } : { found: false };
 }
 function ticketPage(raw) {
   const ti = ticketInfo(raw), o = ti.o, st = ti.st;
   const msg = { NOT_FOUND: 'Tiket tidak ditemukan.', CANCELLED: 'Pesanan ini sudah dibatalkan.', UNPAID: 'Menunggu konfirmasi pembayaran.', USED: 'Tiket ini sudah digunakan untuk check-in.' }[st];
   const f = (l, v) => '<div class="r"><small>' + l + '</small><b>' + esc(v) + '</b></div>';
   const body = !o ? '<div class="m">' + msg + '</div>'
-    : (st === 'OK' || st === 'USED' ? '<div class="q"><img alt="QR" width="230" height="230" src="https://api.qrserver.com/v1/create-qr-code/?size=300x300&margin=0&data=' + encodeURIComponent(o.ticket_code) + '"><div class="k">' + esc(o.ticket_code) + '</div><div class="s">Pindai di gerbang masuk</div></div>' : '')
+    : (st === 'OK' || st === 'USED' ? '<div class="q">' + (o && o.guest_name ? '<div style="margin:4px auto 16px;padding:12px;background:linear-gradient(180deg,rgba(212,175,55,.12),rgba(212,175,55,.03));border:1.5px solid rgba(212,175,55,.3);border-radius:12px;text-align:center"><div style="font-size:11px;color:#b8921f;font-weight:bold;letter-spacing:2px;text-transform:uppercase;margin-bottom:4px">' + (o.kind === 'invitation' ? 'Kepada Yth.' : 'Pemegang Tiket') + '</div><div style="font-size:18px;font-weight:bold;color:#0b1026">' + esc(o.guest_name) + '</div>' + (o.guest_org ? '<div style="font-size:13px;color:#555;margin-top:4px">' + esc(o.guest_org) + '</div>' : '') + '</div>' : '') + '<img alt="QR" width="230" height="230" src="https://api.qrserver.com/v1/create-qr-code/?size=300x300&margin=0&data=' + encodeURIComponent(o.ticket_code) + '"><div class="k">' + esc(o.ticket_code) + '</div><div class="s">Pindai di gerbang masuk</div></div>' : '')
       + (msg ? '<div class="m">' + msg + '</div>' : '')
       + '<div class="d">' + f('Hari & Tanggal', idDate(o.edate)) + f('Waktu', o.stime + ' WIB') + f('Lokasi', o.location) + f('Jumlah Tiket', o.qty + ' orang') + '</div>';
   const html = '<!DOCTYPE html><html lang="id"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>'
@@ -76,7 +76,7 @@ function ticketPage(raw) {
     + '.q{text-align:center;padding:18px 16px 6px}.q img{width:230px;height:230px}.k{font:700 18px monospace;margin-top:10px}.s{color:#778;font-size:12px;margin-top:2px}.m{margin:12px 18px;padding:12px;border-radius:10px;background:#fff4e5;color:#8a5200;font-size:14px;text-align:center}'
     + '.d{padding:10px 20px 20px}.r{margin-top:12px}.r small{display:block;color:#778;font-size:10px;letter-spacing:1px;text-transform:uppercase}.r b{font-size:15px}'
     + '@media(prefers-color-scheme:dark){body{background:#090c16}.c{background:#111627;color:#eef0fa}.q{background:#fff;margin:14px 20px 0;border-radius:14px;padding:14px}.q .k,.q .s{color:#0f1222}.s{color:#667!important}}'
-    + '</style></head><body><div class="c"><div class="h"><small>E-TIKET - AMBILTIKETNYA</small><h1>' + esc(o ? o.name : 'E-Tiket') + '</h1></div>' + body + '</div></body></html>';
+    + '</style></head><body><div class="c"><div class="h">' + (o && o.kind === 'invitation' ? '<div style="color:#d4af37;letter-spacing:6px;font-size:18px;font-weight:900;text-transform:uppercase;margin-bottom:6px">UNDANGAN</div>' : '<small style="letter-spacing:3px;font-size:11px;font-weight:700">E-TIKET RESMI</small>') + '<h1>' + esc(o ? o.name : 'E-Tiket') + '</h1></div>' + body + '</div></body></html>';
   return HtmlService.createHtmlOutput(html).setTitle(o ? 'E-Tiket ' + o.name : 'E-Tiket')
     .addMetaTag('viewport', 'width=device-width, initial-scale=1').setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
 }
