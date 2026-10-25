@@ -214,7 +214,7 @@ window.addEventListener('error',function(e){show((e.message||'error')+' @'+e.lin
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script id="src" type="text/plain">
 let B={};const $=s=>document.querySelector(s);window.$=$;
-const ls={g:k=>{try{return localStorage.getItem(k)}catch(e){return null}},s:(k,v)=>{try{localStorage.setItem(k,v)}catch(e){}}};
+const ls={g:k=>{try{return localStorage.getItem(k)}catch(e){return null}},s:(k,v)=>{try{localStorage.setItem(k,v)}catch(e){}},d:k=>{try{localStorage.removeItem(k)}catch(e){}},r:k=>{try{localStorage.removeItem(k)}catch(e){}}};
 const D={
 catalog:['Katalog Acara','Event Catalog'],mytix:['Tiket Saya','My Tickets'],title:['Pemesanan Tiket Acara','Book Event Tickets'],sub:['Pilih acara, dapatkan QR Code instan dan konfirmasi ke email Anda.','Pick an event, get an instant QR code and email confirmation.'],
 free:['Gratis','Free'],left:['Sisa Kuota','Seats left'],book:['Pesan Tiket','Book Ticket'],qty:['Jumlah tiket','Number of tickets'],soldout:['Kuota Habis','Sold Out'],ordered:['Sudah Dipesan','Already Booked'],maxp:['Maks tiket/transaksi','Max per order'],
@@ -474,7 +474,7 @@ window.hasMod=hasMod;
 function getModConfig(e){if(!e)return{};let c=e.module_config;if(c==null)return{};if(typeof c==='string'){try{c=JSON.parse(c)}catch(x){return{}}}return(c&&typeof c==='object')?c:{};}
 window.getModConfig=getModConfig;
 function getCurEvId(){return S.curEvId||ls.g('atk_cur_ev')||'';}
-function setCurEvId(evId){S.curEvId=evId||'';if(evId)ls.s('atk_cur_ev',evId);else ls.d('atk_cur_ev');S.sel=evId;S.anSelEv=evId;S_fb.evId=evId;S_dp.evId=evId;}
+function setCurEvId(evId){S.curEvId=evId||'';if(evId)ls.s('atk_cur_ev',evId);else{try{localStorage.removeItem('atk_cur_ev')}catch(e){}}S.sel=evId;S.anSelEv=evId;S_fb.evId=evId;S_dp.evId=evId;}
 function getCurEv(){const id=getCurEvId();if(!id||!S.aev)return null;return S.aev.find(e=>e.id===id)||null;}
 function isCurRsvpMode(){const ev=getCurEv();return !!(ev&&hasMod(ev,'rsvp'));}
 window.getCurEvId=getCurEvId;window.setCurEvId=setCurEvId;window.getCurEv=getCurEv;window.isCurRsvpMode=isCurRsvpMode;
