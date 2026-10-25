@@ -213,7 +213,7 @@ window.addEventListener('error',function(e){show((e.message||'error')+' @'+e.lin
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jsQR/1.4.0/jsQR.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script id="src" type="text/plain">
-let B={};const $=s=>document.querySelector(s);
+let B={};const $=s=>document.querySelector(s);window.$=$;
 const ls={g:k=>{try{return localStorage.getItem(k)}catch(e){return null}},s:(k,v)=>{try{localStorage.setItem(k,v)}catch(e){}}};
 const D={
 catalog:['Katalog Acara','Event Catalog'],mytix:['Tiket Saya','My Tickets'],title:['Pemesanan Tiket Acara','Book Event Tickets'],sub:['Pilih acara, dapatkan QR Code instan dan konfirmasi ke email Anda.','Pick an event, get an instant QR code and email confirmation.'],
@@ -461,7 +461,14 @@ function renderUser(){if(!S.user)return renderGuest();
  }
  $('#app').innerHTML=hdr()+`<main class="wrap"><div class="hero"><h1>${t('title')}</h1><p>${t('sub')}</p></div><div class="tabs">${seg([['catalog',t('catalog')],['tickets',t('mytix')]],S.tab,'tab')}</div><div id="uc">${skel(3)}</div>${legalFooter()}</main>`;userTab()}
 async function userTab(){const uc=$('#uc');if(!uc)return;uc.innerHTML=skel(3);try{if(S.tab==='catalog'){if(!S.ev||!S.ev.length){S.ev=S.pre||(S.user?await api('events'):(await call('init','')).events||[])}S.pre=null;uc.innerHTML=S.ev.length?'<div class="grid">'+S.ev.map(evCard).join('')+'</div>':`<p class="muted">${t('none')}</p>`}else{if(!S.user){gateModal();return}S.tix=S.preT||await api('myTickets');S.preT=null;uc.innerHTML=S.tix.length?S.tix.map(tixRow).join(''):`<p class="muted">${t('none')}</p>`}}catch(e){fail(e)}}
-const hasMod=(e,m)=>((e&&e.active_modules)?(Array.isArray(e.active_modules)?e.active_modules:JSON.parse(e.active_modules||'[]')):['ticketing']).includes(m);
+const hasMod=(e,m)=>{
+  if(!e)return m==='ticketing';
+  let a=e.active_modules;
+  if(a==null)return m==='ticketing';
+  if(typeof a==='string'){try{a=JSON.parse(a)}catch(x){return m==='ticketing'}}
+  return Array.isArray(a)?a.includes(m):(m==='ticketing');
+};
+window.hasMod=hasMod;
 const stPill=s=>`<span class="pill ${s==='confirmed'?'ok':s==='cancelled'?'er':'wn'}">${t('st_'+s)}</span>`;
 function evCard(e){const isRsvp=hasMod(e,'rsvp')&&!hasMod(e,'ticketing');const used=e.quota-e.remaining;return `<article class="card ev" data-act="open" data-id="${e.id}"><div class="ban">${e.banner_url?`<img loading="lazy" decoding="async" src="${esc(e.banner_url)}" onerror="this.remove()">`:''}<div class="bd"><span class="pill ${isRsvp?'ok':''}">${isRsvp?'✉️ RSVP':rp(e.is_paid?e.price:0)}</span>${e.max_per_order>1&&!isRsvp?`<span class="pill y">${t('maxp')}: ${e.max_per_order}</span>`:''}</div><div class="dt"><span>&#128197; ${fd(e.event_date)}</span><span>&#128338; ${tm(e)}</span></div></div>
 <div class="eb"><div class="cat">${esc(e.category)}</div><h3>${esc(e.name)}</h3><div class="ds">${esc(e.description)}</div><div class="row" style="margin-top:10px"><span class="muted">${isRsvp?'Kapasitas:':t('left')}</span><b class="mono">${e.remaining} ${isRsvp?'Kursi':t('tix')}</b></div><div class="qb"><i style="width:${pc(e.remaining,e.quota)}%"></i></div><button class="btn pri" style="width:100%">${e.remaining<=0?t('soldout'):e.has_order&&e.one_order_per_account?(isRsvp?'✓ Sudah RSVP':t('ordered')):(isRsvp?'✉️ RSVP Sekarang':t('book'))} &#8250;</button></div></article>`}
@@ -1667,7 +1674,7 @@ ${rk()>=3?`<div style="margin:10px 0"><label>🏢 Penyelenggara (EO Workspace)</
 
   <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px">
     <label style="display:flex;gap:8px;align-items:flex-start;background:var(--card,#fff);padding:10px;border-radius:10px;border:1px solid var(--bd);cursor:pointer">
-      <input type="checkbox" name="active_mod_ticketing" id="mod_tkt" style="width:auto;margin-top:3px" ${hasMod(e,'ticketing')?'checked':''} onchange="$('#ef_pricing_box').style.display=this.checked?'block':'none'">
+      <input type="checkbox" name="active_mod_ticketing" id="mod_tkt" style="width:auto;margin-top:3px" ${hasMod(e,'ticketing')?'checked':''} onchange="var b=document.getElementById('ef_pricing_box');if(b)b.style.display=this.checked?'block':'none'">
       <div>
         <b style="font-size:12px;display:block">🎟️ Tiket Komersial</b>
         <small style="opacity:.7;font-size:10px">Penjualan tiket berbayar/gratis untuk konser &amp; workshop</small>
@@ -1675,7 +1682,7 @@ ${rk()>=3?`<div style="margin:10px 0"><label>🏢 Penyelenggara (EO Workspace)</
     </label>
 
     <label style="display:flex;gap:8px;align-items:flex-start;background:var(--card,#fff);padding:10px;border-radius:10px;border:1px solid var(--bd);cursor:pointer">
-      <input type="checkbox" name="active_mod_rsvp" id="mod_rsvp" style="width:auto;margin-top:3px" ${hasMod(e,'rsvp')?'checked':''} onchange="$('#ef_rsvp_box').style.display=this.checked?'block':'none'">
+      <input type="checkbox" name="active_mod_rsvp" id="mod_rsvp" style="width:auto;margin-top:3px" ${hasMod(e,'rsvp')?'checked':''} onchange="var b=document.getElementById('ef_rsvp_box');if(b)b.style.display=this.checked?'block':'none'">
       <div>
         <b style="font-size:12px;display:block">✉️ RSVP &amp; Undangan</b>
         <small style="opacity:.7;font-size:10px">Konfirmasi kehadiran, pendamping &amp; alokasi meja</small>
@@ -1683,7 +1690,7 @@ ${rk()>=3?`<div style="margin:10px 0"><label>🏢 Penyelenggara (EO Workspace)</
     </label>
 
     <label style="display:flex;gap:8px;align-items:flex-start;background:var(--card,#fff);padding:10px;border-radius:10px;border:1px solid var(--bd);cursor:pointer">
-      <input type="checkbox" name="active_mod_guestbook" id="mod_gb" style="width:auto;margin-top:3px" ${hasMod(e,'guestbook')?'checked':''} onchange="$('#ef_gb_box').style.display=this.checked?'block':'none'">
+      <input type="checkbox" name="active_mod_guestbook" id="mod_gb" style="width:auto;margin-top:3px" ${hasMod(e,'guestbook')?'checked':''} onchange="var b=document.getElementById('ef_gb_box');if(b)b.style.display=this.checked?'block':'none'">
       <div>
         <b style="font-size:12px;display:block">📖 Buku Tamu &amp; Layar</b>
         <small style="opacity:.7;font-size:10px">Kotak ucapan/doa tamu &amp; live greeting wall panggung</small>
@@ -1735,7 +1742,7 @@ ${rk()>=3?`<div style="margin:10px 0"><label>🏢 Penyelenggara (EO Workspace)</
     </label>
     
     <label style="display:flex;gap:8px;align-items:flex-start;background:var(--card,#fff);padding:10px 12px;border-radius:10px;border:1px solid var(--bd,rgba(0,0,0,.08));cursor:pointer">
-      <input type="checkbox" name="enable_certificate" id="ef_cert" style="width:auto;margin-top:3px" ${e.enable_certificate?'checked':''} onchange="$('#ef_cert_box').style.display=this.checked?'block':'none'">
+      <input type="checkbox" name="enable_certificate" id="ef_cert" style="width:auto;margin-top:3px" ${e.enable_certificate?'checked':''} onchange="var b=document.getElementById('ef_cert_box');if(b)b.style.display=this.checked?'block':'none'">
       <div>
         <b style="font-size:12px;display:block">🎓 E-Sertifikat Digital</b>
         <small style="opacity:.7;font-size:11px">Peserta yang hadir dapat mengunduh sertifikat resmi ber-QR Code</small>
@@ -1801,6 +1808,8 @@ function renderCustomFieldRow(cf, idx){
  </div>`;
 }
 
+window.addCustomFieldRow=addCustomFieldRow;
+window.addCustomFieldPreset=addCustomFieldPreset;
 function addCustomFieldRow(cf){
  const box=$('#custom_fields_container');
  if(!box)return;
@@ -3941,19 +3950,19 @@ function showRsvpModal(ev){
    
    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px;margin-bottom:14px">
      <label style="display:flex;flex-direction:column;align-items:center;padding:10px;border-radius:10px;border:2px solid var(--ok,#10b981);background:var(--card,#fff);cursor:pointer;text-align:center">
-       <input type="radio" name="rsvp_status" value="attending" checked style="margin-bottom:6px" onchange="$('#rsvp_attending_box').style.display='block'">
+       <input type="radio" name="rsvp_status" value="attending" checked style="margin-bottom:6px" onchange="var b=document.getElementById('rsvp_attending_box');if(b)b.style.display='block'">
        <b style="color:var(--ok,#10b981);font-size:13px">🟢 Pasti Hadir</b>
        <small class="muted" style="font-size:10px">Saya akan datang</small>
      </label>
      
      <label style="display:flex;flex-direction:column;align-items:center;padding:10px;border-radius:10px;border:1px solid var(--bd);background:var(--card,#fff);cursor:pointer;text-align:center">
-       <input type="radio" name="rsvp_status" value="declined" style="margin-bottom:6px" onchange="$('#rsvp_attending_box').style.display='none'">
+       <input type="radio" name="rsvp_status" value="declined" style="margin-bottom:6px" onchange="var b=document.getElementById('rsvp_attending_box');if(b)b.style.display='none'">
        <b style="color:var(--er,#ef4444);font-size:13px">🔴 Berhalangan</b>
        <small class="muted" style="font-size:10px">Tidak dapat hadir</small>
      </label>
 
      <label style="display:flex;flex-direction:column;align-items:center;padding:10px;border-radius:10px;border:1px solid var(--bd);background:var(--card,#fff);cursor:pointer;text-align:center">
-       <input type="radio" name="rsvp_status" value="tentative" style="margin-bottom:6px" onchange="$('#rsvp_attending_box').style.display='block'">
+       <input type="radio" name="rsvp_status" value="tentative" style="margin-bottom:6px" onchange="var b=document.getElementById('rsvp_attending_box');if(b)b.style.display='block'">
        <b style="color:var(--wn,#f59e0b);font-size:13px">🟡 Ragu-ragu</b>
        <small class="muted" style="font-size:10px">Belum pasti</small>
      </label>
