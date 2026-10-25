@@ -1581,7 +1581,13 @@ function feedbackPublic(p) { return pubRun(feedbackPublicImpl, p); }
 function feedbackPublicImpl(p) {
   const code = String(p && p.code || '').trim().toUpperCase();
   const eventId = String(p && p.eventId || '').trim();
-  const rating = Math.min(Math.max(parseInt(p && p.rating, 10) || 5, 1), 5);
+  const ratings = (p && (p.ratings || p.aspects)) || {};
+  const rOverall = Math.min(Math.max(parseInt(ratings.overall || (p && p.rating), 10) || 5, 1), 5);
+  const rContent = Math.min(Math.max(parseInt(ratings.content, 10) || 5, 1), 5);
+  const rService = Math.min(Math.max(parseInt(ratings.service, 10) || 5, 1), 5);
+  const rVenue   = Math.min(Math.max(parseInt(ratings.venue, 10) || 5, 1), 5);
+  const rSound   = Math.min(Math.max(parseInt(ratings.sound, 10) || 5, 1), 5);
+  const aspectsJson = JSON.stringify({ overall: rOverall, content: rContent, service: rService, venue: rVenue, sound: rSound });
   const category = String(p && p.category || 'Umum').trim() || 'Umum';
   const comment = String(p && p.comment || '').trim();
   const isAnon = !!(p && p.isAnonymous);
@@ -1591,34 +1597,56 @@ function feedbackPublicImpl(p) {
     if (ord) { targetOrderId = ord.id; targetEventId = ord.event_id; gName = ord.name || ''; gOrg = ord.org || ''; }
   }
   if (!targetEventId) throw new Error('EVENT_NOT_FOUND');
-  q(`INSERT INTO event_feedbacks(event_id, order_id, ticket_code, guest_name, guest_org, is_anonymous, rating, category, comment) VALUES($1::uuid, $2, $3, $4, $5, $6, $7, $8, $9)`, [targetEventId, targetOrderId, code, isAnon ? '' : gName, isAnon ? '' : gOrg, isAnon, rating, category, comment]);
+  q(`INSERT INTO event_feedbacks(event_id, order_id, ticket_code, guest_name, guest_org, is_anonymous, rating, rating_content, rating_service, rating_venue, rating_sound, aspects, category, comment) VALUES($1::uuid, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12::jsonb, $13, $14)`, [targetEventId, targetOrderId, code, isAnon ? '' : gName, isAnon ? '' : gOrg, isAnon, rOverall, rContent, rService, rVenue, rSound, aspectsJson, category, comment]);
   return { success: true };
 }
 function feedbackSubmit(u, p) {
   const eventId = String(p.eventId || '').trim();
   const orderId = p.orderId || null;
-  const rating = Math.min(Math.max(parseInt(p.rating, 10) || 5, 1), 5);
+  const ratings = p.ratings || p.aspects || {};
+  const rOverall = Math.min(Math.max(parseInt(ratings.overall || p.rating, 10) || 5, 1), 5);
+  const rContent = Math.min(Math.max(parseInt(ratings.content, 10) || 5, 1), 5);
+  const rService = Math.min(Math.max(parseInt(ratings.service, 10) || 5, 1), 5);
+  const rVenue   = Math.min(Math.max(parseInt(ratings.venue, 10) || 5, 1), 5);
+  const rSound   = Math.min(Math.max(parseInt(ratings.sound, 10) || 5, 1), 5);
+  const aspectsJson = JSON.stringify({ overall: rOverall, content: rContent, service: rService, venue: rVenue, sound: rSound });
   const category = String(p.category || 'Umum').trim() || 'Umum';
   const comment = String(p.comment || '').trim();
   const isAnon = !!p.isAnonymous;
-  const code = String(p.code || '').trim().toUpperCase();
-  q(`INSERT INTO event_feedbacks(event_id, order_id, user_id, ticket_code, guest_name, guest_org, is_anonymous, rating, category, comment) VALUES($1::uuid, $2, $3::uuid, $4, $5, $6, $7, $8, $9, $10)`, [eventId, orderId, u.id, code, isAnon ? '' : u.name, isAnon ? '' : u.church, isAnon, rating, category, comment]);
+  const code = String(p.code || p.ticketCode || '').trim().toUpperCase();
+  q(`INSERT INTO event_feedbacks(event_id, order_id, user_id, ticket_code, guest_name, guest_org, is_anonymous, rating, rating_content, rating_service, rating_venue, rating_sound, aspects, category, comment) VALUES($1::uuid, $2, $3::uuid, $4, $5, $6, $7, $8, $9, $10, $11, $12::jsonb, $13, $14)`, [eventId, orderId, u.id, code, isAnon ? '' : u.name, isAnon ? '' : u.church, isAnon, rOverall, rContent, rService, rVenue, rSound, aspectsJson, category, comment]);
   return { success: true };
 }
 function feedbacksGet(u, p) {
   const evId = String(p.eventId || '').trim();
-  let sql = `SELECT f.id, f.event_id, e.name AS event_name, f.rating, f.category, f.comment, f.is_anonymous, CASE WHEN f.is_anonymous THEN 'Anonim' ELSE coalesce(nullif(f.guest_name,''),'Peserta') END AS author_name, CASE WHEN f.is_anonymous THEN '' ELSE f.guest_org END AS author_org, to_char(f.created_at AT TIME ZONE 'Asia/Jakarta','YYYY-MM-DD HH24:MI') AS created_at_fmt FROM event_feedbacks f JOIN events e ON e.id=f.event_id`;
+  let sql = `SELECT f.id, f.event_id, e.name AS event_name, f.rating AS rating_overall, coalesce(f.rating_content, 5) AS rating_content, coalesce(f.rating_service, 5) AS rating_service, coalesce(f.rating_venue, 5) AS rating_venue, coalesce(f.rating_sound, 5) AS rating_sound, f.aspects, f.rating, f.category, f.comment, f.is_anonymous, CASE WHEN f.is_anonymous THEN 'Anonim' ELSE coalesce(nullif(f.guest_name,''),'Peserta') END AS author_name, CASE WHEN f.is_anonymous THEN '' ELSE f.guest_org END AS author_org, to_char(f.created_at AT TIME ZONE 'Asia/Jakarta','YYYY-MM-DD HH24:MI') AS created_at_fmt FROM event_feedbacks f JOIN events e ON e.id=f.event_id`;
   const qArgs = [];
   if (evId) { sql += ` WHERE f.event_id=$1::uuid`; qArgs.push(evId); }
   sql += ` ORDER BY f.created_at DESC LIMIT 300`;
   const rows = q(sql, qArgs);
   const total = rows.length;
-  const sumRating = rows.reduce((acc, r) => acc + (r.rating || 0), 0);
-  const avg = total ? Math.round((sumRating / total) * 10) / 10 : 0;
+  const sumOverall = rows.reduce((acc, r) => acc + (r.rating_overall || r.rating || 0), 0);
+  const sumContent = rows.reduce((acc, r) => acc + (r.rating_content || 5), 0);
+  const sumService = rows.reduce((acc, r) => acc + (r.rating_service || 5), 0);
+  const sumVenue   = rows.reduce((acc, r) => acc + (r.rating_venue || 5), 0);
+  const sumSound   = rows.reduce((acc, r) => acc + (r.rating_sound || 5), 0);
+
+  const aspectAvgs = {
+    overall: total ? Math.round((sumOverall / total) * 10) / 10 : 0,
+    content: total ? Math.round((sumContent / total) * 10) / 10 : 0,
+    service: total ? Math.round((sumService / total) * 10) / 10 : 0,
+    venue:   total ? Math.round((sumVenue / total) * 10) / 10 : 0,
+    sound:   total ? Math.round((sumSound / total) * 10) / 10 : 0
+  };
+
   const dist = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
   let anonCount = 0;
-  rows.forEach(r => { if (dist[r.rating] !== undefined) dist[r.rating]++; if (r.is_anonymous) anonCount++; });
-  return { rows: rows, total: total, avg: avg, dist: dist, anonCount: anonCount };
+  rows.forEach(r => {
+    const rt = r.rating_overall || r.rating;
+    if (dist[rt] !== undefined) dist[rt]++;
+    if (r.is_anonymous) anonCount++;
+  });
+  return { rows: rows, total: total, avg: aspectAvgs.overall, aspectAvgs: aspectAvgs, dist: dist, anonCount: anonCount };
 }
 
 /* ---------- Live Doorprize ---------- */

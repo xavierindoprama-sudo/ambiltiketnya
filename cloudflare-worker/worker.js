@@ -287,19 +287,29 @@ async function ensureFeatureTables(env) {
   if (_tablesEnsured) return;
   const ddlStatements = [
     `CREATE TABLE IF NOT EXISTS event_feedbacks (
-      id           uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-      event_id     uuid NOT NULL REFERENCES events(id) ON DELETE CASCADE,
-      order_id     uuid REFERENCES orders(id) ON DELETE SET NULL,
-      user_id      uuid REFERENCES users(id) ON DELETE SET NULL,
-      ticket_code  text DEFAULT '',
-      guest_name   text DEFAULT '',
-      guest_org    text DEFAULT '',
-      is_anonymous boolean NOT NULL DEFAULT false,
-      rating       int NOT NULL CHECK (rating BETWEEN 1 AND 5),
-      category     text NOT NULL DEFAULT 'Umum',
-      comment      text NOT NULL DEFAULT '',
-      created_at   timestamptz NOT NULL DEFAULT now()
+      id              uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+      event_id        uuid NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+      order_id        uuid REFERENCES orders(id) ON DELETE SET NULL,
+      user_id         uuid REFERENCES users(id) ON DELETE SET NULL,
+      ticket_code     text DEFAULT '',
+      guest_name      text DEFAULT '',
+      guest_org       text DEFAULT '',
+      is_anonymous    boolean NOT NULL DEFAULT false,
+      rating          int NOT NULL CHECK (rating BETWEEN 1 AND 5),
+      rating_content  int NOT NULL DEFAULT 5,
+      rating_service  int NOT NULL DEFAULT 5,
+      rating_venue    int NOT NULL DEFAULT 5,
+      rating_sound    int NOT NULL DEFAULT 5,
+      aspects         jsonb NOT NULL DEFAULT '{}'::jsonb,
+      category        text NOT NULL DEFAULT 'Umum',
+      comment         text NOT NULL DEFAULT '',
+      created_at      timestamptz NOT NULL DEFAULT now()
     )`,
+    `ALTER TABLE event_feedbacks ADD COLUMN IF NOT EXISTS rating_content int NOT NULL DEFAULT 5`,
+    `ALTER TABLE event_feedbacks ADD COLUMN IF NOT EXISTS rating_service int NOT NULL DEFAULT 5`,
+    `ALTER TABLE event_feedbacks ADD COLUMN IF NOT EXISTS rating_venue int NOT NULL DEFAULT 5`,
+    `ALTER TABLE event_feedbacks ADD COLUMN IF NOT EXISTS rating_sound int NOT NULL DEFAULT 5`,
+    `ALTER TABLE event_feedbacks ADD COLUMN IF NOT EXISTS aspects jsonb NOT NULL DEFAULT '{}'::jsonb`,
     `CREATE INDEX IF NOT EXISTS event_feedbacks_ev_idx ON event_feedbacks (event_id, created_at DESC)`,
     `CREATE TABLE IF NOT EXISTS doorprize_winners (
       id           uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -527,7 +537,13 @@ export default {
         const [p] = args;
         const code = String(p && p.code || '').trim().toUpperCase();
         const eventId = String(p && p.eventId || '').trim();
-        const rating = Math.min(Math.max(parseInt(p && p.rating, 10) || 5, 1), 5);
+        const ratings = (p && (p.ratings || p.aspects)) || {};
+        const rOverall = Math.min(Math.max(parseInt(ratings.overall || (p && p.rating), 10) || 5, 1), 5);
+        const rContent = Math.min(Math.max(parseInt(ratings.content, 10) || 5, 1), 5);
+        const rService = Math.min(Math.max(parseInt(ratings.service, 10) || 5, 1), 5);
+        const rVenue   = Math.min(Math.max(parseInt(ratings.venue, 10) || 5, 1), 5);
+        const rSound   = Math.min(Math.max(parseInt(ratings.sound, 10) || 5, 1), 5);
+        const aspectsJson = JSON.stringify({ overall: rOverall, content: rContent, service: rService, venue: rVenue, sound: rSound });
         const category = String(p && p.category || 'Umum').trim() || 'Umum';
         const comment = String(p && p.comment || '').trim();
         const isAnon = !!(p && p.isAnonymous);
@@ -552,9 +568,9 @@ export default {
         if (!targetEventId) throw new Error('EVENT_NOT_FOUND');
 
         await ensureFeatureTables(env);
-        await neonQuery(env, `INSERT INTO event_feedbacks(event_id, order_id, ticket_code, guest_name, guest_org, is_anonymous, rating, category, comment)
-          VALUES($1::uuid, $2, $3, $4, $5, $6, $7, $8, $9)`,
-          [targetEventId, targetOrderId, code, isAnon ? '' : gName, isAnon ? '' : gOrg, isAnon, rating, category, comment]);
+        await neonQuery(env, `INSERT INTO event_feedbacks(event_id, order_id, ticket_code, guest_name, guest_org, is_anonymous, rating, rating_content, rating_service, rating_venue, rating_sound, aspects, category, comment)
+          VALUES($1::uuid, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12::jsonb, $13, $14)`,
+          [targetEventId, targetOrderId, code, isAnon ? '' : gName, isAnon ? '' : gOrg, isAnon, rOverall, rContent, rService, rVenue, rSound, aspectsJson, category, comment]);
         return json({ ok: true, data: { success: true } });
       }
 
@@ -981,16 +997,22 @@ export default {
         if (action === 'feedbackSubmit') {
           const eventId = String(params.eventId || '').trim();
           const orderId = params.orderId || null;
-          const rating = Math.min(Math.max(parseInt(params.rating, 10) || 5, 1), 5);
+          const ratings = params.ratings || params.aspects || {};
+          const rOverall = Math.min(Math.max(parseInt(ratings.overall || params.rating, 10) || 5, 1), 5);
+          const rContent = Math.min(Math.max(parseInt(ratings.content, 10) || 5, 1), 5);
+          const rService = Math.min(Math.max(parseInt(ratings.service, 10) || 5, 1), 5);
+          const rVenue   = Math.min(Math.max(parseInt(ratings.venue, 10) || 5, 1), 5);
+          const rSound   = Math.min(Math.max(parseInt(ratings.sound, 10) || 5, 1), 5);
+          const aspectsJson = JSON.stringify({ overall: rOverall, content: rContent, service: rService, venue: rVenue, sound: rSound });
           const category = String(params.category || 'Umum').trim() || 'Umum';
           const comment = String(params.comment || '').trim();
           const isAnon = !!params.isAnonymous;
-          const code = String(params.code || '').trim().toUpperCase();
+          const code = String(params.code || params.ticketCode || '').trim().toUpperCase();
 
           await ensureFeatureTables(env);
-          await neonQuery(env, `INSERT INTO event_feedbacks(event_id, order_id, user_id, ticket_code, guest_name, guest_org, is_anonymous, rating, category, comment)
-            VALUES($1::uuid, $2, $3::uuid, $4, $5, $6, $7, $8, $9, $10)`,
-            [eventId, orderId, u.id, code, isAnon ? '' : u.name, isAnon ? '' : u.church, isAnon, rating, category, comment]);
+          await neonQuery(env, `INSERT INTO event_feedbacks(event_id, order_id, user_id, ticket_code, guest_name, guest_org, is_anonymous, rating, rating_content, rating_service, rating_venue, rating_sound, aspects, category, comment)
+            VALUES($1::uuid, $2, $3::uuid, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13::jsonb, $14, $15)`,
+            [eventId, orderId, u.id, code, isAnon ? '' : u.name, isAnon ? '' : u.church, isAnon, rOverall, rContent, rService, rVenue, rSound, aspectsJson, category, comment]);
           return json({ ok: true, data: { success: true } });
         }
 
@@ -998,7 +1020,14 @@ export default {
           needRole(2);
           await ensureFeatureTables(env);
           const evId = String(params.eventId || '').trim();
-          let sql = `SELECT f.id, f.event_id, e.name AS event_name, f.rating, f.category, f.comment, f.is_anonymous,
+          let sql = `SELECT f.id, f.event_id, e.name AS event_name,
+            f.rating AS rating_overall,
+            coalesce(f.rating_content, 5) AS rating_content,
+            coalesce(f.rating_service, 5) AS rating_service,
+            coalesce(f.rating_venue, 5) AS rating_venue,
+            coalesce(f.rating_sound, 5) AS rating_sound,
+            f.aspects,
+            f.rating, f.category, f.comment, f.is_anonymous,
             CASE WHEN f.is_anonymous THEN 'Anonim' ELSE coalesce(nullif(f.guest_name,''),'Peserta') END AS author_name,
             CASE WHEN f.is_anonymous THEN '' ELSE f.guest_org END AS author_org,
             to_char(f.created_at AT TIME ZONE 'Asia/Jakarta','YYYY-MM-DD HH24:MI') AS created_at_fmt
@@ -1012,15 +1041,34 @@ export default {
           const rows = await neonQuery(env, sql, qArgs);
 
           const total = rows.length;
-          const sumRating = rows.reduce((acc, r) => acc + (r.rating || 0), 0);
-          const avg = total ? Math.round((sumRating / total) * 10) / 10 : 0;
+          const sumOverall = rows.reduce((acc, r) => acc + (r.rating_overall || r.rating || 0), 0);
+          const sumContent = rows.reduce((acc, r) => acc + (r.rating_content || 5), 0);
+          const sumService = rows.reduce((acc, r) => acc + (r.rating_service || 5), 0);
+          const sumVenue   = rows.reduce((acc, r) => acc + (r.rating_venue || 5), 0);
+          const sumSound   = rows.reduce((acc, r) => acc + (r.rating_sound || 5), 0);
+
+          const avgOverall = total ? Math.round((sumOverall / total) * 10) / 10 : 0;
+          const avgContent = total ? Math.round((sumContent / total) * 10) / 10 : 0;
+          const avgService = total ? Math.round((sumService / total) * 10) / 10 : 0;
+          const avgVenue   = total ? Math.round((sumVenue / total) * 10) / 10 : 0;
+          const avgSound   = total ? Math.round((sumSound / total) * 10) / 10 : 0;
+
+          const aspectAvgs = {
+            overall: avgOverall,
+            content: avgContent,
+            service: avgService,
+            venue: avgVenue,
+            sound: avgSound
+          };
+
           const dist = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
           let anonCount = 0;
           rows.forEach(r => {
-            if (dist[r.rating] !== undefined) dist[r.rating]++;
+            const rt = r.rating_overall || r.rating;
+            if (dist[rt] !== undefined) dist[rt]++;
             if (r.is_anonymous) anonCount++;
           });
-          return json({ ok: true, data: { rows, total, avg, dist, anonCount } });
+          return json({ ok: true, data: { rows, total, avg: avgOverall, aspectAvgs, dist, anonCount } });
         }
 
         if (action === 'doorprizePool') {

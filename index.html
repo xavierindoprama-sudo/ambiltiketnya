@@ -813,12 +813,21 @@ async function feedbackView(c) {
   }
 }
 
+const FB_ASPECTS = [
+  { key: 'overall', label: '✨ Keseluruhan Acara', desc: 'Kepuasan umum terhadap keseluruhan acara' },
+  { key: 'content', label: '🎤 Konten & Pengisi Acara/Pembicara', desc: 'Materi, firman, pembicara & penampilan pengisi acara' },
+  { key: 'service', label: '👥 Pelayanan Panitia & Usher', desc: 'Keramahan, bantuan, alur antrean & pelayanan tim' },
+  { key: 'venue',   label: '🏢 Fasilitas Venue & Tempat', desc: 'Kenyamanan ruangan, tata letak, kebersihan & AC' },
+  { key: 'sound',   label: '🎵 Sound, Musik & Multimedia', desc: 'Kualitas audio sound system, musik, lighting & visual screen' }
+];
+
 function paintFeedback(c) {
   if (!c) c = $('#ac');
   if (!c) return;
   const d = S_fb.data || { rows: [], total: 0, avg: 0, dist: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 }, anonCount: 0 };
   const evOpts = '<option value="">Semua Acara</option>' + (S.aev || []).map(e => `<option value="${e.id}" ${e.id === S_fb.evId ? 'selected' : ''}>${esc(e.name)}</option>`).join('');
   const anonPct = d.total ? Math.round((d.anonCount / d.total) * 100) : 0;
+  const asp = d.aspectAvgs || { overall: d.avg || 0, content: 0, service: 0, venue: 0, sound: 0 };
 
   const starBars = [5, 4, 3, 2, 1].map(st => {
     const cnt = d.dist[st] || 0;
@@ -843,11 +852,12 @@ function paintFeedback(c) {
       ${d.total ? `<button class="btn pri" data-act="fbExportCsv" style="padding:10px 18px;display:inline-flex;align-items:center;gap:8px"><span>📥</span> <b>Ekspor CSV</b></button>` : ''}
     </div>
 
+    <!-- STATS KPI -->
     <div class="stats" style="grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-bottom:20px">
       <div class="card stat" style="border-left:4px solid #f59e0b">
         <div>
           <b>${d.avg} / 5.0</b>
-          <small>${t('fb_avg')}</small><br>
+          <small>${t('fb_avg')} (Umum)</small><br>
           <small style="color:#f59e0b">${'★'.repeat(Math.round(d.avg))}${'☆'.repeat(5 - Math.round(d.avg))}</small>
         </div>
         <div style="font-size:26px">⭐</div>
@@ -856,7 +866,7 @@ function paintFeedback(c) {
         <div>
           <b>${d.total}</b>
           <small>${t('fb_total')}</small><br>
-          <small class="muted">Ulasan yang masuk</small>
+          <small class="muted">Peserta mengisi survey</small>
         </div>
         <div style="font-size:26px">💬</div>
       </div>
@@ -870,19 +880,87 @@ function paintFeedback(c) {
       </div>
     </div>
 
+    <!-- MULTI-ASPECT SCORECARD -->
+    <div class="card" style="padding:18px;margin-bottom:20px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:8px">
+        <div>
+          <h3 style="margin:0;font-size:16px">🎯 Rata-Rata Kepuasan per Aspek Acara</h3>
+          <small class="muted">Penilaian mendalam peserta terhadap 5 aspek utama penyelenggaraan</small>
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px">
+        <div style="background:var(--in);border:1px solid var(--bd);border-radius:12px;padding:12px">
+          <div style="font-size:12px;color:var(--mu);font-weight:700">✨ Keseluruhan Acara</div>
+          <div style="display:flex;align-items:baseline;gap:6px;margin:4px 0">
+            <b style="font-size:24px;color:#f59e0b">${asp.overall}</b>
+            <small class="muted">/ 5.0</small>
+          </div>
+          <div style="height:6px;background:rgba(255,255,255,.1);border-radius:99px;overflow:hidden">
+            <div style="height:100%;width:${(asp.overall/5)*100}%;background:linear-gradient(90deg,#f59e0b,#fbbf24);border-radius:99px"></div>
+          </div>
+        </div>
+
+        <div style="background:var(--in);border:1px solid var(--bd);border-radius:12px;padding:12px">
+          <div style="font-size:12px;color:var(--mu);font-weight:700">🎤 Konten & Pengisi Acara</div>
+          <div style="display:flex;align-items:baseline;gap:6px;margin:4px 0">
+            <b style="font-size:24px;color:#3b82f6">${asp.content}</b>
+            <small class="muted">/ 5.0</small>
+          </div>
+          <div style="height:6px;background:rgba(255,255,255,.1);border-radius:99px;overflow:hidden">
+            <div style="height:100%;width:${(asp.content/5)*100}%;background:linear-gradient(90deg,#3b82f6,#60a5fa);border-radius:99px"></div>
+          </div>
+        </div>
+
+        <div style="background:var(--in);border:1px solid var(--bd);border-radius:12px;padding:12px">
+          <div style="font-size:12px;color:var(--mu);font-weight:700">👥 Pelayanan Panitia & Usher</div>
+          <div style="display:flex;align-items:baseline;gap:6px;margin:4px 0">
+            <b style="font-size:24px;color:#10b981">${asp.service}</b>
+            <small class="muted">/ 5.0</small>
+          </div>
+          <div style="height:6px;background:rgba(255,255,255,.1);border-radius:99px;overflow:hidden">
+            <div style="height:100%;width:${(asp.service/5)*100}%;background:linear-gradient(90deg,#10b981,#34d399);border-radius:99px"></div>
+          </div>
+        </div>
+
+        <div style="background:var(--in);border:1px solid var(--bd);border-radius:12px;padding:12px">
+          <div style="font-size:12px;color:var(--mu);font-weight:700">🏢 Fasilitas & Venue</div>
+          <div style="display:flex;align-items:baseline;gap:6px;margin:4px 0">
+            <b style="font-size:24px;color:#8b5cf6">${asp.venue}</b>
+            <small class="muted">/ 5.0</small>
+          </div>
+          <div style="height:6px;background:rgba(255,255,255,.1);border-radius:99px;overflow:hidden">
+            <div style="height:100%;width:${(asp.venue/5)*100}%;background:linear-gradient(90deg,#8b5cf6,#a78bfa);border-radius:99px"></div>
+          </div>
+        </div>
+
+        <div style="background:var(--in);border:1px solid var(--bd);border-radius:12px;padding:12px">
+          <div style="font-size:12px;color:var(--mu);font-weight:700">🎵 Sound & Multimedia</div>
+          <div style="display:flex;align-items:baseline;gap:6px;margin:4px 0">
+            <b style="font-size:24px;color:#ec4899">${asp.sound}</b>
+            <small class="muted">/ 5.0</small>
+          </div>
+          <div style="height:6px;background:rgba(255,255,255,.1);border-radius:99px;overflow:hidden">
+            <div style="height:100%;width:${(asp.sound/5)*100}%;background:linear-gradient(90deg,#ec4899,#f472b6);border-radius:99px"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- DISTRIBUSI & KETERANGAN -->
     <div class="two" style="gap:16px;margin-bottom:20px">
       <div class="card" style="padding:18px">
-        <h3 style="margin:0 0 12px;font-size:16px">📊 Distribusi Rating Bintang</h3>
+        <h3 style="margin:0 0 12px;font-size:16px">📊 Distribusi Rating Keseluruhan</h3>
         ${starBars}
       </div>
       <div class="card" style="padding:18px;display:flex;flex-direction:column;justify-content:center;background:linear-gradient(135deg,rgba(212,175,55,.1),rgba(212,175,55,.02))">
-        <h3 style="margin:0 0 8px;font-size:16px">💡 Keterangan Survey</h3>
+        <h3 style="margin:0 0 8px;font-size:16px">💡 Keterangan Survey Multi-Aspek</h3>
         <p class="muted" style="margin:0 0 10px;font-size:13px;line-height:1.5">
-          Peserta dapat mengisi ulasan langsung melalui halaman e-tiket mereka atau melalui modal tiket di aplikasi. Peserta memiliki pilihan untuk mengirimkan ulasan secara <b>Anonim</b> atau menyertakan identitas mereka.
+          Peserta menilai 5 aspek terpisah: <b>Keseluruhan</b>, <b>Konten & Pengisi Acara</b>, <b>Pelayanan Panitia</b>, <b>Fasilitas Venue</b>, dan <b>Sound & Multimedia</b>. Peserta juga dapat memilih untuk mengirim ulasan secara <b>Anonim</b> untuk menjaga kenyamanan privasi mereka.
         </p>
       </div>
     </div>
 
+    <!-- FEED ULASAN -->
     <div class="card" style="padding:20px">
       <h3 style="margin:0 0 14px">💬 Feed Ulasan & Masukan Peserta (${d.total})</h3>
       ${d.rows.length ? `
@@ -891,13 +969,18 @@ function paintFeedback(c) {
             <div style="background:var(--in);border:1px solid var(--bd);border-radius:14px;padding:16px">
               <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px;margin-bottom:8px">
                 <div style="display:flex;align-items:center;gap:10px">
-                  <span style="color:#f59e0b;font-size:16px;letter-spacing:1px">${'★'.repeat(r.rating)}${'☆'.repeat(5 - r.rating)}</span>
-                  <span class="pill" style="font-size:11px;font-weight:700">${esc(r.category || 'Umum')}</span>
+                  <span style="color:#f59e0b;font-size:16px;letter-spacing:1px">${'★'.repeat(r.rating_overall || r.rating)}${'☆'.repeat(5 - (r.rating_overall || r.rating))}</span>
                   ${r.is_anonymous ? `<span class="pill wn" style="font-size:11px;font-weight:700">🎭 Anonim</span>` : `<b>${esc(r.author_name)}</b> ${r.author_org ? `<span class="muted" style="font-size:12px">(${esc(r.author_org)})</span>` : ''}`}
                 </div>
                 <small class="muted" style="font-size:11px">${esc(r.created_at_fmt)} · ${esc(r.event_name)}</small>
               </div>
-              <p style="margin:0;font-size:14px;line-height:1.5;color:var(--tx);white-space:pre-wrap">"${esc(r.comment || 'Tanpa komentar tertulis.')}"</p>
+              <div style="display:flex;flex-wrap:wrap;gap:6px;margin:8px 0">
+                <span class="pill" style="font-size:11px">🎤 Konten: <b>${r.rating_content || 5}★</b></span>
+                <span class="pill" style="font-size:11px">👥 Panitia: <b>${r.rating_service || 5}★</b></span>
+                <span class="pill" style="font-size:11px">🏢 Venue: <b>${r.rating_venue || 5}★</b></span>
+                <span class="pill" style="font-size:11px">🎵 Sound: <b>${r.rating_sound || 5}★</b></span>
+              </div>
+              <p style="margin:6px 0 0;font-size:14px;line-height:1.5;color:var(--tx);white-space:pre-wrap">"${esc(r.comment || 'Tanpa catatan tambahan.')}"</p>
             </div>
           `).join('')}
         </div>
@@ -906,17 +989,27 @@ function paintFeedback(c) {
   `;
 }
 
-/* Modal Form Pengisian Feedback */
+/* Modal Form Pengisian Feedback (Multi-Aspek) */
 function feedbackModal({ eventId, orderId, code, eventName, isPublic }) {
-  window._fbStar = 5;
+  window._fbAspects = { overall: 5, content: 5, service: 5, venue: 5, sound: 5 };
   modal(`
     <button class="btn sm x" data-act="cm">&#10005;</button>
     <h2>⭐ ${t('fb_title')}</h2>
     <p class="muted" style="margin:2px 0 14px">${esc(eventName || 'Acara')} ${code ? `· <span class="mono">${esc(code)}</span>` : ''}</p>
     
-    <label style="font-weight:700;margin-bottom:6px;display:block">${t('fb_rate_lbl')}</label>
-    <div id="fb_star_picker" style="display:flex;gap:10px;font-size:32px;cursor:pointer;margin-bottom:14px;user-select:none">
-      ${[1, 2, 3, 4, 5].map(st => `<span data-act="fbSetStar" data-v="${st}" style="color:#f59e0b;transition:transform .12s">★</span>`).join('')}
+    <label style="font-weight:700;margin-bottom:8px;display:block">Nilai Kepuasan Anda per Aspek:</label>
+    <div style="background:var(--in);border:1px solid var(--bd);border-radius:14px;padding:6px 14px;margin-bottom:14px;max-height:45vh;overflow-y:auto">
+      ${FB_ASPECTS.map((a, i) => `
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;${i < FB_ASPECTS.length - 1 ? 'border-bottom:1px solid var(--bd);' : ''}gap:10px" class="fb-asp-row">
+          <div style="flex:1;min-width:0">
+            <div style="font-weight:700;font-size:13px">${a.label}</div>
+            <small class="muted" style="font-size:11px;display:block;line-height:1.3">${a.desc}</small>
+          </div>
+          <div class="fb-stars" data-asp="${a.key}" style="display:flex;gap:4px;font-size:22px;cursor:pointer;user-select:none;flex-shrink:0">
+            ${[1, 2, 3, 4, 5].map(st => `<span data-act="fbSetAspectStar" data-asp="${a.key}" data-v="${st}" style="color:#f59e0b;transition:transform .12s">★</span>`).join('')}
+          </div>
+        </div>
+      `).join('')}
     </div>
     
     <div style="background:var(--in);border:1px solid var(--bd);border-radius:12px;padding:12px 14px;margin-bottom:14px">
@@ -927,17 +1020,8 @@ function feedbackModal({ eventId, orderId, code, eventName, isPublic }) {
       <small class="muted" style="display:block;margin-top:6px;line-height:1.4">${t('fb_anon_hint')}</small>
     </div>
 
-    <label style="font-weight:700;margin-bottom:4px;display:block">${t('fb_cat_lbl')}</label>
-    <select id="fb_cat" style="margin-bottom:14px;width:100%">
-      <option value="Umum">✨ Keseluruhan Acara (Umum)</option>
-      <option value="Acara & Pembicara">🎤 Konten Acara & Pembicara</option>
-      <option value="Pelayanan Panitia">👥 Pelayanan Panitia & Usher</option>
-      <option value="Fasilitas & Venue">🏢 Fasilitas Venue & Tempat</option>
-      <option value="Sound & Multimedia">🎵 Sound, Musik & Multimedia</option>
-    </select>
-
-    <label style="font-weight:700;margin-bottom:4px;display:block">${t('fb_comment_lbl')}</label>
-    <textarea id="fb_comment" rows="3" placeholder="Tuliskan ulasan, kesan positif, atau masukan untuk perbaikan kami..." style="width:100%;box-sizing:border-box;margin-bottom:16px"></textarea>
+    <label style="font-weight:700;margin-bottom:4px;display:block">Kritik, Saran & Masukan Anda (Opsional)</label>
+    <textarea id="fb_comment" rows="3" placeholder="Tuliskan masukan atau pesan positif untuk panitia..." style="width:100%;box-sizing:border-box;margin-bottom:16px"></textarea>
 
     <div class="acts">
       <button class="btn pri" data-act="fbDoSubmit" data-ev="${esc(eventId || '')}" data-ord="${esc(orderId || '')}" data-code="${esc(code || '')}">🚀 ${t('fb_submit')}</button>
@@ -1865,10 +1949,23 @@ const NL=String.fromCharCode(10),find=(a,id)=>a.find(x=>x.id===id),A={
  },
  fbSetStar(el){
   const v = parseInt(el.dataset.v, 10) || 5;
-  window._fbStar = v;
+  if (!window._fbAspects) window._fbAspects = { overall: 5, content: 5, service: 5, venue: 5, sound: 5 };
+  window._fbAspects.overall = v;
   const picker = $('#fb_star_picker');
   if (picker) {
    picker.querySelectorAll('span').forEach((s, idx) => {
+    s.style.color = (idx < v) ? '#f59e0b' : 'var(--bd)';
+   });
+  }
+ },
+ fbSetAspectStar(el){
+  const asp = el.dataset.asp;
+  const v = parseInt(el.dataset.v, 10) || 5;
+  if (!window._fbAspects) window._fbAspects = { overall: 5, content: 5, service: 5, venue: 5, sound: 5 };
+  window._fbAspects[asp] = v;
+  const row = el.closest('.fb-stars');
+  if (row) {
+   row.querySelectorAll('span').forEach((s, idx) => {
     s.style.color = (idx < v) ? '#f59e0b' : 'var(--bd)';
    });
   }
@@ -1877,34 +1974,26 @@ const NL=String.fromCharCode(10),find=(a,id)=>a.find(x=>x.id===id),A={
   const eventId = el.dataset.ev;
   const orderId = el.dataset.ord;
   const code = el.dataset.code;
-  const rating = window._fbStar || 5;
+  const ratings = window._fbAspects || { overall: 5, content: 5, service: 5, venue: 5, sound: 5 };
   const isAnon = $('#fb_is_anon') ? $('#fb_is_anon').checked : false;
-  const cat = $('#fb_cat') ? $('#fb_cat').value : 'Umum';
   const comment = ($('#fb_comment') ? $('#fb_comment').value : '').trim();
-  if (!comment) return toast('Silakan tulis ulasan atau komentar Anda', 1);
 
   try {
+   const payload = {
+    eventId: eventId,
+    orderId: orderId,
+    ticketCode: code,
+    ratings: ratings,
+    rating: ratings.overall || 5,
+    comment: comment,
+    isAnonymous: isAnon
+   };
    if (S.user) {
-    await api('feedbackSubmit', {
-     eventId: eventId,
-     orderId: orderId,
-     rating: rating,
-     category: cat,
-     comment: comment,
-     isAnonymous: isAnon
-    }, t('loading'));
+    await api('feedbackSubmit', payload, t('loading'));
    } else {
-    await pub('feedbackPublic', {
-     eventId: eventId,
-     orderId: orderId,
-     ticketCode: code,
-     rating: rating,
-     category: cat,
-     comment: comment,
-     isAnonymous: isAnon
-    }, t('loading'));
+    await pub('feedbackPublic', payload, t('loading'));
    }
-   closeModal();
+   cm();
    toast(t('fb_thanks'), 0);
    if (S.view === 'feedback') {
     await fbLoadData();
@@ -1917,12 +2006,15 @@ const NL=String.fromCharCode(10),find=(a,id)=>a.find(x=>x.id===id),A={
  fbExportCsv(){
   const rows = (S_fb.data && S_fb.data.rows) || [];
   if (!rows.length) return toast(t('none'), 1);
-  const headers = ['Waktu', 'Acara', 'Rating', 'Kategori', 'Anonim', 'Nama Peserta', 'Asal Gereja / Instansi', 'Komentar / Masukan'];
+  const headers = ['Waktu', 'Acara', 'Skor Keseluruhan', 'Konten & Pengisi Acara', 'Pelayanan Panitia', 'Fasilitas Venue', 'Sound & Multimedia', 'Anonim', 'Nama Peserta', 'Asal Gereja / Instansi', 'Komentar / Masukan'];
   const data = rows.map(r => [
    r.created_at_fmt || '',
    r.event_name || '',
-   r.rating + ' Bintang',
-   r.category || 'Umum',
+   (r.rating_overall || r.rating) + '★',
+   (r.rating_content || 5) + '★',
+   (r.rating_service || 5) + '★',
+   (r.rating_venue || 5) + '★',
+   (r.rating_sound || 5) + '★',
    r.is_anonymous ? 'Ya (Anonim)' : 'Tidak',
    r.is_anonymous ? 'Anonim' : (r.author_name || ''),
    r.is_anonymous ? '-' : (r.author_org || ''),
@@ -1932,7 +2024,7 @@ const NL=String.fromCharCode(10),find=(a,id)=>a.find(x=>x.id===id),A={
   const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
-  a.download = 'Feedback_Peserta_' + (S_fb.evId || 'Semua') + '_' + new Date().toISOString().slice(0,10) + '.csv';
+  a.download = 'Survey_MultiAspek_' + (S_fb.evId || 'Semua') + '_' + new Date().toISOString().slice(0,10) + '.csv';
   document.body.appendChild(a); a.click(); a.remove();
  },
  dpToggleFs(){
