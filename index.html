@@ -572,32 +572,67 @@ function exportOrdersCsv(targetEventId){const evId=targetEventId||($('#of')&&$('
  const evName=(S.aev&&S.aev.find(x=>x.id===evId))?S.aev.find(x=>x.id===evId).name.replace(/[^a-zA-Z0-9]/g,'_'):'Semua_Acara';
  a.download='Laporan_Kehadiran_'+evName+'_'+new Date().toISOString().slice(0,10)+'.csv';document.body.appendChild(a);a.click();a.remove()}
 
-/* ===== AUDIO SFX & CONFETTI (Self-Contained) ===== */
+/* ===== AUDIO SFX & CONFETTI (Self-Contained Singleton Web Audio) ===== */
+let _actx = null;
+function actx() {
+  try {
+    if (!_actx) {
+      const AC = window.AudioContext || window.webkitAudioContext;
+      if (AC) _actx = new AC();
+    }
+    if (_actx && _actx.state === 'suspended') {
+      _actx.resume().catch(() => {});
+    }
+  } catch(e) {}
+  return _actx;
+}
+
+if (typeof window !== 'undefined') {
+  const unlockAudio = () => {
+    try {
+      const c = actx();
+      if (c && c.state === 'suspended') c.resume().catch(() => {});
+    } catch(e) {}
+  };
+  ['click', 'keydown', 'touchstart'].forEach(ev => {
+    window.addEventListener(ev, unlockAudio, { passive: true });
+  });
+}
+
 function playSfx(type) {
   try {
-    const AudioCtx = window.AudioContext || window.webkitAudioContext;
-    if (!AudioCtx) return;
-    const ctx = new AudioCtx();
+    const c = actx();
+    if (!c) return;
+    if (c.state === 'suspended') {
+      c.resume().catch(() => {});
+    }
+    const t = c.currentTime;
     if (type === 'tick') {
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
+      const osc = c.createOscillator();
+      const gain = c.createGain();
       osc.type = 'triangle';
-      osc.frequency.setValueAtTime(520, ctx.currentTime);
-      gain.gain.setValueAtTime(0.06, ctx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.04);
-      osc.connect(gain); gain.connect(ctx.destination);
-      osc.start(); osc.stop(ctx.currentTime + 0.04);
+      osc.frequency.setValueAtTime(580, t);
+      osc.frequency.exponentialRampToValueAtTime(180, t + 0.04);
+      gain.gain.setValueAtTime(0.12, t);
+      gain.gain.exponentialRampToValueAtTime(0.001, t + 0.04);
+      osc.connect(gain);
+      gain.connect(c.destination);
+      osc.start(t);
+      osc.stop(t + 0.045);
     } else if (type === 'win') {
       [523.25, 659.25, 783.99, 1046.50].forEach((freq, i) => {
-        const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
+        const osc = c.createOscillator();
+        const gain = c.createGain();
         osc.type = 'sine';
-        osc.frequency.setValueAtTime(freq, ctx.currentTime + i * 0.11);
-        gain.gain.setValueAtTime(0.18, ctx.currentTime + i * 0.11);
-        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + i * 0.11 + 0.65);
-        osc.connect(gain); gain.connect(ctx.destination);
-        osc.start(ctx.currentTime + i * 0.11);
-        osc.stop(ctx.currentTime + i * 0.11 + 0.65);
+        const startT = t + i * 0.11;
+        const dur = (i === 3) ? 1.0 : 0.45;
+        osc.frequency.setValueAtTime(freq, startT);
+        gain.gain.setValueAtTime(0.2, startT);
+        gain.gain.exponentialRampToValueAtTime(0.001, startT + dur);
+        osc.connect(gain);
+        gain.connect(c.destination);
+        osc.start(startT);
+        osc.stop(startT + dur + 0.05);
       });
     }
   } catch(e) {}
@@ -1588,8 +1623,7 @@ function paintOrders(){const k=($('#oq').value||'').toLowerCase(),emF=$('#oem')?
  $('#ot').innerHTML=`<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:8px"><div><b style="font-size:20px">${l.reduce((a,o)=>a+o.qty,0)}</b> ${t('tix')} / ${n} pemesan ${pendingCnt>0?`<span class="pill wn" style="font-weight:700;margin-left:6px">⚠️ ${pendingCnt} ${t('em_pending')}</span>`:''}</div></div>${S.ordTr?'<p class="muted">'+t('pg_trunc')+'</p>':''}<div class="tw"><table class="rt"><tr>${th}</tr>${rows.map(o=>`<tr><td data-l="${t('c_code')}" class="mono"><b>${esc(o.ticket_code)}</b><br><small class="muted">${new Date(o.created_at).toLocaleString(loc())}</small></td><td data-l="${t('c_name')}">${esc(o.name)}${o.kind==='invitation'?' <span class="pill gd">'+t('inv_badge')+'</span>':o.kind==='walk_in'?' <span class="pill wn" style="background:#10b981;color:#fff;font-weight:700">'+t('walkin_badge')+'</span>':''}<br><small class="muted">${o.kind==='invitation'?esc(o.church):o.kind==='walk_in'?(o.guest_org?esc(o.guest_org)+'<br>':'')+(o.guest_phone?'+'+esc(o.guest_phone)+' &#183; ':'')+(o.guest_email?esc(o.guest_email):'Di tempat'):esc(o.email)+'<br>+'+esc(o.whatsapp)+' &#183; '+esc(o.age)+' &#183; '+esc(o.church)}</small>${o.kind==='order'&&o.status==='confirmed'?`<div style="margin-top:3px;display:flex;align-items:center;flex-wrap:wrap;gap:4px"><span class="pill ${o.emailed?'ok':'er'}" style="font-size:10px;padding:2px 7px;font-weight:700" title="${esc(o.email_error||(o.emailed?'Terkirim pada '+(o.emailed_at?new Date(o.emailed_at).toLocaleString(loc()):'-'):'Belum terkirim'))}">${o.emailed?'✓ '+t('em_sent'):'⚠️ '+t('em_pending')}</span>${o.emailed&&o.email_error?`<span class="muted" style="font-size:10px;font-weight:600">(${esc(o.email_error)})</span>`:''}${!o.emailed&&o.email_error?`<div style="font-size:10px;color:var(--er);margin-top:2px;width:100%;white-space:normal;line-height:1.2">${esc(o.email_error)}</div>`:''}</div>`:''}</td><td data-l="${t('c_event')}">${esc(o.event_name)}</td><td data-l="${t('c_qty')}">${o.qty}</td><td data-l="${t('c_status')}">${stPill(o.status)}</td><td data-l="${t('c_chk')}" class="mono">${o.checked_in}/${o.qty}</td><td>${acts(o)}</td></tr>`).join('')}</table></div>${pagerHtml(n,S.ordPage,pages,from,rows.length)}`}
 
 /* ===== Scanner Engine (Continuous, Audio, Torch, Haptic) ===== */
-let _actx=null,_muted=false,_stream=null,_track=null,_torch=false,_facing='environment',_scanning=false,_cooldown=false,_lastCode='',_lastTime=0,_sessionCount=0,_resTimer=null;
-function actx(){if(!_actx){const AC=window.AudioContext||window.webkitAudioContext;if(AC)_actx=new AC()}if(_actx&&_actx.state==='suspended')_actx.resume();return _actx}
+let _muted=false,_stream=null,_track=null,_torch=false,_facing='environment',_scanning=false,_cooldown=false,_lastCode='',_lastTime=0,_sessionCount=0,_resTimer=null;
 function snd(type){if(_muted)return;try{const c=actx();if(!c)return;const t=c.currentTime;
  if(type==='VALID'){[523.25,659.25,783.99,1046.5].forEach((f,i)=>{const o=c.createOscillator(),g=c.createGain();o.type='triangle';o.frequency.setValueAtTime(f,t+i*.055);g.gain.setValueAtTime(0,t+i*.055);g.gain.linearRampToValueAtTime(.28,t+i*.055+.02);g.gain.exponentialRampToValueAtTime(.001,t+i*.055+.22);o.connect(g);g.connect(c.destination);o.start(t+i*.055);o.stop(t+i*.055+.24)})}
  else if(type==='USED'||type==='UNPAID'){[0,.14].forEach(d=>{const o=c.createOscillator(),g=c.createGain();o.type='sawtooth';o.frequency.setValueAtTime(180,t+d);o.frequency.linearRampToValueAtTime(120,t+d+.1);g.gain.setValueAtTime(.32,t+d);g.gain.exponentialRampToValueAtTime(.001,t+d+.11);o.connect(g);g.connect(c.destination);o.start(t+d);o.stop(t+d+.12)})}
@@ -2705,6 +2739,7 @@ const NL=String.fromCharCode(10),find=(a,id)=>a.find(x=>x.id===id),A={
   },
  dpSpin(){
    if (S_dp.isSpinning) return;
+   actx();
    if (!S_dp.candidates || !S_dp.candidates.length) return toast(t('dp_empty_pool'), 1);
    const prizeInp = $('#dp_prize_inp');
    if (prizeInp && prizeInp.value.trim()) S_dp.prize = prizeInp.value.trim();
