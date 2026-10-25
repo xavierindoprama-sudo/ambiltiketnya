@@ -168,10 +168,16 @@ function normPhone(s) {
   return /^628\d{7,11}$/.test(d) ? d : null;
 }
 
-const AUTH_SQL = `SELECT u.id,u.email,u.name,u.whatsapp,u.age,u.church,u.role,coalesce(u.picture,'') AS picture FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token_hash=$1 AND s.expires_at>now()`;
+const AUTH_SQL = `SELECT u.id,u.email,u.name,u.whatsapp,u.age,u.church,u.role,coalesce(u.picture,'') AS picture,
+  u.organizer_id, coalesce(org.name,'') AS organizer_name, coalesce(org.slug,'') AS organizer_slug
+  FROM sessions s
+  JOIN users u ON u.id=s.user_id
+  LEFT JOIN organizers org ON org.id=u.organizer_id
+  WHERE s.token_hash=$1 AND s.expires_at>now()`;
 
 async function auth(env, token) {
   if (!token) throw new Error('AUTH');
+  await ensureFeatureTables(env);
   const h = await sha256(token);
   const rows = await neonQuery(env, AUTH_SQL, [h]);
   const u = rows[0];
@@ -365,7 +371,28 @@ async function ensureFeatureTables(env) {
     `ALTER TABLE events ADD COLUMN IF NOT EXISTS enable_nametag boolean NOT NULL DEFAULT false`,
     `ALTER TABLE events ADD COLUMN IF NOT EXISTS enable_certificate boolean NOT NULL DEFAULT false`,
     `ALTER TABLE events ADD COLUMN IF NOT EXISTS certificate_config jsonb NOT NULL DEFAULT '{}'::jsonb`,
-    `ALTER TABLE orders ADD COLUMN IF NOT EXISTS custom_answers jsonb NOT NULL DEFAULT '{}'::jsonb`
+    `ALTER TABLE orders ADD COLUMN IF NOT EXISTS custom_answers jsonb NOT NULL DEFAULT '{}'::jsonb`,
+    `CREATE TABLE IF NOT EXISTS organizers (
+      id                  uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+      name                text NOT NULL,
+      slug                text UNIQUE NOT NULL,
+      description         text DEFAULT '',
+      logo_url            text DEFAULT '',
+      banner_url          text DEFAULT '',
+      contact_email       text DEFAULT '',
+      contact_phone       text DEFAULT '',
+      bank_name           text DEFAULT '',
+      bank_account_no     text DEFAULT '',
+      bank_account_holder text DEFAULT '',
+      is_verified         boolean NOT NULL DEFAULT true,
+      created_at          timestamptz NOT NULL DEFAULT now()
+    )`,
+    `INSERT INTO organizers (id, name, slug, description, is_verified)
+      VALUES ('00000000-0000-0000-0000-000000000001', 'Penyelenggara Utama', 'default', 'Penyelenggara resmi platform Ambiltiketnya.', true)
+      ON CONFLICT (id) DO NOTHING`,
+    `ALTER TABLE events ADD COLUMN IF NOT EXISTS organizer_id uuid REFERENCES organizers(id)`,
+    `UPDATE events SET organizer_id = '00000000-0000-0000-0000-000000000001' WHERE organizer_id IS NULL`,
+    `ALTER TABLE users ADD COLUMN IF NOT EXISTS organizer_id uuid REFERENCES organizers(id)`
   ];
   for (const sql of ddlStatements) {
     try {
@@ -573,6 +600,21 @@ export default {
 
         const sess = await newSession(env, vol.id);
         return json({ ok: true, data: { session: sess, user: vol, role: 'gate_staff', name: 'Petugas Gerbang', eventId: ev.id, eventName: ev.name } });
+      }
+
+      if (fn === 'organizerPublic') {
+        const [p] = args;
+        const slug = String(p && p.slug || '').trim();
+        const id = String(p && p.id || '').trim();
+        if (!slug && !id) throw new Error('SLUG_OR_ID_REQUIRED');
+        await ensureFeatureTables(env);
+        const orgs = await neonQuery(env, `SELECT id, name, slug, description, logo_url, banner_url, contact_email, contact_phone, is_verified, created_at FROM organizers WHERE ($1::text <> '' AND slug=$1::text) OR ($2::text <> '' AND id=$2::uuid) LIMIT 1`, [slug, id || null]);
+        if (!orgs.length) return json({ ok: true, data: { found: false } });
+        const org = orgs[0];
+        const events = await neonQuery(env, `SELECT id, name, category, banner_url, description, event_date::text AS edate, to_char(start_time,'HH24:MI') AS stime, to_char(end_time,'HH24:MI') AS etime, location, quota, is_paid, price, is_active,
+          coalesce((SELECT sum(qty) FROM orders o WHERE o.event_id=events.id AND o.status<>'cancelled' AND o.kind<>'walk_in'),0)::int AS booked
+          FROM events WHERE organizer_id=$1::uuid AND is_active=true ORDER BY event_date ASC`, [org.id]);
+        return json({ ok: true, data: { found: true, organizer: org, events } });
       }
 
       if (fn === 'ticketPublic') {
@@ -1087,6 +1129,15 @@ export default {
 
         if (action === 'stats') {
           needRole(1);
+          let filterSql = '';
+          const qParams = [];
+          if (u.role === 2 && u.organizer_id) {
+            filterSql = ' WHERE e.organizer_id = $1::uuid ';
+            qParams.push(u.organizer_id);
+          } else if (params.organizerId) {
+            filterSql = ' WHERE e.organizer_id = $1::uuid ';
+            qParams.push(params.organizerId);
+          }
           const r = await neonQuery(env, `SELECT e.id,e.name,e.quota,coalesce(e.walkin_quota,0)::int AS walkin_quota,e.is_active,
             coalesce(sum(o.qty) FILTER (WHERE o.status='confirmed' AND o.kind<>'walk_in'),0)::int AS booked,
             coalesce(sum(o.checked_in) FILTER (WHERE o.status='confirmed' AND o.kind<>'walk_in'),0)::int AS checked,
@@ -1094,22 +1145,40 @@ export default {
             coalesce(sum(o.checked_in) FILTER (WHERE o.status='confirmed' AND o.kind='walk_in'),0)::int AS walkin_checked,
             coalesce(sum(o.qty) FILTER (WHERE o.status='pending_payment'),0)::int AS pending,
             coalesce(sum(o.total) FILTER (WHERE o.status='confirmed'),0)::int AS revenue
-            FROM events e LEFT JOIN orders o ON o.event_id=e.id GROUP BY e.id ORDER BY e.event_date`);
+            FROM events e LEFT JOIN orders o ON o.event_id=e.id ${filterSql} GROUP BY e.id ORDER BY e.event_date`, qParams);
           return json({ ok: true, data: r });
         }
 
         if (action === 'adminEvents') {
           needRole(1);
-          const r = await neonQuery(env, `SELECT e.*,
+          let filterSql = '';
+          const qParams = [];
+          if (u.role === 2 && u.organizer_id) {
+            filterSql = ' WHERE e.organizer_id = $1::uuid ';
+            qParams.push(u.organizer_id);
+          } else if (params.organizerId) {
+            filterSql = ' WHERE e.organizer_id = $1::uuid ';
+            qParams.push(params.organizerId);
+          }
+          const r = await neonQuery(env, `SELECT e.*, coalesce(org.name, 'Default') AS organizer_name, coalesce(org.slug, 'default') AS organizer_slug,
             coalesce((SELECT sum(qty) FROM orders o WHERE o.event_id=e.id AND o.status<>'cancelled' AND o.kind<>'walk_in'),0)::int AS sold,
             coalesce((SELECT sum(qty) FROM orders o WHERE o.event_id=e.id AND o.status<>'cancelled' AND o.kind='walk_in'),0)::int AS walkin_sold,
             (coalesce(e.walkin_quota,0) - coalesce((SELECT sum(qty) FROM orders o WHERE o.event_id=e.id AND o.status<>'cancelled' AND o.kind='walk_in'),0))::int AS walkin_remaining
-            FROM events e ORDER BY e.event_date DESC, e.start_time`);
+            FROM events e
+            LEFT JOIN organizers org ON org.id=e.organizer_id
+            ${filterSql}
+            ORDER BY e.event_date DESC, e.start_time`, qParams);
           return json({ ok: true, data: r });
         }
 
         if (action === 'orders' || action === 'ordersAll') {
           needRole(2);
+          let orgFilter = '';
+          const qParams = [params.eventId || null, params.status || null];
+          if (u.role === 2 && u.organizer_id) {
+            orgFilter = ' AND e.organizer_id = $3::uuid ';
+            qParams.push(u.organizer_id);
+          }
           const sql = `SELECT o.id,o.order_code,o.ticket_code,o.qty,o.total,o.status,o.checked_in,o.checked_in_at,o.created_at,o.kind,
             coalesce(o.custom_answers, '{}'::jsonb) AS custom_answers,
             coalesce(o.emailed, false) AS emailed, o.email_error, o.emailed_at,
@@ -1120,15 +1189,88 @@ export default {
             CASE WHEN o.kind IN ('invitation','walk_in') THEN o.guest_org ELSE u.church END AS church,
             e.id AS event_id,e.name AS event_name,e.terms,e.location,e.event_date,e.start_time,e.announcement
             FROM orders o JOIN users u ON u.id=o.user_id JOIN events e ON e.id=o.event_id
-            WHERE ($1::uuid IS NULL OR o.event_id=$1::uuid) AND ($2::text IS NULL OR o.status=$2::text)
+            WHERE ($1::uuid IS NULL OR o.event_id=$1::uuid) AND ($2::text IS NULL OR o.status=$2::text) ${orgFilter}
             ORDER BY o.created_at DESC LIMIT 5000`;
-          const rows = await neonQuery(env, sql, [params.eventId || null, params.status || null]);
+          const rows = await neonQuery(env, sql, qParams);
           return json({ ok: true, data: action === 'ordersAll' ? { rows, truncated: false } : rows });
+        }
+
+        if (action === 'organizersList') {
+          needRole(2);
+          await ensureFeatureTables(env);
+          let sql = `SELECT o.*,
+            coalesce((SELECT count(e.id) FROM events e WHERE e.organizer_id=o.id), 0)::int AS event_count,
+            coalesce((SELECT sum(ord.qty) FROM orders ord JOIN events ev ON ev.id=ord.event_id WHERE ev.organizer_id=o.id AND ord.status='confirmed'), 0)::int AS total_sold
+            FROM organizers o `;
+          const qParams = [];
+          if (u.role === 2 && u.organizer_id) {
+            sql += ` WHERE o.id = $1::uuid `;
+            qParams.push(u.organizer_id);
+          }
+          sql += ` ORDER BY o.created_at ASC `;
+          const r = await neonQuery(env, sql, qParams);
+          return json({ ok: true, data: r });
+        }
+
+        if (action === 'organizerSave') {
+          needRole(2);
+          await ensureFeatureTables(env);
+          const name = String(params.name || '').trim();
+          if (!name) throw new Error('NAME_REQUIRED');
+          let slug = String(params.slug || '').trim().toLowerCase().replace(/[^a-z0-9_-]/g, '-').replace(/^-+|-+$/g, '');
+          if (!slug) slug = name.toLowerCase().replace(/[^a-z0-9_-]/g, '-').replace(/^-+|-+$/g, '');
+
+          let id = params.id ? String(params.id).trim() : null;
+          if (u.role === 2) {
+            if (!u.organizer_id || (id && id !== u.organizer_id)) throw new Error('FORBIDDEN');
+            id = u.organizer_id;
+          }
+
+          const desc = String(params.description || '').trim();
+          const logo = String(params.logo_url || '').trim();
+          const banner = String(params.banner_url || '').trim();
+          const email = String(params.contact_email || '').trim();
+          const phone = String(params.contact_phone || '').trim();
+          const bankName = String(params.bank_name || '').trim();
+          const bankAcc = String(params.bank_account_no || '').trim();
+          const bankHolder = String(params.bank_account_holder || '').trim();
+          const isVerified = u.role >= 3 ? (params.is_verified !== false) : true;
+
+          if (!id) {
+            needRole(3);
+            const r = await neonQuery(env, `INSERT INTO organizers(name, slug, description, logo_url, banner_url, contact_email, contact_phone, bank_name, bank_account_no, bank_account_holder, is_verified)
+              VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+              ON CONFLICT (slug) DO UPDATE SET name=EXCLUDED.name, description=EXCLUDED.description, logo_url=EXCLUDED.logo_url, banner_url=EXCLUDED.banner_url, contact_email=EXCLUDED.contact_email, contact_phone=EXCLUDED.contact_phone, bank_name=EXCLUDED.bank_name, bank_account_no=EXCLUDED.bank_account_no, bank_account_holder=EXCLUDED.bank_account_holder
+              RETURNING id`, [name, slug, desc, logo, banner, email, phone, bankName, bankAcc, bankHolder, isVerified]);
+            return json({ ok: true, data: r[0] });
+          } else {
+            const r = await neonQuery(env, `UPDATE organizers SET name=$1, slug=$2, description=$3, logo_url=$4, banner_url=$5, contact_email=$6, contact_phone=$7, bank_name=$8, bank_account_no=$9, bank_account_holder=$10, is_verified=$11 WHERE id=$12::uuid RETURNING id`, [name, slug, desc, logo, banner, email, phone, bankName, bankAcc, bankHolder, isVerified, id]);
+            return json({ ok: true, data: r[0] });
+          }
+        }
+
+        if (action === 'userAssignOrganizer') {
+          needRole(3);
+          await ensureFeatureTables(env);
+          const userId = String(params.userId || '').trim();
+          const orgId = params.organizerId ? String(params.organizerId).trim() : null;
+          const role = params.role !== undefined ? parseInt(params.role, 10) : undefined;
+          if (!userId) throw new Error('USER_ID_REQUIRED');
+          if (role !== undefined) {
+            await neonQuery(env, `UPDATE users SET organizer_id=$1, role=$2 WHERE id=$3::uuid`, [orgId, role, userId]);
+          } else {
+            await neonQuery(env, `UPDATE users SET organizer_id=$1 WHERE id=$2::uuid`, [orgId, userId]);
+          }
+          return json({ ok: true, data: true });
         }
 
         if (action === 'users') {
           needRole(3);
-          const r = await neonQuery(env, `SELECT id,name,email,whatsapp,age,church,role,coalesce(picture,'') AS picture,created_at FROM users ORDER BY created_at DESC LIMIT 5000`);
+          const r = await neonQuery(env, `SELECT u.id,u.name,u.email,u.whatsapp,u.age,u.church,u.role,coalesce(u.picture,'') AS picture,u.created_at,
+            u.organizer_id, coalesce(org.name, '-') AS organizer_name
+            FROM users u
+            LEFT JOIN organizers org ON org.id=u.organizer_id
+            ORDER BY u.created_at DESC LIMIT 5000`);
           return json({ ok: true, data: r });
         }
 
@@ -1254,7 +1396,20 @@ export default {
         }
 
         if (action === 'saveEvent') {
-          needRole(3);
+          needRole(2);
+          let orgId = '00000000-0000-0000-0000-000000000001';
+          if (u.role === 2) {
+            orgId = u.organizer_id || '00000000-0000-0000-0000-000000000001';
+            if (params.id) {
+              const existing = await neonQuery(env, `SELECT organizer_id FROM events WHERE id=$1::uuid`, [params.id]);
+              if (existing.length && existing[0].organizer_id && existing[0].organizer_id !== orgId) {
+                throw new Error('FORBIDDEN');
+              }
+            }
+          } else if (u.role >= 3) {
+            orgId = params.organizer_id || '00000000-0000-0000-0000-000000000001';
+          }
+
           const paid = !!params.is_paid, quota = parseInt(params.quota, 10), maxp = parseInt(params.max_per_order, 10), walkinQuota = parseInt(params.walkin_quota, 10) || 0;
           const customFields = Array.isArray(params.custom_fields) ? JSON.stringify(params.custom_fields) : (params.custom_fields || '[]');
           const enableNametag = !!params.enable_nametag;
@@ -1263,15 +1418,16 @@ export default {
 
           const v = [params.name.trim(), params.category || '', params.banner_url || '', params.description || '', params.announcement || '', params.event_date, params.start_time, params.end_time || null, params.location.trim(),
             quota, walkinQuota, paid, paid ? Math.max(0, parseInt(params.price, 10) || 0) : 0, maxp, !!params.one_order_per_account, params.is_active !== false, params.payment_instructions || '', String(params.terms || '').slice(0, 8000),
-            customFields, enableNametag, enableCertificate, certConfig];
-          const r = await neonQuery(env, `INSERT INTO events(name,category,banner_url,description,announcement,event_date,start_time,end_time,location,quota,walkin_quota,is_paid,price,max_per_order,one_order_per_account,is_active,payment_instructions,terms,custom_fields,enable_nametag,enable_certificate,certificate_config,id)
-            VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19::jsonb,$20::boolean,$21::boolean,$22::jsonb,$23::uuid) ON CONFLICT(id) DO UPDATE SET
+            customFields, enableNametag, enableCertificate, certConfig, orgId];
+          const r = await neonQuery(env, `INSERT INTO events(name,category,banner_url,description,announcement,event_date,start_time,end_time,location,quota,walkin_quota,is_paid,price,max_per_order,one_order_per_account,is_active,payment_instructions,terms,custom_fields,enable_nametag,enable_certificate,certificate_config,organizer_id,id)
+            VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19::jsonb,$20::boolean,$21::boolean,$22::jsonb,$23::uuid,$24::uuid) ON CONFLICT(id) DO UPDATE SET
             name=EXCLUDED.name,category=EXCLUDED.category,banner_url=EXCLUDED.banner_url,description=EXCLUDED.description,announcement=EXCLUDED.announcement,
             quota=EXCLUDED.quota,walkin_quota=EXCLUDED.walkin_quota,is_paid=EXCLUDED.is_paid,is_active=EXCLUDED.is_active,price=EXCLUDED.price,
             event_date=EXCLUDED.event_date,start_time=EXCLUDED.start_time,end_time=EXCLUDED.end_time,location=EXCLUDED.location,
             max_per_order=EXCLUDED.max_per_order,one_order_per_account=EXCLUDED.one_order_per_account,
             payment_instructions=EXCLUDED.payment_instructions,terms=EXCLUDED.terms,
-            custom_fields=EXCLUDED.custom_fields,enable_nametag=EXCLUDED.enable_nametag,enable_certificate=EXCLUDED.enable_certificate,certificate_config=EXCLUDED.certificate_config
+            custom_fields=EXCLUDED.custom_fields,enable_nametag=EXCLUDED.enable_nametag,enable_certificate=EXCLUDED.enable_certificate,certificate_config=EXCLUDED.certificate_config,
+            organizer_id=EXCLUDED.organizer_id
             RETURNING id`, [...v, params.id || crypto.randomUUID()]);
           return json({ ok: true, data: r[0] });
         }

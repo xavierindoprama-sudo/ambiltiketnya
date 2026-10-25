@@ -33,7 +33,7 @@ function doGet(e) {
 /* ---------- API JSON untuk tampilan yang dihosting di luar Apps Script (mis. GitHub Pages) ----------
  * Klien memanggil POST ke alamat /exec dengan isi {"fn":"nama","args":[...]} (Content-Type: text/plain agar tanpa preflight CORS).
  * Hanya fungsi pada daftar putih di bawah yang bisa dipanggil; semuanya sama dengan yang dipakai google.script.run. */
-const API_FNS = { init: init, register: register, loginPw: loginPw, loginGoogle: loginGoogle, forgotRequest: forgotRequest, forgotReset: forgotReset, legalPublic: legalPublic, ticketPublic: ticketPublic, eventsPublic: eventsPublic, feedbackPublic: feedbackPublic, surveyInfo: surveyInfo, surveyStagePoll: surveyStagePoll, api: api, migrateOauth: migrateOauth, gateLogin: gateLogin, ticketFacilities: ticketFacilities, sessionSelfCheckin: sessionSelfCheckin, checkpointPublicInfo: checkpointPublicInfo, sessionStageLiveCount: sessionStageLiveCount, certificateVerify: certificateVerify };
+const API_FNS = { init: init, register: register, loginPw: loginPw, loginGoogle: loginGoogle, forgotRequest: forgotRequest, forgotReset: forgotReset, legalPublic: legalPublic, ticketPublic: ticketPublic, eventsPublic: eventsPublic, feedbackPublic: feedbackPublic, surveyInfo: surveyInfo, surveyStagePoll: surveyStagePoll, api: api, migrateOauth: migrateOauth, gateLogin: gateLogin, ticketFacilities: ticketFacilities, sessionSelfCheckin: sessionSelfCheckin, checkpointPublicInfo: checkpointPublicInfo, sessionStageLiveCount: sessionStageLiveCount, certificateVerify: certificateVerify, organizerPublic: organizerPublic };
 function jsonOut(o) { return ContentService.createTextOutput(JSON.stringify(o === undefined ? null : o)).setMimeType(ContentService.MimeType.JSON); }
 function doPost(e) {
   let out;
@@ -517,7 +517,10 @@ const ACTIONS = {
   } },
   walkinCreate:{ min: 1, fn: walkinCreate },
   orders:      { min: 2, fn: adminOrders },
-  users:       { min: 3, fn: () => q(`SELECT id,name,email,whatsapp,age,church,role,coalesce(picture,'') AS picture,created_at FROM users ORDER BY created_at DESC LIMIT 5000`) },
+  users:       { min: 3, fn: () => q(`SELECT u.id,u.name,u.email,u.whatsapp,u.age,u.church,u.role,coalesce(u.picture,'') AS picture,u.created_at, u.organizer_id, coalesce(org.name, '-') AS organizer_name FROM users u LEFT JOIN organizers org ON org.id=u.organizer_id ORDER BY u.created_at DESC LIMIT 5000`) },
+  organizersList: { min: 2, fn: organizersList },
+  organizerSave:  { min: 2, fn: organizerSave },
+  userAssignOrganizer: { min: 3, fn: userAssignOrganizer },
   migrateOauth:{ min: 3, fn: () => migrateOauth() },
   saveEvent:   { min: 3, fn: saveEvent },
   toggleEvent: { min: 3, fn: (u, p) => q(`UPDATE events SET is_active=$2::bool WHERE id=$1::uuid RETURNING id`, [p.id, !!p.active]) && true },
@@ -2102,3 +2105,80 @@ function certificateVerify(p) {
   };
 }
 
+function organizerPublic(p) {
+  var slug = String(p && p.slug || '').trim().toLowerCase();
+  if (!slug) throw new Error('NOT_FOUND');
+  var orgs = neonQuery(`SELECT id, name, slug, description, logo_url, contact_whatsapp, contact_email, is_verified FROM organizers WHERE lower(slug)=$1`, [slug]);
+  if (!orgs || !orgs.length) return { found: false };
+  var org = orgs[0];
+  var events = neonQuery(`SELECT e.id,e.name,e.category,e.banner_url,e.description,e.event_date,e.start_time,e.end_time,e.location,e.quota,e.is_paid,e.price,e.max_per_order,e.terms,
+    (e.quota - coalesce((SELECT sum(qty) FROM orders o WHERE o.event_id=e.id AND o.status<>'cancelled' AND o.kind<>'walk_in'),0))::int AS remaining
+    FROM events e WHERE e.organizer_id=$1::uuid AND e.is_active ORDER BY e.event_date, e.start_time`, [org.id]);
+  return { found: true, organizer: org, events: events };
+}
+
+
+
+
+function organizersList(u) {
+  var sql = `SELECT o.*,
+    coalesce((SELECT count(e.id) FROM events e WHERE e.organizer_id=o.id), 0)::int AS event_count,
+    coalesce((SELECT sum(ord.qty) FROM orders ord JOIN events ev ON ev.id=ord.event_id WHERE ev.organizer_id=o.id AND ord.status='confirmed'), 0)::int AS total_sold
+    FROM organizers o `;
+  var qParams = [];
+  if (u.role === 2 && u.organizer_id) {
+    sql += ` WHERE o.id = $1::uuid `;
+    qParams.push(u.organizer_id);
+  }
+  sql += ` ORDER BY o.created_at ASC `;
+  return neonQuery(sql, qParams);
+}
+
+function organizerSave(u, p) {
+  var name = String(p.name || '').trim();
+  if (!name) throw new Error('NAME_REQUIRED');
+  var slug = String(p.slug || '').trim().toLowerCase().replace(/[^a-z0-9_-]/g, '-').replace(/^-+|-+$/g, '');
+  if (!slug) slug = name.toLowerCase().replace(/[^a-z0-9_-]/g, '-').replace(/^-+|-+$/g, '');
+
+  var id = p.id ? String(p.id).trim() : null;
+  if (u.role === 2) {
+    if (!u.organizer_id || (id && id !== u.organizer_id)) throw new Error('FORBIDDEN');
+    id = u.organizer_id;
+  }
+
+  var desc = String(p.description || '').trim();
+  var logo = String(p.logo_url || '').trim();
+  var banner = String(p.banner_url || '').trim();
+  var email = String(p.contact_email || '').trim();
+  var phone = String(p.contact_phone || '').trim();
+  var bankName = String(p.bank_name || '').trim();
+  var bankAcc = String(p.bank_account_no || '').trim();
+  var bankHolder = String(p.bank_account_holder || '').trim();
+  var isVerified = u.role >= 3 ? (p.is_verified !== false) : true;
+
+  if (!id) {
+    if (u.role < 3) throw new Error('FORBIDDEN');
+    var r = neonQuery(`INSERT INTO organizers(name, slug, description, logo_url, banner_url, contact_email, contact_phone, bank_name, bank_account_no, bank_account_holder, is_verified)
+      VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+      ON CONFLICT (slug) DO UPDATE SET name=EXCLUDED.name, description=EXCLUDED.description, logo_url=EXCLUDED.logo_url, banner_url=EXCLUDED.banner_url, contact_email=EXCLUDED.contact_email, contact_phone=EXCLUDED.contact_phone, bank_name=EXCLUDED.bank_name, bank_account_no=EXCLUDED.bank_account_no, bank_account_holder=EXCLUDED.bank_account_holder
+      RETURNING id`, [name, slug, desc, logo, banner, email, phone, bankName, bankAcc, bankHolder, isVerified]);
+    return r[0];
+  } else {
+    var r = neonQuery(`UPDATE organizers SET name=$1, slug=$2, description=$3, logo_url=$4, banner_url=$5, contact_email=$6, contact_phone=$7, bank_name=$8, bank_account_no=$9, bank_account_holder=$10, is_verified=$11 WHERE id=$12::uuid RETURNING id`, [name, slug, desc, logo, banner, email, phone, bankName, bankAcc, bankHolder, isVerified, id]);
+    return r[0];
+  }
+}
+
+function userAssignOrganizer(u, p) {
+  if (u.role < 3) throw new Error('FORBIDDEN');
+  var userId = String(p.userId || '').trim();
+  var orgId = p.organizerId ? String(p.organizerId).trim() : null;
+  var role = p.role !== undefined ? parseInt(p.role, 10) : undefined;
+  if (!userId) throw new Error('USER_ID_REQUIRED');
+  if (role !== undefined) {
+    neonQuery(`UPDATE users SET organizer_id=$1, role=$2 WHERE id=$3::uuid`, [orgId, role, userId]);
+  } else {
+    neonQuery(`UPDATE users SET organizer_id=$1 WHERE id=$2::uuid`, [orgId, userId]);
+  }
+  return true;
+}
