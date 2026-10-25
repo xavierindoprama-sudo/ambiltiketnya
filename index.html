@@ -1714,7 +1714,7 @@ function paintOfflineStatus(){const badge=$('#off_badge_area'),info=$('#off_info
  if(info){if(!evIds.length)info.innerHTML='<span class="muted">Belum ada data acara yang disimpan di HP.</span>';
   else{const totalTix=evIds.reduce((a,k)=>a+(store[k].count||0),0);info.innerHTML=`<span style="color:var(--ok)">✓ <b>${totalTix}</b> ${t('off_cached_cnt')} (${evIds.map(k=>esc(store[k].eventName)).join(', ')})</span>`}}}
 
-async function evList(c){try{S.aev=await api('adminEvents')}catch(e){return fail(e)}
+async function evList(c){try{if(!S.aev)S.aev=await api('adminEvents')}catch(e){return fail(e)}
  c.innerHTML=(canEdit()?`<div class="acts"><button class="btn pri" data-act="evForm" style="flex:none">+ ${t('new_ev')}</button></div>`:'')+S.aev.map(e=>`<div class="card er"><img src="${esc(e.banner_url)}" onerror="this.style.visibility='hidden'"><div style="flex:1;min-width:0"><b>${esc(e.name)}</b>${e.organizer_name?`<span class="badge" style="background:var(--card-sub);font-size:11px;margin-left:6px;padding:2px 8px;border-radius:10px">🏢 ${esc(e.organizer_name)}</span>`:''}<div class="muted">${fd(e.event_date)} &#183; Online: ${e.sold}/${e.quota} ${t('tix')}${e.walkin_quota?` &#183; Walk-in: ${e.walkin_sold||0}/${e.walkin_quota}`:''} &#183; ${rp(e.is_paid?e.price:0)}</div></div>${canEdit()?`<label class="sw"><input type="checkbox" data-ch="tgl" data-id="${e.id}" ${e.is_active?'checked':''}><i></i></label>${hasMod(e,'guestbook')?`<a class="btn sm" href="${location.pathname}?stage=greeting&ev=${e.id}" target="_blank" title="Buka Layar Panggung Ucapan (Live Wall)">📺 Layar Ucapan</a>`:""}<button class="btn sm" data-act="cpManageModal" data-id="${e.id}" title="Kelola Pos Check-In &amp; Fasilitas">📍 Pos Check-In</button><button class="btn sm" data-act="gatelink" data-id="${e.id}" title="${t('gate_pass')}">📋 ${t('gate_pass')}</button><button class="btn sm ${getCurEvId()===e.id?'ok':'pri'}" data-act="focusEv" data-id="${e.id}" title="Kelola dan fokuskan ke acara ini" style="font-weight:700">${getCurEvId()===e.id?'✓ Dikelola':'🎯 Kelola'}</button><button class="btn sm" data-act="evForm" data-id="${e.id}">${t('edit')}</button>`:stPill(e.is_active?'confirmed':'cancelled')}</div>`).join('')}
 function evForm(id){if(rk()>=3&&(!S.organizers||!S.organizers.length)){api('organizersList').then(r=>{S.organizers=r;if($('#ef'))paintDash();}).catch(()=>{});}const e=S.aev.find(x=>x.id===id)||{name:'',category:'',quota:100,walkin_quota:0,banner_url:'',event_date:'',start_time:'19:00',end_time:'',location:'',description:'',announcement:'',is_paid:false,price:0,max_per_order:1,one_order_per_account:false,is_active:true,payment_instructions:'',terms:defTerms()};S.paid=!!e.is_paid;
  const f=(k,l,v,ty)=>`<div><label>${t(l)}</label><input name="${k}" type="${ty||'text'}" value="${esc(v)}"></div>`;
@@ -5505,9 +5505,16 @@ const NL=String.fromCharCode(10),find=(a,id)=>a.find(x=>x.id===id),A={
 window.addEventListener('online',()=>paintOfflineStatus());
 window.addEventListener('offline',()=>paintOfflineStatus());
 document.addEventListener('click',e=>{const el=e.target.closest('[data-act]');if(el&&A[el.dataset.act])A[el.dataset.act](el,e)});
+let _oqTimer=null, _uqTimer=null;
 document.addEventListener('input',e=>{
-  if(e.target.id==='oq'){S.ordPage=1;paintOrders()}
-  else if(e.target.id==='uq'){S.usrPage=1;paintUsers()}
+  if(e.target.id==='oq'){
+    clearTimeout(_oqTimer);
+    _oqTimer=setTimeout(()=>{ S.ordPage=1; paintOrders(); }, 120);
+  }
+  else if(e.target.id==='uq'){
+    clearTimeout(_uqTimer);
+    _uqTimer=setTimeout(()=>{ S.usrPage=1; paintUsers(); }, 120);
+  }
   else if(e.target.id==='dp_prize_inp'){
     S_dp.prize=e.target.value.trim();
     dpBroadcast({action:'prize',prize:e.target.value});

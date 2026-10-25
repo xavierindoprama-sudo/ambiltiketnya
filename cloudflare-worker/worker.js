@@ -205,12 +205,21 @@ function eventsSql(uidExpr) {
     coalesce(e.enable_nametag, false)::boolean AS enable_nametag,
     coalesce(e.enable_certificate, false)::boolean AS enable_certificate,
     coalesce(e.certificate_config, '{}'::jsonb) AS certificate_config,
-    (e.quota - coalesce((SELECT sum(qty) FROM orders o WHERE o.event_id=e.id AND o.status<>'cancelled' AND o.kind<>'walk_in'),0))::int AS remaining,
-    (coalesce(e.walkin_quota,0) - coalesce((SELECT sum(qty) FROM orders o WHERE o.event_id=e.id AND o.status<>'cancelled' AND o.kind='walk_in'),0))::int AS walkin_remaining,
+    (e.quota - coalesce(os.sold, 0))::int AS remaining,
+    (coalesce(e.walkin_quota,0) - coalesce(os.walkin_sold, 0))::int AS walkin_remaining,
     EXISTS(SELECT 1 ${mine}) AS has_order,
     (SELECT o.id ${mine} ORDER BY o.created_at DESC LIMIT 1) AS my_order,
     (SELECT o.status ${mine} ORDER BY o.created_at DESC LIMIT 1) AS my_status
-    FROM events e WHERE e.is_active ORDER BY e.event_date, e.start_time`;
+    FROM events e
+    LEFT JOIN (
+      SELECT event_id,
+        sum(CASE WHEN kind<>'walk_in' THEN qty ELSE 0 END) AS sold,
+        sum(CASE WHEN kind='walk_in' THEN qty ELSE 0 END) AS walkin_sold
+      FROM orders
+      WHERE status<>'cancelled'
+      GROUP BY event_id
+    ) os ON os.event_id = e.id
+    WHERE e.is_active ORDER BY e.event_date, e.start_time`;
 }
 
 async function publicEventsList(env) {
@@ -221,10 +230,19 @@ async function publicEventsList(env) {
     coalesce(e.enable_nametag, false)::boolean AS enable_nametag,
     coalesce(e.enable_certificate, false)::boolean AS enable_certificate,
     coalesce(e.certificate_config, '{}'::jsonb) AS certificate_config,
-    (e.quota - coalesce((SELECT sum(qty) FROM orders o WHERE o.event_id=e.id AND o.status<>'cancelled' AND o.kind<>'walk_in'),0))::int AS remaining,
-    (coalesce(e.walkin_quota,0) - coalesce((SELECT sum(qty) FROM orders o WHERE o.event_id=e.id AND o.status<>'cancelled' AND o.kind='walk_in'),0))::int AS walkin_remaining,
+    (e.quota - coalesce(os.sold, 0))::int AS remaining,
+    (coalesce(e.walkin_quota,0) - coalesce(os.walkin_sold, 0))::int AS walkin_remaining,
     false AS has_order, null AS my_order, null AS my_status
-    FROM events e WHERE e.is_active ORDER BY e.event_date, e.start_time`);
+    FROM events e
+    LEFT JOIN (
+      SELECT event_id,
+        sum(CASE WHEN kind<>'walk_in' THEN qty ELSE 0 END) AS sold,
+        sum(CASE WHEN kind='walk_in' THEN qty ELSE 0 END) AS walkin_sold
+      FROM orders
+      WHERE status<>'cancelled'
+      GROUP BY event_id
+    ) os ON os.event_id = e.id
+    WHERE e.is_active ORDER BY e.event_date, e.start_time`);
 }
 
 // Email Sender (Brevo -> MailerSend -> Resend)
@@ -300,9 +318,9 @@ const LEGAL = {
   cookie: { title: 'Kebijakan Cookie', text: '## 1. Cookie Teknis\n- Kami hanya menyimpan token sesi di peramban Anda untuk keperluan autentikasi masuk.' }
 };
 
-let _tablesEnsured = false;
-async function ensureFeatureTables(env) {
-  if (_tablesEnsured) return;
+let _tablesEnsured = true;
+async function ensureFeatureTables(env, force = false) {
+  if (_tablesEnsured && !force) return;
   const ddlStatements = [
     `CREATE TABLE IF NOT EXISTS event_feedbacks (
       id              uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -1356,11 +1374,19 @@ export default {
             qParams.push(params.organizerId);
           }
           const r = await neonQuery(env, `SELECT e.*, coalesce(org.name, 'Default') AS organizer_name, coalesce(org.slug, 'default') AS organizer_slug,
-            coalesce((SELECT sum(qty) FROM orders o WHERE o.event_id=e.id AND o.status<>'cancelled' AND o.kind<>'walk_in'),0)::int AS sold,
-            coalesce((SELECT sum(qty) FROM orders o WHERE o.event_id=e.id AND o.status<>'cancelled' AND o.kind='walk_in'),0)::int AS walkin_sold,
-            (coalesce(e.walkin_quota,0) - coalesce((SELECT sum(qty) FROM orders o WHERE o.event_id=e.id AND o.status<>'cancelled' AND o.kind='walk_in'),0))::int AS walkin_remaining
+            coalesce(os.sold, 0)::int AS sold,
+            coalesce(os.walkin_sold, 0)::int AS walkin_sold,
+            (coalesce(e.walkin_quota, 0) - coalesce(os.walkin_sold, 0))::int AS walkin_remaining
             FROM events e
             LEFT JOIN organizers org ON org.id=e.organizer_id
+            LEFT JOIN (
+              SELECT event_id,
+                sum(CASE WHEN kind<>'walk_in' THEN qty ELSE 0 END) AS sold,
+                sum(CASE WHEN kind='walk_in' THEN qty ELSE 0 END) AS walkin_sold
+              FROM orders
+              WHERE status<>'cancelled'
+              GROUP BY event_id
+            ) os ON os.event_id = e.id
             ${filterSql}
             ORDER BY e.event_date DESC, e.start_time`, qParams);
           return json({ ok: true, data: r });
@@ -1368,18 +1394,27 @@ export default {
 
         if (action === 'orders' || action === 'ordersAll') {
           needRole(2);
-          let orgFilter = '';
-          const qParams = [params.eventId || null, params.status || null];
-          if (u.role === 2 && u.organizer_id) {
-            orgFilter = ' AND e.organizer_id = $3::uuid ';
-            qParams.push(u.organizer_id);
+          const qParams = [];
+          const whereClauses = [];
+          if (params.eventId) {
+            qParams.push(params.eventId);
+            whereClauses.push(`o.event_id = $${qParams.length}::uuid`);
           }
+          if (params.status) {
+            qParams.push(params.status);
+            whereClauses.push(`o.status = $${qParams.length}::text`);
+          }
+          if (u.role === 2 && u.organizer_id) {
+            qParams.push(u.organizer_id);
+            whereClauses.push(`e.organizer_id = $${qParams.length}::uuid`);
+          }
+          const whereSql = whereClauses.length ? `WHERE ${whereClauses.join(' AND ')}` : '';
           const sql = `SELECT o.id,o.order_code,o.ticket_code,o.qty,o.total,o.status,o.checked_in,o.checked_in_at,o.created_at,o.kind,
             coalesce(o.custom_answers, '{}'::jsonb) AS custom_answers,
-          coalesce(o.rsvp_status, '') AS rsvp_status,
-          coalesce(o.plus_one_count, 0)::int AS plus_one_count,
-          coalesce(o.guestbook_message, '') AS guestbook_message,
-          coalesce(o.table_assignment, '') AS table_assignment,
+            coalesce(o.rsvp_status, '') AS rsvp_status,
+            coalesce(o.plus_one_count, 0)::int AS plus_one_count,
+            coalesce(o.guestbook_message, '') AS guestbook_message,
+            coalesce(o.table_assignment, '') AS table_assignment,
             coalesce(o.emailed, false) AS emailed, o.email_error, o.emailed_at,
             CASE WHEN o.kind IN ('invitation','walk_in') THEN o.guest_name ELSE u.name END AS name,
             CASE WHEN o.kind='invitation' THEN 'Undangan' WHEN o.kind='walk_in' THEN coalesce(nullif(o.guest_email,''), 'Walk-In') ELSE u.email END AS email,
@@ -1388,10 +1423,16 @@ export default {
             CASE WHEN o.kind IN ('invitation','walk_in') THEN o.guest_org ELSE u.church END AS church,
             e.id AS event_id,e.name AS event_name,e.terms,e.location,e.event_date,e.start_time,e.announcement
             FROM orders o JOIN users u ON u.id=o.user_id JOIN events e ON e.id=o.event_id
-            WHERE ($1::uuid IS NULL OR o.event_id=$1::uuid) AND ($2::text IS NULL OR o.status=$2::text) ${orgFilter}
-            ORDER BY o.created_at DESC LIMIT 5000`;
+            ${whereSql}
+            ORDER BY o.created_at DESC LIMIT 3000`;
           const rows = await neonQuery(env, sql, qParams);
           return json({ ok: true, data: action === 'ordersAll' ? { rows, truncated: false } : rows });
+        }
+
+        if (action === 'adminEnsureTables') {
+          needRole(3);
+          await ensureFeatureTables(env, true);
+          return json({ ok: true, message: 'All feature tables and columns verified.' });
         }
 
         if (action === 'organizersList') {
