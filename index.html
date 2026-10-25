@@ -350,7 +350,7 @@ async function boot(){applyTheme();const tkc=ticketParam();if(tkc)return ticketV
  if(stage==='survey'){return surveyStageView(qp.get('ev')||'');}
  const surveyEv=qp.get('survey')||qp.get('fb');
  if(surveyEv){return publicSurveyView(surveyEv);}
- if(stage==='doorprize'){applyTheme();const evId=qp.get('ev')||'';if(evId)S_dp.evId=evId;S.token=ls.g('tk')||'';if(!S.token)return gate();try{S.user=await api('me',{});S.mode='admin';S.view='doorprize';if(qp.get('mode')==='screen'){return doorprizeStageScreen(evId);}$('#app').innerHTML='<div style="min-height:100vh;background:#080b18;padding:20px" id="ac"></div>';doorprizeView($('#ac'));return}catch(x){return gate()}}
+ if(stage==='doorprize'){applyTheme();const evId=qp.get('ev')||'';if(evId)S_dp.evId=evId;if(qp.get('mode')==='screen'){return doorprizeStageScreen(evId);}S.token=ls.g('tk')||'';if(!S.token)return gate();try{S.user=await api('me',{});S.mode='admin';S.view='doorprize';$('#app').innerHTML='<div style="min-height:100vh;background:#080b18;padding:20px" id="ac"></div>';doorprizeView($('#ac'));return}catch(x){return gate()}}
  if(gateEv&&gateKey){bz(1);try{const r=await pub('gateLogin',{eventId:gateEv,key:gateKey},t('loading'));bz(-1);S.token=r.session;ls.s('tk',r.session);ls.s('mode','admin');S.user=r.user||{id:'gate_volunteer',name:'Petugas Gerbang',role:'gate_staff',email:'gate_volunteer@ambiltiketnya.online'};S.mode='admin';S.view='scan';try{history.replaceState({},'',location.pathname)}catch(x){}cacheOfflineEvent(gateEv,true);call('init',S.token).then(res=>{if(res&&res.cfg)B=res.cfg}).catch(()=>{});renderAdmin();setTimeout(()=>{openScannerModal()},450);return}catch(e){bz(-1);const msg=(e&&e.message&&D['e_'+e.message])?t('e_'+e.message):errMsg(e);toast('Tautan Gate Pass tidak valid atau kedaluwarsa: '+msg,1)}}
  S.token=ls.g('tk')||'';bz(1);let r;const t0=performance.now();
  try{r=await call('init',S.token)}catch(e){bz(-1);return gate(e&&e.message==='NO_API'?'APP_API_URL belum diisi di config.js':t('e_E_GENERIC')+' (init)')}
@@ -650,19 +650,11 @@ function triggerConfetti(canvasId) {
   requestAnimationFrame(anim);
 }
 
-async function openStageWindow(url, name) {
-  let left = window.screen ? window.screen.availWidth : 0;
-  let top = 0, width = 1280, height = 720;
+function openStageWindow(url, name) {
+  let left = 0, top = 0, width = 1280, height = 720;
   try {
-    if ('getScreenDetails' in window) {
-      const screenDetails = await window.getScreenDetails();
-      const ext = screenDetails.screens.find(s => s !== screenDetails.currentScreen);
-      if (ext) {
-        left = ext.availLeft;
-        top = ext.availTop;
-        width = ext.availWidth;
-        height = ext.availHeight;
-      }
+    if (window.screen && window.screen.availWidth) {
+      left = window.screen.availWidth;
     }
   } catch(e) {}
   const w = window.open(url, name || 'atk_stage_win', `left=${left},top=${top},width=${width},height=${height},menubar=no,toolbar=no,location=no,status=no,resizable=yes`);
@@ -2502,39 +2494,36 @@ const NL=String.fromCharCode(10),find=(a,id)=>a.find(x=>x.id===id),A={
    if(!S_fb.evId)return toast('Pilih acara terlebih dahulu',1);
    const ev = (S.aev && S.aev.find(x => x.id === S_fb.evId));
    const evName = ev ? ev.name : 'Acara';
-   $('#modal').innerHTML = `
-    <div class="mbg" data-act="cm">
-     <div class="modal" onclick="event.stopPropagation()" style="max-width:440px">
-      <button class="btn x" data-act="cm">&#10005;</button>
-      <div style="text-align:center;margin-bottom:18px">
-       <div style="font-size:38px;margin-bottom:6px">📽️</div>
-       <h2 style="margin:0;font-size:20px">Tampilan Layar Videotron QR</h2>
-       <p class="muted" style="margin:6px 0 0;font-size:13px">${esc(evName)}</p>
-      </div>
-      <div style="display:flex;flex-direction:column;gap:10px">
-       <button class="btn lg pri" data-act="fbStageExt" style="display:flex;align-items:flex-start;gap:12px;padding:14px;text-align:left;border-radius:14px">
-        <span style="font-size:26px;flex:none">📽️</span>
-        <div style="flex:1">
-         <b style="font-size:14px;display:block">Extended Screen (Multi-Monitor)</b>
-         <small style="opacity:.9;font-weight:normal;font-size:12px;line-height:1.4;display:block">Buka jendela bersih untuk ditarik ke videotron / proyektor panggung. Anda tetap bisa memantau ulasan masuk di layar laptop ini.</small>
-        </div>
-       </button>
-       <button class="btn lg" data-act="fbStageMain" style="display:flex;align-items:flex-start;gap:12px;padding:14px;text-align:left;border-radius:14px">
-        <span style="font-size:26px;flex:none">🖥️</span>
-        <div style="flex:1">
-         <b style="font-size:14px;display:block">Layar Utama (1 Monitor)</b>
-         <small class="muted" style="font-size:12px;line-height:1.4;display:block">Tampilkan langsung layar penuh di tab / monitor saat ini. Cocok jika Anda hanya menggunakan 1 monitor laptop.</small>
-        </div>
-       </button>
-      </div>
-     </div>
+   modal(`
+    <button class="btn x" data-act="cm">&#10005;</button>
+    <div style="text-align:center;margin-bottom:18px">
+     <div style="font-size:38px;margin-bottom:6px">📽️</div>
+     <h2 style="margin:0;font-size:20px">Tampilan Layar Videotron QR</h2>
+     <p class="muted" style="margin:6px 0 0;font-size:13px">${esc(evName)}</p>
     </div>
-   `;
+    <div style="display:flex;flex-direction:column;gap:10px">
+     <button class="btn lg pri" data-act="fbStageExt" style="display:flex;align-items:flex-start;gap:12px;padding:14px;text-align:left;border-radius:14px;cursor:pointer">
+      <span style="font-size:26px;flex:none">📽️</span>
+      <div style="flex:1">
+       <b style="font-size:14px;display:block">Extended Screen (Multi-Monitor)</b>
+       <small style="opacity:.9;font-weight:normal;font-size:12px;line-height:1.4;display:block">Buka jendela bersih untuk ditarik ke videotron / proyektor panggung. Anda tetap bisa memantau ulasan masuk di layar laptop ini.</small>
+      </div>
+     </button>
+     <button class="btn lg" data-act="fbStageMain" style="display:flex;align-items:flex-start;gap:12px;padding:14px;text-align:left;border-radius:14px;cursor:pointer">
+      <span style="font-size:26px;flex:none">🖥️</span>
+      <div style="flex:1">
+       <b style="font-size:14px;display:block">Layar Utama (1 Monitor)</b>
+       <small class="muted" style="font-size:12px;line-height:1.4;display:block">Tampilkan langsung layar penuh di tab / monitor saat ini. Cocok jika Anda hanya menggunakan 1 monitor laptop.</small>
+      </div>
+     </button>
+    </div>
+   `);
   },
-  async fbStageExt(){
+  fbStageExt(){
    cm();
    if(!S_fb.evId)return;
-   await openStageWindow('?stage=survey&ev='+encodeURIComponent(S_fb.evId), 'atk_survey_stage');
+   const url = location.origin + location.pathname + '?stage=survey&ev=' + encodeURIComponent(S_fb.evId);
+   openStageWindow(url, 'atk_survey_stage');
    toast('Layar Videotron QR dibuka! Tarik ke layar proyektor lalu tekan F11', 0);
   },
   fbStageMain(){
@@ -2663,40 +2652,38 @@ const NL=String.fromCharCode(10),find=(a,id)=>a.find(x=>x.id===id),A={
    if(!S_dp.evId)return toast('Pilih acara terlebih dahulu',1);
    const ev = (S.aev && S.aev.find(x => x.id === S_dp.evId));
    const evName = ev ? ev.name : 'Acara';
-   $('#modal').innerHTML = `
-    <div class="mbg" data-act="cm">
-     <div class="modal" onclick="event.stopPropagation()" style="max-width:440px">
-      <button class="btn x" data-act="cm">&#10005;</button>
-      <div style="text-align:center;margin-bottom:18px">
-       <div style="font-size:38px;margin-bottom:6px">🎁</div>
-       <h2 style="margin:0;font-size:20px">Tampilan Undian Doorprize</h2>
-       <p class="muted" style="margin:6px 0 0;font-size:13px">${esc(evName)}</p>
-      </div>
-      <div style="display:flex;flex-direction:column;gap:10px">
-       <button class="btn lg pri" data-act="dpOpenExtStage" style="display:flex;align-items:flex-start;gap:12px;padding:14px;text-align:left;border-radius:14px">
-        <span style="font-size:26px;flex:none">📽️</span>
-        <div style="flex:1">
-         <b style="font-size:14px;display:block">Extended Screen (Multi-Monitor)</b>
-         <small style="opacity:.9;font-weight:normal;font-size:12px;line-height:1.4;display:block">Tampilan panggung bersih muncul di videotron / proyektor panggung, sementara tombol undi, nama hadiah, dan pemenang tetap dikontrol dari laptop Anda.</small>
-        </div>
-       </button>
-       <button class="btn lg" data-act="dpStageMain" style="display:flex;align-items:flex-start;gap:12px;padding:14px;text-align:left;border-radius:14px">
-        <span style="font-size:26px;flex:none">🖥️</span>
-        <div style="flex:1">
-         <b style="font-size:14px;display:block">Layar Utama (1 Monitor)</b>
-         <small class="muted" style="font-size:12px;line-height:1.4;display:block">Tampilkan langsung presentasi dan kontrol undian di layar saat ini (Layar Penuh).</small>
-        </div>
-       </button>
-      </div>
-     </div>
+   modal(`
+    <button class="btn x" data-act="cm">&#10005;</button>
+    <div style="text-align:center;margin-bottom:18px">
+     <div style="font-size:38px;margin-bottom:6px">🎁</div>
+     <h2 style="margin:0;font-size:20px">Tampilan Undian Doorprize</h2>
+     <p class="muted" style="margin:6px 0 0;font-size:13px">${esc(evName)}</p>
     </div>
-   `;
+    <div style="display:flex;flex-direction:column;gap:10px">
+     <button class="btn lg pri" data-act="dpOpenExtStage" style="display:flex;align-items:flex-start;gap:12px;padding:14px;text-align:left;border-radius:14px;cursor:pointer">
+      <span style="font-size:26px;flex:none">📽️</span>
+      <div style="flex:1">
+       <b style="font-size:14px;display:block">Extended Screen (Multi-Monitor)</b>
+       <small style="opacity:.9;font-weight:normal;font-size:12px;line-height:1.4;display:block">Tampilan panggung bersih muncul di videotron / proyektor panggung, sementara tombol undi, nama hadiah, dan pemenang tetap dikontrol dari laptop Anda.</small>
+      </div>
+     </button>
+     <button class="btn lg" data-act="dpStageMain" style="display:flex;align-items:flex-start;gap:12px;padding:14px;text-align:left;border-radius:14px;cursor:pointer">
+      <span style="font-size:26px;flex:none">🖥️</span>
+      <div style="flex:1">
+       <b style="font-size:14px;display:block">Layar Utama (1 Monitor)</b>
+       <small class="muted" style="font-size:12px;line-height:1.4;display:block">Tampilkan langsung presentasi dan kontrol undian di layar saat ini (Layar Penuh).</small>
+      </div>
+     </button>
+    </div>
+   `);
   },
- async dpOpenExtStage(){
+ dpOpenExtStage(){
    cm();
    if (!S_dp.evId) return toast('Pilih acara terlebih dahulu', 1);
-   await openStageWindow('?stage=doorprize&mode=screen&ev=' + encodeURIComponent(S_dp.evId), 'atk_dp_stage');
+   const url = location.origin + location.pathname + '?stage=doorprize&mode=screen&ev=' + encodeURIComponent(S_dp.evId);
+   openStageWindow(url, 'atk_dp_stage');
    toast('Layar Panggung dibuka! Tarik ke layar videotron lalu tekan F11', 0);
+   updateDpOperatorStatus(true);
    setTimeout(() => {
      dpBroadcast({ action: 'ping' });
      dpBroadcast({
@@ -2705,13 +2692,15 @@ const NL=String.fromCharCode(10),find=(a,id)=>a.find(x=>x.id===id),A={
        candCount: S_dp.candidates ? S_dp.candidates.length : 0,
        winCount: S_dp.winners ? S_dp.winners.length : 0
      });
-   }, 500);
+   }, 300);
   },
  dpStageMain(){
    cm();
+   updateDpOperatorStatus(false);
    const stageEl = $('#dp_stage_box') || document.documentElement;
    if (!document.fullscreenElement && stageEl.requestFullscreen) {
      stageEl.requestFullscreen().catch(() => {});
+     toast('Mode Layar Utama: Tekan Esc untuk keluar dari layar penuh', 0);
    }
   },
  dpSpin(){
