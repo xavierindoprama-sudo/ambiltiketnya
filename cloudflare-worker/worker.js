@@ -1277,20 +1277,54 @@ export default {
 
           const cpInfo = (await neonQuery(env, `SELECT checkpoint_key, name, icon, checkpoint_type FROM event_checkpoints WHERE event_id=$1::uuid AND checkpoint_key=$2`, [o.event_id, cpKey]))[0] || { checkpoint_key: cpKey, name: cpKey === 'main_gate' ? 'Pintu Masuk Utama' : cpKey, icon: '📍', checkpoint_type: 'facility' };
 
-          const base = { code, kind: o.kind, name: o.name, church: o.church, age: o.age, whatsapp: o.whatsapp, event: o.event_name, qty: o.qty, at: o.checked_in_at, checkpoint: cpInfo, enable_nametag: o.enable_nametag, enable_certificate: o.enable_certificate, custom_answers: o.custom_answers };
+          const base = { code, kind: o.kind, name: o.name, church: o.church, age: o.age, whatsapp: o.whatsapp, event: o.event_name, qty: o.qty, at: o.checked_in_at, checkpoint: cpInfo, enable_nametag: o.enable_nametag, enable_certificate: o.enable_certificate, custom_answers: o.custom_answers, table_assignment: o.table_assignment, rsvp_status: o.rsvp_status, plus_one_count: o.plus_one_count };
           if (o.status === 'cancelled') return json({ ok: true, data: { ...base, result: 'CANCELLED' } });
           if (o.status === 'pending_payment') return json({ ok: true, data: { ...base, result: 'UNPAID' } });
 
           // MAIN GATE
           if (cpKey === 'main_gate') {
-            if (o.checked_in >= o.qty) return json({ ok: true, data: { ...base, result: 'USED', checked: o.checked_in } });
+            const curChecked = parseInt(o.checked_in, 10) || 0;
+            const remaining = Math.max(0, o.qty - curChecked);
+            if (remaining <= 0) {
+              return json({ ok: true, data: { ...base, result: 'USED', checked: curChecked, qty: o.qty, message: `Semua kuota tiket (${o.qty} orang) sudah check-in.` } });
+            }
 
-            await neonQuery(env, `UPDATE orders SET checked_in=qty,checked_in_at=now(),checked_in_by=$2::uuid WHERE id=$1::uuid AND checked_in<qty`, [o.id, u.id]);
+            // Tiket rombongan (qty > 1) dan belum ada konfirmasi/input jumlah masuk
+            if (o.qty > 1 && !params.confirm && !params.entered_qty) {
+              return json({
+                ok: true,
+                data: {
+                  ...base,
+                  result: 'CONFIRM_PARTIAL',
+                  checked: curChecked,
+                  remaining: remaining,
+                  qty: o.qty,
+                  message: `Tiket rombongan (${o.qty} orang). ${curChecked > 0 ? curChecked + ' orang sudah masuk sebelumnya. ' : ''}Sisa kuota: ${remaining} orang.`
+                }
+              });
+            }
+
+            const enterQty = Math.min(remaining, Math.max(1, parseInt(params.entered_qty, 10) || remaining));
+            const newChecked = curChecked + enterQty;
+
+            await neonQuery(env, `UPDATE orders SET checked_in=$1, checked_in_at=now(), checked_in_by=$2::uuid WHERE id=$3::uuid`, [newChecked, u.id, o.id]);
             await neonQuery(env, `INSERT INTO checkpoint_claims(event_id, checkpoint_key, order_id, ticket_code, qty, claimed_by, claimed_by_name)
-              VALUES($1::uuid, 'main_gate', $2::uuid, $3, $4::int, $5::uuid, $6) ON CONFLICT (order_id, checkpoint_key) DO NOTHING`,
-              [o.event_id, o.id, code, o.qty, u.id, u.name || 'Petugas Gerbang']);
+              VALUES($1::uuid, 'main_gate', $2::uuid, $3, $4::int, $5::uuid, $6)
+              ON CONFLICT (order_id, checkpoint_key) DO UPDATE SET qty = checkpoint_claims.qty + EXCLUDED.qty, claimed_at = now()`,
+              [o.event_id, o.id, code, enterQty, u.id, u.name || 'Petugas Gerbang']);
 
-            return json({ ok: true, data: { ...base, result: 'VALID', entered: o.qty - o.checked_in, checked: o.qty, at: new Date().toISOString() } });
+            return json({
+              ok: true,
+              data: {
+                ...base,
+                result: 'VALID',
+                entered: enterQty,
+                checked: newChecked,
+                remaining: o.qty - newChecked,
+                is_partial: newChecked < o.qty,
+                at: new Date().toISOString()
+              }
+            });
           }
 
           // FACILITY / BREAKOUT / MEAL / KIT / VOUCHER
@@ -1910,6 +1944,42 @@ export default {
           if (pin.length < 4) throw new Error('BAD_PIN');
           await neonQuery(env, `INSERT INTO settings(key, value, updated_at) VALUES('checkin_pin', $1, now()) ON CONFLICT (key) DO UPDATE SET value=EXCLUDED.value, updated_at=now()`, [pin]);
           return json({ ok: true, data: { pin, isCustom: true } });
+        }
+
+        if (action === 'checkinOrder') {
+          needRole(2);
+          const ordId = params.id;
+          const pw = String(params.password || '').trim();
+          const pinRow = (await neonQuery(env, `SELECT value FROM settings WHERE key='checkin_pin'`))[0];
+          const validPin = pinRow ? pinRow.value : '';
+          let authorized = false;
+          if (validPin && pw === validPin) {
+            authorized = true;
+          } else {
+            const uRow = (await neonQuery(env, `SELECT password_hash FROM users WHERE id=$1::uuid`, [u.id]))[0];
+            if (uRow && await checkPw(pw, uRow.password_hash)) {
+              authorized = true;
+            }
+          }
+          if (!authorized) throw new Error('WRONG_PASSWORD');
+
+          const ord = (await neonQuery(env, `SELECT id, event_id, ticket_code, qty, checked_in, status FROM orders WHERE id=$1::uuid`, [ordId]))[0];
+          if (!ord) throw new Error('NOT_FOUND');
+          if (ord.status !== 'confirmed') throw new Error('NOT_CONFIRMED');
+          const curChecked = parseInt(ord.checked_in, 10) || 0;
+          const rem = Math.max(0, ord.qty - curChecked);
+          if (rem <= 0) throw new Error('ALREADY_CHECKED_IN');
+
+          const enterQty = Math.min(rem, Math.max(1, parseInt(params.entered_qty, 10) || rem));
+          const newChecked = curChecked + enterQty;
+
+          await neonQuery(env, `UPDATE orders SET checked_in=$1, checked_in_at=now(), checked_in_by=$2::uuid WHERE id=$3::uuid`, [newChecked, u.id, ord.id]);
+          await neonQuery(env, `INSERT INTO checkpoint_claims(event_id, checkpoint_key, order_id, ticket_code, qty, claimed_by, claimed_by_name)
+            VALUES($1::uuid, 'main_gate', $2::uuid, $3, $4::int, $5::uuid, $6)
+            ON CONFLICT (order_id, checkpoint_key) DO UPDATE SET qty = checkpoint_claims.qty + EXCLUDED.qty, claimed_at = now()`,
+            [ord.event_id, ord.id, ord.ticket_code, enterQty, u.id, u.name || 'Admin']);
+
+          return json({ ok: true, data: { id: ord.id, checked_in: newChecked, qty: ord.qty, entered: enterQty, remaining: ord.qty - newChecked } });
         }
 
         if (action === 'legalGet') {

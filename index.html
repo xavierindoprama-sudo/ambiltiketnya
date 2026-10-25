@@ -2129,13 +2129,19 @@ function paintOrders(){const k=($('#oq').value||'').toLowerCase(),emF=$('#oem')?
  const isRsvpEv=!!(activeEv&&hasMod(activeEv,'rsvp'));
  const termPerson=isRsvpEv?'Peserta / Tamu':t('c_name');
  const termQty=isRsvpEv?'Pax / Hadir':t('c_qty');
- const termOrders=isRsvpEv?'peserta':t('orders');
+ const termOrders=isRsvpEv?'Undangan':t('orders');
  const th=['c_code',termPerson,'c_event',termQty,'c_status','c_chk'].map(x=>'<th>'+(x.startsWith('c_')?t(x):x)+'</th>').join('')+'<th></th>';
  const acts=o=>{let b='';if(o.kind==='walk_in'||o.kind==='invitation')b+=`<button class="btn sm" data-act="pass" data-id="${o.id}">${t('view')}</button>`;
   if(rk()>=2&&o.status==='confirmed'&&o.checked_in<o.qty)b+=`<button class="btn sm pri" data-act="ci" data-id="${o.id}">${t('ci')}</button>`;
   if(canEdit()||rk()>=2){if(o.status==='pending_payment'&&canEdit())b+=`<button class="btn sm pri" data-act="cpay" data-id="${o.id}">${t('confirmpay')}</button>`;if(o.status==='confirmed'&&o.kind==='order')b+=`<button class="btn sm" data-act="resend" data-id="${o.id}" title="${t('resend')}">✉️ ${t('resend')}</button>`;if(o.status!=='cancelled'&&canEdit())b+=`<button class="btn sm dg" data-act="cxl" data-id="${o.id}">${t('cancel')}</button>`}
   return b?`<div class="acts" style="margin:0;justify-content:flex-end">${b}</div>`:''};
- $('#ot').innerHTML=`<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:8px"><div><b style="font-size:20px">${l.reduce((a,o)=>a+o.qty,0)}</b> ${isRsvpEv?'pax hadir':t('tix')} / ${n} ${termOrders} ${pendingCnt>0?`<span class="pill wn" style="font-weight:700;margin-left:6px">⚠️ ${pendingCnt} ${t('em_pending')}</span>`:''}</div></div>${S.ordTr?'<p class="muted">'+t('pg_trunc')+'</p>':''}<div class="tw"><table class="rt"><tr>${th}</tr>${rows.map(o=>`<tr><td data-l="${t('c_code')}" class="mono"><b>${esc(o.ticket_code)}</b><br><small class="muted">${new Date(o.created_at).toLocaleString(loc())}</small></td><td data-l="${t('c_name')}">${esc(o.name)}${o.kind==='invitation'?' <span class="pill gd">'+t('inv_badge')+'</span>':o.kind==='walk_in'?' <span class="pill wn" style="background:#10b981;color:#fff;font-weight:700">'+t('walkin_badge')+'</span>':''}<br><small class="muted">${o.kind==='invitation'?esc(o.church):o.kind==='walk_in'?(o.guest_org?esc(o.guest_org)+'<br>':'')+(o.guest_phone?'+'+esc(o.guest_phone)+' &#183; ':'')+(o.guest_email?esc(o.guest_email):'Di tempat'):esc(o.email)+'<br>+'+esc(o.whatsapp)+' &#183; '+esc(o.age)+' &#183; '+esc(o.church)}</small>${(()=>{
+ const totalQty=l.reduce((a,o)=>a+o.qty,0);
+  const totalChecked=l.reduce((a,o)=>a+(parseInt(o.checked_in,10)||0),0);
+  const summaryHeader=isRsvpEv
+    ? `<span style="font-size:18px;font-weight:800;color:var(--tx)">Total: ${totalQty} Tamu Hadir</span> <span class="muted" style="font-size:14px;font-weight:600">(${n} Undangan)</span>`
+    : `<span style="font-size:18px;font-weight:800;color:var(--tx)">Total: ${totalQty} ${t('tix')}</span> <span class="muted" style="font-size:14px;font-weight:600">(${n} ${t('orders')})</span>`;
+  const chkLocBadge=totalChecked>0?`<span class="pill ok" style="font-size:11px;font-weight:700;margin-left:8px" title="Total tamu yang sudah check-in masuk di lokasi">✓ ${totalChecked} Hadir di Lokasi</span>`:'';
+  $('#ot').innerHTML=`<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:8px"><div style="display:flex;align-items:center;flex-wrap:wrap;gap:4px">${summaryHeader} ${chkLocBadge} ${pendingCnt>0?`<span class="pill wn" style="font-weight:700;margin-left:6px">⚠️ ${pendingCnt} ${t('em_pending')}</span>`:''}</div></div>${S.ordTr?'<p class="muted">'+t('pg_trunc')+'</p>':''}<div class="tw"><table class="rt"><tr>${th}</tr>${rows.map(o=>`<tr><td data-l="${t('c_code')}" class="mono"><b>${esc(o.ticket_code)}</b><br><small class="muted">${new Date(o.created_at).toLocaleString(loc())}</small></td><td data-l="${t('c_name')}">${esc(o.name)}${o.kind==='invitation'?' <span class="pill gd">'+t('inv_badge')+'</span>':o.kind==='walk_in'?' <span class="pill wn" style="background:#10b981;color:#fff;font-weight:700">'+t('walkin_badge')+'</span>':''}<br><small class="muted">${o.kind==='invitation'?esc(o.church):o.kind==='walk_in'?(o.guest_org?esc(o.guest_org)+'<br>':'')+(o.guest_phone?'+'+esc(o.guest_phone)+' &#183; ':'')+(o.guest_email?esc(o.guest_email):'Di tempat'):esc(o.email)+'<br>+'+esc(o.whatsapp)+' &#183; '+esc(o.age)+' &#183; '+esc(o.church)}</small>${(()=>{
   const evOfOrd=(S.aev||[]).find(e=>String(e.id).toLowerCase()===String(o.event_id||curEvId).toLowerCase())||activeEv;
   const isRsvpOrd=!!(evOfOrd&&hasMod(evOfOrd,'rsvp'))||!!(activeEv&&hasMod(activeEv,'rsvp'));
   const allowTbl=isRsvpOrd&&rk()>=2;
@@ -2145,7 +2151,12 @@ function paintOrders(){const k=($('#oq').value||'').toLowerCase(),emF=$('#oem')?
   }
   const tblBtn=allowTbl?`<div style="margin-top:3px"><button class="btn sm" data-act="openTableModal" data-id="${o.id}" data-tbl="${esc(o.table_assignment||'')}" style="font-size:10px;padding:1px 6px;border-radius:4px;border:1px dashed var(--bd);background:var(--in)">🪑 ${esc(o.table_assignment||'+ Set Meja')}</button></div>`:'';
   return (pill?`<div style="margin-top:2px">${pill}</div>`:'')+tblBtn;
-})()}${o.guestbook_message?`<div style="font-size:11px;color:var(--mu);margin-top:3px;font-style:italic">✉️ "${esc(o.guestbook_message)}"</div>`:''}${(o.custom_answers&&typeof o.custom_answers==='object'&&Object.keys(o.custom_answers).length>0)?`<div style="margin-top:4px;display:flex;flex-wrap:wrap;gap:3px">${Object.values(o.custom_answers).map(a=>`<span style="background:var(--in,rgba(0,0,0,.05));border:1px solid var(--bd,rgba(0,0,0,.1));padding:1px 6px;border-radius:4px;font-size:10px;font-weight:600">${esc(a.label)}: <b>${esc(a.value)}</b></span>`).join('')}</div>`:''}${o.kind==='order'&&o.status==='confirmed'?`<div style="margin-top:3px;display:flex;align-items:center;flex-wrap:wrap;gap:4px"><span class="pill ${o.emailed?'ok':'er'}" style="font-size:10px;padding:2px 7px;font-weight:700" title="${esc(o.email_error||(o.emailed?'Terkirim pada '+(o.emailed_at?new Date(o.emailed_at).toLocaleString(loc()):'-'):'Belum terkirim'))}">${o.emailed?'✓ '+t('em_sent'):'⚠️ '+t('em_pending')}</span>${o.emailed&&o.email_error?`<span class="muted" style="font-size:10px;font-weight:600">(${esc(o.email_error)})</span>`:''}${!o.emailed&&o.email_error?`<div style="font-size:10px;color:var(--er);margin-top:2px;width:100%;white-space:normal;line-height:1.2">${esc(o.email_error)}</div>`:''}</div>`:''}</td><td data-l="${t('c_event')}">${esc(o.event_name)}</td><td data-l="${t('c_qty')}">${o.qty}</td><td data-l="${t('c_status')}">${stPill(o.status)}</td><td data-l="${t('c_chk')}" class="mono">${o.checked_in}/${o.qty}</td><td>${acts(o)}</td></tr>`).join('')}</table></div>${pagerHtml(n,S.ordPage,pages,from,rows.length)}`}
+})()}${o.guestbook_message?`<div style="font-size:11px;color:var(--mu);margin-top:3px;font-style:italic">✉️ "${esc(o.guestbook_message)}"</div>`:''}${(o.custom_answers&&typeof o.custom_answers==='object'&&Object.keys(o.custom_answers).length>0)?`<div style="margin-top:4px;display:flex;flex-wrap:wrap;gap:3px">${Object.values(o.custom_answers).map(a=>`<span style="background:var(--in,rgba(0,0,0,.05));border:1px solid var(--bd,rgba(0,0,0,.1));padding:1px 6px;border-radius:4px;font-size:10px;font-weight:600">${esc(a.label)}: <b>${esc(a.value)}</b></span>`).join('')}</div>`:''}${o.kind==='order'&&o.status==='confirmed'?`<div style="margin-top:3px;display:flex;align-items:center;flex-wrap:wrap;gap:4px"><span class="pill ${o.emailed?'ok':'er'}" style="font-size:10px;padding:2px 7px;font-weight:700" title="${esc(o.email_error||(o.emailed?'Terkirim pada '+(o.emailed_at?new Date(o.emailed_at).toLocaleString(loc()):'-'):'Belum terkirim'))}">${o.emailed?'✓ '+t('em_sent'):'⚠️ '+t('em_pending')}</span>${o.emailed&&o.email_error?`<span class="muted" style="font-size:10px;font-weight:600">(${esc(o.email_error)})</span>`:''}${!o.emailed&&o.email_error?`<div style="font-size:10px;color:var(--er);margin-top:2px;width:100%;white-space:normal;line-height:1.2">${esc(o.email_error)}</div>`:''}</div>`:''}</td><td data-l="${t('c_event')}">${esc(o.event_name)}</td><td data-l="${t('c_qty')}">${o.qty}</td><td data-l="${t('c_status')}">${stPill(o.status)}</td><td data-l="${t('c_chk')}" class="mono">${(()=>{
+   const chk=parseInt(o.checked_in,10)||0;
+   if(chk===0)return `<span class="muted" style="opacity:.65">0/${o.qty}</span>`;
+   if(chk<o.qty)return `<span class="pill wn" style="font-size:10px;padding:2px 6px;font-weight:700" title="Check-in sebagian: ${chk} dari ${o.qty} tamu telah hadir">${chk}/${o.qty} Masuk</span>`;
+   return `<span class="pill ok" style="font-size:10px;padding:2px 6px;font-weight:700" title="Lengkap: semua ${chk} tamu telah hadir">✓ ${chk}/${o.qty}</span>`;
+ })()}</td><td>${acts(o)}</td></tr>`).join('')}</table></div>${pagerHtml(n,S.ordPage,pages,from,rows.length)}`}
 
 /* ===== Scanner Engine (Continuous, Audio, Torch, Haptic) ===== */
 let _muted=false,_stream=null,_track=null,_torch=false,_facing='environment',_scanning=false,_cooldown=false,_lastCode='',_lastTime=0,_sessionCount=0,_resTimer=null;
@@ -2228,15 +2239,62 @@ async function startCamera(){const v=$('#sc_video');if(!v)return;try{
  requestAnimationFrame(loop)
 }catch(err){toast('Tidak dapat mengakses kamera: '+(err.message||'Izin ditolak'),1);closeScannerModal()}}
 function stopCamera(){_scanning=false;if(_stream){_stream.getTracks().forEach(t=>t.stop());_stream=null;_track=null;_torch=false;const b=$('#sc_torch_btn');if(b)b.classList.remove('active')}}
-function scCardHtml(r){const isOk=r.result==='VALID',isAlready=r.result==='ALREADY_CLAIMED',isNotCheckIn=r.result==='NOT_CHECKED_IN',isWn=r.result==='USED'||isAlready||isNotCheckIn||r.result==='UNPAID',cls=isOk?'ok':isWn?'wn':'no',ic=isOk?'✓':(r.result==='USED'||isAlready)?'⚠':isNotCheckIn?'⛔':'✕';
+function changeDashStepQty(delta){
+ const inp=$('#dash_step_entered_qty');if(!inp)return;
+ const min=parseInt(inp.min,10)||1,max=parseInt(inp.max,10)||999;
+ let cur=parseInt(inp.value,10)||min;
+ cur=Math.min(max,Math.max(min,cur+delta));
+ inp.value=cur;
+}
+function cancelDashPartialCheckin(){
+ _cooldown=false;
+ const resArea=$('#sc_res');
+ if(resArea&&_scanning)resArea.innerHTML='<div class="sc-card ready"><div style="display:flex;align-items:center;gap:10px;justify-content:center"><span class="sc-pdot"></span><span style="font-size:14px;font-weight:600;letter-spacing:.5px">'+t('v_ready')+'</span></div></div>';
+}
+async function submitDashPartialCheckin(code, all){
+ const inp=$('#dash_step_entered_qty');
+ const max=inp?(parseInt(inp.max,10)||1):1;
+ const val=all?max:(inp?parseInt(inp.value,10):max);
+ const qtyToEnter=Math.min(max,Math.max(1,isNaN(val)?1:val));
+ doValidate(code, qtyToEnter, true);
+}
+function scCardHtml(r){
+ const isOk=r.result==='VALID',isPartialConfirm=r.result==='CONFIRM_PARTIAL',isAlready=r.result==='ALREADY_CLAIMED',isNotCheckIn=r.result==='NOT_CHECKED_IN',isWn=r.result==='USED'||isAlready||isNotCheckIn||r.result==='UNPAID'||isPartialConfirm,cls=isOk?'ok':isWn?'wn':'no',ic=isOk?'✓':isPartialConfirm?'👥':(r.result==='USED'||isAlready)?'⚠':isNotCheckIn?'⛔':'✕';
  let title=t('v_'+r.result)||r.result;
- if(isOk&&r.checkpoint&&r.checkpoint.checkpoint_key!=='main_gate'){title=(r.checkpoint.icon||'✓')+' '+(r.checkpoint.name||'KLAIM')+' BERHASIL'}
+ if(isOk){
+  if(r.is_partial){title='VALID — Masuk Sebagian ('+r.entered+' orang)'}
+  else if(r.checkpoint&&r.checkpoint.checkpoint_key!=='main_gate'){title=(r.checkpoint.icon||'✓')+' '+(r.checkpoint.name||'KLAIM')+' BERHASIL'}
+  else{title='VALID — Silakan Masuk ('+(r.entered||r.qty||1)+' orang)'}
+ }
+ else if(isPartialConfirm){title='TIKET ROMBONGAN ('+r.qty+' ORANG)'}
  else if(isAlready){title='SUDAH DIAMBIL SEBELUMNYA'}
  else if(isNotCheckIn){title='BELUM CHECK-IN GERBANG'}
  const isInv=r.kind==='invitation',isWalkin=r.kind==='walk_in';
+
+ if(isPartialConfirm){
+  return `<div class="sc-card wn" style="border-color:#f59e0b">
+   <div class="sc-status-h"><span class="icn">👥</span><div style="flex:1;min-width:0"><div style="font-size:16px;font-weight:800;color:var(--wn)">TIKET ROMBONGAN (${r.qty} ORANG)</div><div class="mono" style="font-size:12px;opacity:.85">${esc(r.code)} ${isInv?'<span class="pill gd">'+t('inv_badge')+'</span>':''}</div></div><div class="sc-qty-pill" style="background:#f59e0b;color:#000">${r.remaining} sisa</div></div>
+   ${r.name?`<div style="margin-top:8px;font-size:13px;display:grid;grid-template-columns:1fr 1fr;gap:4px"><div><b>${esc(r.name)}</b><br><small style="opacity:.75">${esc(r.church||'-')}${r.age?' · '+esc(r.age):''}</small></div><div style="text-align:right"><span>Sudah masuk: <b>${r.checked||0}/${r.qty}</b></span><br><small style="opacity:.75">${esc(r.event||'')}</small></div></div>`:''}
+   <div style="margin-top:12px;padding:12px;background:rgba(0,0,0,.35);border-radius:10px;text-align:center">
+     <div style="font-size:12px;font-weight:700;color:#fcd34d;margin-bottom:8px">BERAPA ORANG YANG HADIR SEKARANG?</div>
+     <div style="display:flex;align-items:center;justify-content:center;gap:12px;margin-bottom:12px">
+       <button type="button" class="btn sm" onclick="changeDashStepQty(-1)" style="font-size:20px;width:38px;height:38px;border-radius:8px;padding:0;font-weight:900">-</button>
+       <input id="dash_step_entered_qty" type="number" min="1" max="${r.remaining}" value="${r.remaining}" style="width:70px;text-align:center;font-size:22px;font-weight:900;border-radius:8px;padding:4px">
+       <button type="button" class="btn sm" onclick="changeDashStepQty(1)" style="font-size:20px;width:38px;height:38px;border-radius:8px;padding:0;font-weight:900">+</button>
+     </div>
+     <div style="display:flex;gap:8px">
+       <button type="button" class="btn pri" onclick="submitDashPartialCheckin('${esc(r.code)}', false)" style="flex:1">✓ Masuk Sesuai Input</button>
+       <button type="button" class="btn wn" onclick="submitDashPartialCheckin('${esc(r.code)}', true)" style="flex:1;background:#f59e0b;color:#000;font-weight:700">Semua (${r.remaining})</button>
+     </div>
+     <button type="button" class="btn sm" onclick="cancelDashPartialCheckin()" style="margin-top:8px;background:transparent;border:none;color:var(--mu);font-size:11px;cursor:pointer">✕ Batal / Lewati</button>
+   </div>
+  </div>`;
+ }
+
  return `<div class="sc-card ${cls}">
   <div class="sc-status-h"><span class="icn">${ic}</span><div style="flex:1;min-width:0"><div style="font-size:16px;font-weight:800;color:var(--${isOk?'ok':isWn?'wn':'er'})">${title} ${r.isOffline?'<span class="pill wn" style="font-size:11px;vertical-align:middle;margin-left:4px">⚡ Offline</span>':''}</div><div class="mono" style="font-size:12px;opacity:.85">${esc(r.code)} ${isInv?'<span class="pill gd">'+t('inv_badge')+'</span>':isWalkin?'<span class="pill wn" style="background:#10b981;color:#fff;font-weight:700">'+t('walkin_badge')+'</span>':''}</div></div>${isOk?`<div class="sc-qty-pill">${r.claimed_qty||r.entered||r.qty||1} ${r.checkpoint&&r.checkpoint.checkpoint_type==='meal'?'porsi':t('tix')}</div>`:''}</div>
-  ${r.name?`<div style="margin-top:8px;font-size:13px;display:grid;grid-template-columns:1fr 1fr;gap:4px"><div><b>${esc(r.name)}</b><br><small style="opacity:.75">${isWalkin?'Walk-In: '+(esc(r.church)||'-'):esc(r.church||'-')}${(!isInv&&!isWalkin&&r.age)?' · '+esc(r.age):''}</small></div><div style="text-align:right"><span>${r.checkpoint?esc(r.checkpoint.name):'Check-in'}: <b>${isOk?'Klaim Sukses':isAlready?'Sudah Diambil':isNotCheckIn?'Ditolak':(r.checked||r.qty)+'/'+r.qty}</b></span><br><small style="opacity:.75">${esc(r.event||'')}</small></div></div>`:''}
+  ${r.name?`<div style="margin-top:8px;font-size:13px;display:grid;grid-template-columns:1fr 1fr;gap:4px"><div><b>${esc(r.name)}</b><br><small style="opacity:.75">${isWalkin?'Walk-In: '+(esc(r.church)||'-'):esc(r.church||'-')}${(!isInv&&!isWalkin&&r.age)?' · '+esc(r.age):''}</small></div><div style="text-align:right"><span>${r.checkpoint?esc(r.checkpoint.name):'Check-in'}: <b>${r.is_partial?`Sebagian (${r.checked}/${r.qty})`:(isOk?`Lengkap (${r.checked}/${r.qty})`:isAlready?'Sudah Diambil':isNotCheckIn?'Ditolak':(r.checked||r.qty)+'/'+r.qty)}</b></span><br><small style="opacity:.75">${esc(r.event||'')}</small></div></div>`:''}
+  ${r.remaining>0&&isOk?`<div style="margin-top:6px;font-size:12px;padding:4px 8px;border-radius:6px;background:rgba(245,158,11,.2);color:#fcd34d;text-align:center;font-weight:700">⚠️ Sisa kuota belum masuk: ${r.remaining} orang</div>`:''}
   ${r.message?`<div style="margin-top:8px;font-size:12px;padding:6px 10px;border-radius:8px;background:rgba(0,0,0,.25);line-height:1.4">${esc(r.message)}</div>`:''}
   ${(isOk&&r.enable_nametag)?`<div style="margin-top:8px;text-align:right"><button class="btn sm" data-act="printThermalNametag" data-code="${esc(r.code)}" style="background:#2563eb;color:#fff;border-color:#2563eb;font-size:11px;font-weight:700;padding:4px 10px;border-radius:8px;display:inline-flex;align-items:center;gap:4px">🖨️ Cetak Name Tag (Thermal)</button></div>`:''}
   <div class="sc-cool-bar"><div class="sc-cool-fill"></div></div></div>`}
@@ -2267,6 +2325,7 @@ async function handleScanCode(raw){const code=String(raw||'').trim().toUpperCase
   S.res=r;S.hist.unshift({code:r.code,name:r.name,result:r.result,qty:r.qty,entered:r.entered,time:new Date().toLocaleTimeString(loc())});S.hist=S.hist.slice(0,30);paintScan();
  }catch(err){snd('ERROR');vib('ERROR');if(fr)fr.className='sc-frame error';if(resArea)resArea.innerHTML=scCardHtml({result:'ERROR',code:code})}
  finally{
+  if(r&&r.result==='CONFIRM_PARTIAL')return;
   setTimeout(()=>{_cooldown=false;if(fr)fr.className='sc-frame'},1500);
   _resTimer=setTimeout(()=>{
    if(resArea&&_scanning){resArea.innerHTML='<div class="sc-card ready"><div style="display:flex;align-items:center;gap:10px;justify-content:center"><span class="sc-pdot"></span><span style="font-size:14px;font-weight:600;letter-spacing:.5px">'+t('v_ready')+'</span></div></div>'}
@@ -2463,11 +2522,11 @@ function paintScan(){const r=S.res,vr=$('#vr');if(!vr)return;
  vr.innerHTML=r?resHtml(r):`<div class="muted" style="text-align:center;padding:40px">${t('v_wait')}</div>`;
  $('#vh').innerHTML=S.hist.map(h=>`<div class="card" style="padding:8px 12px;margin-top:8px;border-left:4px solid var(--${h.result==='VALID'?'ok':'er'})"><span class="mono"><b>${esc(h.code)}</b></span> <small class="muted">${esc(h.name||'')} &#183; ${h.time}</small></div>`).join('')||'&#8212;'}
 
-async function doValidate(code){try{let r;
+async function doValidate(code, enteredQty, isConfirm){try{let r;
  const curCp=($('#scan_view_cp_sel')?$('#scan_view_cp_sel').value:($('#sc_cp_sel')?$('#sc_cp_sel').value:'main_gate'));
  if(!navigator.onLine){r=offlineValidate(code)}
  else{
-  try{r=await api('validate',{code:code,checkpoint:curCp},t('loading'))}
+  try{r=await api('validate',{code:code,checkpoint:curCp,entered_qty:enteredQty,confirm:isConfirm},t('loading'))}
   catch(apiErr){const off=offlineValidate(code);if(off.result!=='NOT_FOUND')r=off;else throw apiErr}
  }
  if(r.result==='VALID'){
@@ -2475,7 +2534,10 @@ async function doValidate(code){try{let r;
   const cnt=$('#sc_cnt'),dc=$('#dash_sc_cnt');if(cnt)cnt.textContent=_sessionCount;if(dc)dc.textContent=_sessionCount;
   if(S.activeEventId)loadCheckpoints(S.activeEventId);
  }
- snd(r.result);vib(r.result);
+ snd(r.result==='CONFIRM_PARTIAL'?'USED':r.result);vib(r.result==='CONFIRM_PARTIAL'?'USED':r.result);
+ const fr=$('#sc_frame'),resArea=$('#sc_res');
+ if(fr)fr.className='sc-frame '+(r.result==='VALID'?'valid':(r.result==='USED'||r.result==='CONFIRM_PARTIAL'||r.result==='UNPAID'||r.result==='NOT_CHECKED_IN'||r.result==='ALREADY_CLAIMED')?'used':'error');
+ if(resArea)resArea.innerHTML=scCardHtml(r);
  S.res=r;S.hist.unshift({code:r.code,name:r.name,result:r.result,qty:r.qty,entered:r.entered,time:new Date().toLocaleTimeString(loc())});S.hist=S.hist.slice(0,30);paintScan();return r
 }catch(e){snd('ERROR');vib('ERROR');fail(e);return {result:'ERROR',message:errMsg(e)}}}
 
@@ -5129,10 +5191,13 @@ const NL=String.fromCharCode(10),find=(a,id)=>a.find(x=>x.id===id),A={
  ordpg(el){S.ordPage=parseInt(el.dataset.v,10)||1;paintOrders();const tb=$('#ot');if(tb&&tb.scrollIntoView)tb.scrollIntoView({block:'start'})},
  usrpg(el){S.usrPage=parseInt(el.dataset.v,10)||1;paintUsers();const tb=$('#ut');if(tb&&tb.scrollIntoView)tb.scrollIntoView({block:'start'})},
  ci(el){const o=S.ord&&S.ord.find(x=>x.id===el.dataset.id);if(!o)return;S.cio=o;
-  modal('<button class="btn sm x" data-act="cm">&#10005;</button><h2>'+t('ci_title')+'</h2><div class="info" style="margin:8px 0"><div><small>'+t('c_name')+'</small><b>'+esc(o.name)+'</b></div><div><small>'+t('c_event')+'</small><b>'+esc(o.event_name)+'</b></div><div><small>'+t('c_code')+'</small><b class="mono">'+esc(o.ticket_code)+'</b></div><div><small>'+t('c_chk')+'</small><b>'+o.checked_in+'/'+o.qty+'</b></div></div><p class="muted" style="margin:6px 0">'+t('ci_hint')+'</p><label>'+t('ci_pw')+'</label><input id="cipw" type="password" autocomplete="off"><p id="cim" style="color:var(--er);min-height:18px;margin:6px 0"></p><div class="acts"><button class="btn" data-act="cm">'+t('close')+'</button><button class="btn pri" data-act="cisubmit">'+t('ci_go')+'</button></div>');
-  setTimeout(()=>{const i=$('#cipw');if(i)i.focus()},50)},
+  const rem=Math.max(1,o.qty-(o.checked_in||0));
+  const qtyField=o.qty>1?`<div><small>Jumlah Masuk Sekarang</small><input id="ciqty" type="number" min="1" max="${rem}" value="${rem}" style="font-size:16px;font-weight:700"><small class="muted" style="display:block;margin-top:2px">Sisa kuota: ${rem} dari ${o.qty} orang</small></div>`:'';
+  modal('<button class="btn sm x" data-act="cm">&#10005;</button><h2>'+t('ci_title')+'</h2><div class="info" style="margin:8px 0"><div><small>'+t('c_name')+'</small><b>'+esc(o.name)+'</b></div><div><small>'+t('c_event')+'</small><b>'+esc(o.event_name)+'</b></div><div><small>'+t('c_code')+'</small><b class="mono">'+esc(o.ticket_code)+'</b></div><div><small>'+t('c_chk')+'</small><b>'+(o.checked_in||0)+'/'+o.qty+'</b></div>'+qtyField+'</div><p class="muted" style="margin:6px 0">'+t('ci_hint')+'</p><label>'+t('ci_pw')+'</label><input id="cipw" type="password" autocomplete="off"><p id="cim" style="color:var(--er);min-height:18px;margin:6px 0"></p><div class="acts"><button class="btn" data-act="cm">'+t('close')+'</button><button class="btn pri" data-act="cisubmit">'+t('ci_go')+'</button></div>');
+  setTimeout(()=>{const i=$('#ciqty')||$('#cipw');if(i)i.focus()},50)},
  async cisubmit(){const o=S.cio,pw=($('#cipw')||{}).value;if(!o||!pw)return;
-  try{const r=await api('checkinOrder',{id:o.id,password:pw},t('loading'));modal('<button class="btn sm x" data-act="cm">&#10005;</button><h2>'+t('ci_title')+'</h2>'+resHtml(r)+'<div class="acts"><button class="btn pri" data-act="cm">'+t('close')+'</button></div>');loadOrders()}
+  const enteredQty=$('#ciqty')?parseInt($('#ciqty').value,10):(o.qty-(o.checked_in||0));
+  try{const r=await api('checkinOrder',{id:o.id,password:pw,entered_qty:enteredQty},t('loading'));modal('<button class="btn sm x" data-act="cm">&#10005;</button><h2>'+t('ci_title')+'</h2><div class="card ok" style="padding:14px;margin:12px 0"><p style="margin:0;font-size:15px;font-weight:700">✓ Check-in Berhasil!</p><p style="margin:6px 0 0;font-size:13px">Sebanyak <b>'+(r.entered||enteredQty)+' orang</b> berhasil di-check-in.<br>Total hadir saat ini: <b>'+r.checked_in+'/'+r.qty+'</b> orang'+(r.remaining>0?' (sisa kuota: '+r.remaining+' orang)':'')+'.</p></div><div class="acts"><button class="btn pri" data-act="cm">'+t('close')+'</button></div>');loadOrders()}
   catch(e){const m=$('#cim');if(m)m.textContent=errMsg(e);else fail(e)}},
  ciPinModal(){const curPin=(S.ciPin&&S.ciPin.pin)||'';modal('<button class="btn sm x" data-act="cm">&#10005;</button><h2>🔑 '+t('ci_pin_title')+'</h2><p class="muted" style="margin:4px 0 14px">'+t('ci_pin_desc')+'</p><label>'+t('ci_pin_ph')+'</label><input id="new_ci_pin" value="'+esc(curPin)+'" placeholder="Contoh: 123456 atau PIN2026" autocomplete="off" style="font-size:16px;font-weight:700;letter-spacing:1px"><small class="muted" style="display:block;margin-top:6px">PIN ini yang dimasukkan saat menekan tombol "Cek in" di daftar pesanan.</small><div class="acts" style="margin-top:16px"><button class="btn pri" data-act="ciPinSave">'+t('ci_pin_save')+'</button><button class="btn" data-act="cm">'+t('close')+'</button></div>');setTimeout(()=>{const el=$('#new_ci_pin');if(el){el.focus();el.select()}},50)},
  async ciPinSave(){const pin=($('#new_ci_pin')?$('#new_ci_pin').value:'').trim();if(!pin||pin.length<4)return toast(t('e_BAD_PIN'),1);try{await api('setCheckinPin',{pin:pin},t('loading'));cm();toast(t('ci_pin_ok'),0);usrView($('#ac'))}catch(e){fail(e)}},

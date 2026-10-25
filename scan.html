@@ -204,13 +204,21 @@ function esc(s) {
 
 function cardHtml(r) {
   const isOk = r.result === 'VALID';
+  const isPartialConfirm = r.result === 'CONFIRM_PARTIAL';
   const isAlready = r.result === 'ALREADY_CLAIMED';
   const isNotCheckIn = r.result === 'NOT_CHECKED_IN';
-  const isWn = r.result === 'USED' || isAlready || r.result === 'UNPAID' || r.result === 'TIMEOUT';
+  const isWn = r.result === 'USED' || isAlready || r.result === 'UNPAID' || r.result === 'TIMEOUT' || isPartialConfirm;
   const cls = isOk ? 'ok' : isWn ? 'wn' : 'no';
-  const ic = isOk ? '✓' : (r.result === 'USED' || isAlready) ? '⚠' : isNotCheckIn ? '⛔' : '✕';
+  const ic = isOk ? '✓' : isPartialConfirm ? '👥' : (r.result === 'USED' || isAlready) ? '⚠' : isNotCheckIn ? '⛔' : '✕';
   let title = 'TIKET TIDAK VALID';
-  if (isOk) title = (r.checkpoint && r.checkpoint.checkpoint_key !== 'main_gate') ? ((r.checkpoint.icon || '✓') + ' ' + (r.checkpoint.name || 'KLAIM') + ' BERHASIL') : 'VALID — Silakan Masuk';
+  if (isOk) {
+    if (r.is_partial) {
+      title = `VALID — Masuk Sebagian (${r.entered} orang)`;
+    } else {
+      title = (r.checkpoint && r.checkpoint.checkpoint_key !== 'main_gate') ? ((r.checkpoint.icon || '✓') + ' ' + (r.checkpoint.name || 'KLAIM') + ' BERHASIL') : `VALID — Silakan Masuk (${r.entered || r.qty || 1} orang)`;
+    }
+  }
+  else if (isPartialConfirm) title = `TIKET ROMBONGAN (${r.qty} ORANG)`;
   else if (r.result === 'USED') title = 'SUDAH DIGUNAKAN (CHECK-IN)';
   else if (isAlready) title = 'SUDAH DIAMBIL SEBELUMNYA';
   else if (isNotCheckIn) title = 'BELUM CHECK-IN GERBANG';
@@ -218,6 +226,36 @@ function cardHtml(r) {
   else if (r.result === 'CANCELLED') title = 'PESANAN DIBATALKAN';
   else if (r.result === 'NOT_FOUND') title = 'TIKET TIDAK DITEMUKAN';
   else if (r.result === 'TIMEOUT') title = 'MENUNGGU RESPON';
+
+  if (isPartialConfirm) {
+    return `<div class="card wn" style="border-color:#f59e0b">
+      <div class="status-h">
+        <span class="icn">👥</span>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:15px;font-weight:800;color:var(--wn)">TIKET ROMBONGAN (${r.qty} ORANG)</div>
+          <div class="mono" style="font-size:12px;opacity:.85">${esc(r.code)} ${r.kind === 'invitation' ? '<span style="background:linear-gradient(135deg,#f59e0b,#d97706);color:#000;font-size:10px;font-weight:800;padding:2px 8px;border-radius:99px;margin-left:4px">UNDANGAN</span>' : ''}</div>
+        </div>
+        <div class="qty-pill" style="background:#f59e0b;color:#000">${r.remaining} sisa</div>
+      </div>
+      ${r.name ? `<div style="margin-top:8px;font-size:13px;display:grid;grid-template-columns:1fr 1fr;gap:4px">
+        <div><b>${esc(r.name)}</b><br><small style="opacity:.75">${esc(r.church || '-')}${r.age ? ' · ' + esc(r.age) : ''}</small></div>
+        <div style="text-align:right"><span>Sudah masuk: <b>${r.checked || 0}/${r.qty}</b></span><br><small style="opacity:.75">${esc(r.event || '')}</small></div>
+      </div>` : ''}
+      <div style="margin-top:12px;padding:12px;background:rgba(0,0,0,.35);border-radius:10px;text-align:center">
+        <div style="font-size:12px;font-weight:700;color:#fcd34d;margin-bottom:8px">BERAPA ORANG YANG HADIR SEKARANG?</div>
+        <div style="display:flex;align-items:center;justify-content:center;gap:12px;margin-bottom:12px">
+          <button type="button" class="btn sm" onclick="changeStepQty(-1)" style="font-size:20px;width:40px;height:40px;border-radius:8px;padding:0;font-weight:900;background:rgba(255,255,255,.15);color:#fff;border:none">-</button>
+          <input id="step_entered_qty" type="number" min="1" max="${r.remaining}" value="${r.remaining}" style="width:70px;text-align:center;font-size:22px;font-weight:900;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.3);color:#fff;border-radius:8px;padding:4px">
+          <button type="button" class="btn sm" onclick="changeStepQty(1)" style="font-size:20px;width:40px;height:40px;border-radius:8px;padding:0;font-weight:900;background:rgba(255,255,255,.15);color:#fff;border:none">+</button>
+        </div>
+        <div style="display:flex;gap:8px">
+          <button type="button" class="btn pri" onclick="submitPartialCheckin('${esc(r.code)}', false)" style="flex:1;background:var(--ok);color:#fff;font-weight:800;padding:10px 4px;border:none;border-radius:8px;font-size:13px">✓ Masuk Sesuai Input</button>
+          <button type="button" class="btn" onclick="submitPartialCheckin('${esc(r.code)}', true)" style="flex:1;background:#f59e0b;color:#000;font-weight:800;padding:10px 4px;border:none;border-radius:8px;font-size:13px">Semua (${r.remaining})</button>
+        </div>
+        <button type="button" class="btn sm" onclick="cancelPartialCheckin()" style="margin-top:8px;background:transparent;border:none;color:#94a3b8;font-size:11px;cursor:pointer">✕ Batal / Lewati</button>
+      </div>
+    </div>`;
+  }
 
   return `<div class="card ${cls}">
     <div class="status-h">
@@ -230,11 +268,66 @@ function cardHtml(r) {
     </div>
     ${r.name ? `<div style="margin-top:8px;font-size:13px;display:grid;grid-template-columns:1fr 1fr;gap:4px">
       <div><b>${esc(r.name)}</b><br><small style="opacity:.75">${esc(r.church || '-')}${r.age ? ' · ' + esc(r.age) : ''}</small></div>
-      <div style="text-align:right"><span>${r.checkpoint ? esc(r.checkpoint.name) : 'Status'}: <b>${isOk ? 'Terverifikasi' : isAlready ? 'Sudah Diambil' : 'Check-in'}</b></span><br><small style="opacity:.75">${esc(r.event || '')}</small></div>
+      <div style="text-align:right"><span>${r.checkpoint ? esc(r.checkpoint.name) : 'Status'}: <b>${r.is_partial ? `Sebagian (${r.checked}/${r.qty})` : (isOk ? `Lengkap (${r.checked}/${r.qty})` : (isAlready ? 'Sudah Diambil' : 'Check-in'))}</b></span><br><small style="opacity:.75">${esc(r.event || '')}</small></div>
     </div>` : ''}
+    ${r.remaining > 0 && isOk ? `<div style="margin-top:6px;font-size:12px;padding:4px 8px;border-radius:6px;background:rgba(245,158,11,.2);color:#fcd34d;text-align:center;font-weight:700">⚠️ Sisa kuota belum masuk: ${r.remaining} orang</div>` : ''}
     ${r.message ? `<div style="margin-top:8px;font-size:12px;padding:6px 10px;border-radius:8px;background:rgba(0,0,0,.25);line-height:1.4">${esc(r.message)}</div>` : ''}
     <div class="cool-bar"><div class="cool-fill"></div></div>
   </div>`;
+}
+
+function changeStepQty(delta) {
+  const inp = $('step_entered_qty');
+  if (!inp) return;
+  const min = parseInt(inp.min, 10) || 1;
+  const max = parseInt(inp.max, 10) || 999;
+  let cur = parseInt(inp.value, 10) || min;
+  cur = Math.min(max, Math.max(min, cur + delta));
+  inp.value = cur;
+}
+
+function cancelPartialCheckin() {
+  _verifying = false;
+  cooldown = false;
+  $('res_area').innerHTML = `<div class="card"><div style="display:flex;align-items:center;gap:10px;justify-content:center"><span class="pdot"></span><span style="font-size:14px;font-weight:600;letter-spacing:.5px">Siap scan tiket berikutnya...</span></div></div>`;
+}
+
+async function submitPartialCheckin(code, all) {
+  const inp = $('step_entered_qty');
+  const max = inp ? (parseInt(inp.max, 10) || 1) : 1;
+  const val = all ? max : (inp ? parseInt(inp.value, 10) : max);
+  const qtyToEnter = Math.min(max, Math.max(1, isNaN(val) ? 1 : val));
+  
+  $('res_area').innerHTML = `<div class="card" style="border-color:#8b5cf6;background:rgba(20,15,40,.92)"><div style="display:flex;align-items:center;gap:10px;justify-content:center"><span style="display:inline-block;animation:spin 1s linear infinite">⏳</span><span style="font-size:14px;font-weight:600">Memproses check-in ${qtyToEnter} orang...</span></div></div>`;
+
+  const tok = TOK || (typeof localStorage !== 'undefined' ? localStorage.getItem('atk_tok') : '');
+  const apiUrl = window.APP_API_URL;
+  if (apiUrl && tok) {
+    try {
+      const res = await fetch(apiUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain' },
+        body: JSON.stringify({
+          action: 'validate',
+          token: tok,
+          code: code,
+          checkpoint: ($('sc_cp_sel') ? $('sc_cp_sel').value : 'main_gate'),
+          entered_qty: qtyToEnter,
+          confirm: true
+        })
+      });
+      const r = await res.json();
+      if (r.ok && r.data) {
+        showResult(r.data);
+      } else {
+        showResult({ result: 'ERROR', code: code, message: r.error || 'Gagal memvalidasi' });
+      }
+      return;
+    } catch (e) {
+      showResult({ result: 'ERROR', code: code, message: e.message });
+      return;
+    }
+  }
 }
 
 function showResult(r) {
@@ -244,11 +337,15 @@ function showResult(r) {
     sessionCount += (r.entered || r.qty || 1);
     $('sc_cnt').textContent = sessionCount;
   }
-  playSound(r.result);
-  doVibrate(r.result);
+  playSound(r.result === 'CONFIRM_PARTIAL' ? 'USED' : r.result);
+  doVibrate(r.result === 'CONFIRM_PARTIAL' ? 'USED' : r.result);
   const fr = $('fr');
-  if (fr) fr.className = 'frame ' + (r.result === 'VALID' ? 'valid' : (r.result === 'USED' || r.result === 'UNPAID' || r.result === 'TIMEOUT') ? 'used' : 'error');
+  if (fr) fr.className = 'frame ' + (r.result === 'VALID' ? 'valid' : (r.result === 'USED' || r.result === 'CONFIRM_PARTIAL' || r.result === 'UNPAID' || r.result === 'TIMEOUT') ? 'used' : 'error');
   $('res_area').innerHTML = cardHtml(r);
+
+  if (r.result === 'CONFIRM_PARTIAL') {
+    return;
+  }
 
   setTimeout(() => {
     cooldown = false;
