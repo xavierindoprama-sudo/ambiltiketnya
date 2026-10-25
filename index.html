@@ -1716,9 +1716,219 @@ function paintOfflineStatus(){const badge=$('#off_badge_area'),info=$('#off_info
 
 async function evList(c){try{if(!S.aev)S.aev=await api('adminEvents')}catch(e){return fail(e)}
  c.innerHTML=(canEdit()?`<div class="acts"><button class="btn pri" data-act="evForm" style="flex:none">+ ${t('new_ev')}</button></div>`:'')+S.aev.map(e=>`<div class="card er"><img src="${esc(e.banner_url)}" onerror="this.style.visibility='hidden'"><div style="flex:1;min-width:0"><b>${esc(e.name)}</b>${e.organizer_name?`<span class="badge" style="background:var(--card-sub);font-size:11px;margin-left:6px;padding:2px 8px;border-radius:10px">🏢 ${esc(e.organizer_name)}</span>`:''}<div class="muted">${fd(e.event_date)} &#183; Online: ${e.sold}/${e.quota} ${t('tix')}${e.walkin_quota?` &#183; Walk-in: ${e.walkin_sold||0}/${e.walkin_quota}`:''} &#183; ${rp(e.is_paid?e.price:0)}</div></div>${canEdit()?`<label class="sw"><input type="checkbox" data-ch="tgl" data-id="${e.id}" ${e.is_active?'checked':''}><i></i></label>${hasMod(e,'guestbook')?`<a class="btn sm" href="${location.pathname}?stage=greeting&ev=${e.id}" target="_blank" title="Buka Layar Panggung Ucapan (Live Wall)">📺 Layar Ucapan</a>`:""}<button class="btn sm" data-act="cpManageModal" data-id="${e.id}" title="Kelola Pos Check-In &amp; Fasilitas">📍 Pos Check-In</button><button class="btn sm" data-act="gatelink" data-id="${e.id}" title="${t('gate_pass')}">📋 ${t('gate_pass')}</button><button class="btn sm ${getCurEvId()===e.id?'ok':'pri'}" data-act="focusEv" data-id="${e.id}" title="Kelola dan fokuskan ke acara ini" style="font-weight:700">${getCurEvId()===e.id?'✓ Dikelola':'🎯 Kelola'}</button><button class="btn sm" data-act="evForm" data-id="${e.id}">${t('edit')}</button>`:stPill(e.is_active?'confirmed':'cancelled')}</div>`).join('')}
+function compressImageToWebp(file, maxW = 1200, maxH = 675, quality = 0.82) {
+  return new Promise((resolve, reject) => {
+    if (!file || !file.type.startsWith('image/')) return reject(new Error('File bukan gambar'));
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error('Gagal membaca file gambar'));
+    reader.onload = e => {
+      const img = new Image();
+      img.onerror = () => reject(new Error('Format gambar tidak didukung atau file korup'));
+      img.onload = () => {
+        let w = img.width, h = img.height;
+        if (w > maxW || h > maxH) {
+          const ratio = Math.min(maxW / w, maxH / h);
+          w = Math.max(1, Math.round(w * ratio));
+          h = Math.max(1, Math.round(h * ratio));
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext('2d');
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, w, h);
+        ctx.drawImage(img, 0, 0, w, h);
+        let dataUrl = canvas.toDataURL('image/webp', quality);
+        if (!dataUrl.startsWith('data:image/webp')) {
+          dataUrl = canvas.toDataURL('image/jpeg', quality);
+        }
+        const originalSizeKb = Math.max(1, Math.round(file.size / 1024));
+        const approxNewSizeKb = Math.max(1, Math.round((dataUrl.length * 3 / 4) / 1024));
+        resolve({
+          dataUrl,
+          width: w,
+          height: h,
+          originalSizeKb,
+          compressedSizeKb: approxNewSizeKb
+        });
+      };
+      img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+function renderBannerUploader(initialUrl) {
+  const hasImg = !!(initialUrl && initialUrl.trim());
+  return `<div style="margin:12px 0">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+      <label style="margin:0;font-weight:700;font-size:12.5px;color:var(--tx)">📸 Poster / Banner Acara</label>
+      <span style="font-size:11px;color:var(--mu)">Rasio disarankan 16:9 (WebP Otomatis)</span>
+    </div>
+    <input type="hidden" name="banner_url" id="ef_banner_url" value="${esc(initialUrl || '')}">
+    <input type="file" id="ef_file_input" accept="image/jpeg,image/png,image/webp,image/gif" style="display:none">
+    
+    <div id="ef_dropzone" style="border:2px dashed var(--bd);border-radius:12px;padding:12px;text-align:center;background:var(--in,rgba(0,0,0,.02));cursor:pointer;transition:border-color .2s,background .2s;position:relative">
+      
+      <div id="ef_preview_wrap" style="display:${hasImg ? 'block' : 'none'}">
+        <div style="position:relative;width:100%;height:165px;border-radius:8px;overflow:hidden;background:#0f172a;box-shadow:0 3px 10px rgba(0,0,0,.12)">
+          <img id="ef_preview_img" src="${esc(initialUrl || '')}" style="width:100%;height:100%;object-fit:cover;display:block" onerror="this.src='';const pw=$('#ef_preview_wrap'),dp=$('#ef_drop_prompt');if(pw)pw.style.display='none';if(dp)dp.style.display='block';">
+          <div style="position:absolute;bottom:0;left:0;right:0;padding:6px 12px;background:linear-gradient(transparent,rgba(0,0,0,.85));display:flex;justify-content:space-between;align-items:center;color:#fff;font-size:11px">
+            <span id="ef_img_info" style="font-weight:600">✓ Poster Terpasang</span>
+            <div style="display:flex;gap:6px">
+              <button type="button" class="btn sm" id="ef_btn_repick" style="padding:2px 8px;font-size:10px;background:rgba(255,255,255,.25);color:#fff;border:none">🔄 Ganti</button>
+              <button type="button" class="btn sm dg" id="ef_btn_remove" style="padding:2px 8px;font-size:10px">🗑️ Hapus</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div id="ef_drop_prompt" style="display:${hasImg ? 'none' : 'block'};padding:14px 8px">
+        <div style="font-size:32px;margin-bottom:6px">🖼️</div>
+        <div style="font-weight:700;font-size:13px;color:var(--tx);margin-bottom:4px">
+          Tarik &amp; lepas (drag &amp; drop) poster di sini, atau <span style="color:var(--ac,#5b4ef0);text-decoration:underline">Pilih File</span>
+        </div>
+        <p class="muted" style="font-size:11px;margin:0">Mendukung JPG, PNG, WEBP. Otomatis dikompres &amp; dioptimalkan ke WebP.</p>
+      </div>
+
+      <div id="ef_upload_spin" style="display:none;padding:20px 10px">
+        <div style="display:inline-block;animation:spin 1s linear infinite;font-size:24px">⏳</div>
+        <div style="font-size:12px;font-weight:700;margin-top:6px;color:var(--ac,#5b4ef0)">Mengompres dan mengoptimalkan poster...</div>
+      </div>
+    </div>
+
+    <div style="margin-top:6px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:4px">
+      <button type="button" class="lnk" id="ef_toggle_url_btn" style="font-size:11px;color:var(--mu)">🔗 Atau masukkan link URL gambar manual</button>
+      <span id="ef_size_badge" style="font-size:11px;color:var(--ok,#10b981);font-weight:700"></span>
+    </div>
+    <div id="ef_manual_url_box" style="display:none;margin-top:6px">
+      <input type="text" id="ef_manual_url_inp" placeholder="https://domain.com/poster.jpg" style="font-size:12px;padding:6px 10px;width:100%" value="${esc(initialUrl && !initialUrl.startsWith('data:') ? initialUrl : '')}">
+    </div>
+  </div>`;
+}
+
+function initBannerUploader() {
+  const dropzone = $('#ef_dropzone');
+  const fileInput = $('#ef_file_input');
+  const bannerUrlInp = $('#ef_banner_url');
+  const previewWrap = $('#ef_preview_wrap');
+  const previewImg = $('#ef_preview_img');
+  const dropPrompt = $('#ef_drop_prompt');
+  const uploadSpin = $('#ef_upload_spin');
+  const imgInfo = $('#ef_img_info');
+  const sizeBadge = $('#ef_size_badge');
+  const toggleUrlBtn = $('#ef_toggle_url_btn');
+  const manualBox = $('#ef_manual_url_box');
+  const manualInp = $('#ef_manual_url_inp');
+  const btnRepick = $('#ef_btn_repick');
+  const btnRemove = $('#ef_btn_remove');
+
+  if (!dropzone || !fileInput || !bannerUrlInp) return;
+
+  function showProcessing(busy) {
+    if (uploadSpin) uploadSpin.style.display = busy ? 'block' : 'none';
+    if (dropPrompt) dropPrompt.style.display = busy ? 'none' : (bannerUrlInp.value ? 'none' : 'block');
+    if (previewWrap) previewWrap.style.display = busy ? 'none' : (bannerUrlInp.value ? 'block' : 'none');
+  }
+
+  async function handleFile(file) {
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      toast('File yang dipilih bukan gambar (JPG, PNG, WEBP).', 1);
+      return;
+    }
+    showProcessing(true);
+    try {
+      const res = await compressImageToWebp(file, 1200, 675, 0.82);
+      bannerUrlInp.value = res.dataUrl;
+      previewImg.src = res.dataUrl;
+      const pct = Math.max(0, Math.round((1 - res.compressedSizeKb / res.originalSizeKb) * 100));
+      if (imgInfo) imgInfo.textContent = `✓ ${res.width}x${res.height} px · ${res.compressedSizeKb} KB`;
+      if (sizeBadge) sizeBadge.textContent = `⚡ Hemat ${pct}% (${res.originalSizeKb} KB ➔ ${res.compressedSizeKb} KB)`;
+      showProcessing(false);
+      toast('Poster berhasil dioptimalkan dan siap disimpan!', 0);
+    } catch (err) {
+      showProcessing(false);
+      toast('Gagal memproses gambar: ' + (err.message || err), 1);
+    }
+  }
+
+  dropzone.addEventListener('click', e => {
+    if (e.target.closest('#ef_btn_repick') || e.target.closest('#ef_btn_remove') || e.target.closest('#ef_manual_url_box') || e.target.closest('#ef_toggle_url_btn')) return;
+    if (!bannerUrlInp.value) fileInput.click();
+  });
+
+  if (btnRepick) btnRepick.addEventListener('click', e => { e.stopPropagation(); fileInput.click(); });
+  if (btnRemove) btnRemove.addEventListener('click', e => {
+    e.stopPropagation();
+    bannerUrlInp.value = '';
+    previewImg.src = '';
+    if (sizeBadge) sizeBadge.textContent = '';
+    if (manualInp) manualInp.value = '';
+    if (previewWrap) previewWrap.style.display = 'none';
+    if (dropPrompt) dropPrompt.style.display = 'block';
+  });
+
+  fileInput.addEventListener('change', () => {
+    if (fileInput.files && fileInput.files[0]) {
+      handleFile(fileInput.files[0]);
+      fileInput.value = '';
+    }
+  });
+
+  ['dragenter', 'dragover'].forEach(evName => {
+    dropzone.addEventListener(evName, e => {
+      e.preventDefault();
+      e.stopPropagation();
+      dropzone.style.borderColor = 'var(--ac, #5b4ef0)';
+      dropzone.style.background = 'rgba(91,78,240,0.06)';
+    });
+  });
+
+  ['dragleave', 'drop'].forEach(evName => {
+    dropzone.addEventListener(evName, e => {
+      e.preventDefault();
+      e.stopPropagation();
+      dropzone.style.borderColor = 'var(--bd)';
+      dropzone.style.background = 'var(--in, rgba(0,0,0,0.02))';
+    });
+  });
+
+  dropzone.addEventListener('drop', e => {
+    const dt = e.dataTransfer;
+    if (dt && dt.files && dt.files[0]) {
+      handleFile(dt.files[0]);
+    }
+  });
+
+  if (toggleUrlBtn && manualBox && manualInp) {
+    toggleUrlBtn.addEventListener('click', () => {
+      const isHidden = manualBox.style.display === 'none';
+      manualBox.style.display = isHidden ? 'block' : 'none';
+      if (isHidden) manualInp.focus();
+    });
+
+    manualInp.addEventListener('input', () => {
+      const val = manualInp.value.trim();
+      bannerUrlInp.value = val;
+      if (val) {
+        previewImg.src = val;
+        if (previewWrap) previewWrap.style.display = 'block';
+        if (dropPrompt) dropPrompt.style.display = 'none';
+        if (imgInfo) imgInfo.textContent = 'Link eksternal';
+        if (sizeBadge) sizeBadge.textContent = '';
+      } else {
+        previewImg.src = '';
+        if (previewWrap) previewWrap.style.display = 'none';
+        if (dropPrompt) dropPrompt.style.display = 'block';
+      }
+    });
+  }
+}
+
 function evForm(id){if(rk()>=3&&(!S.organizers||!S.organizers.length)){api('organizersList').then(r=>{S.organizers=r;if($('#ef'))paintDash();}).catch(()=>{});}const e=S.aev.find(x=>x.id===id)||{name:'',category:'',quota:100,walkin_quota:0,banner_url:'',event_date:'',start_time:'19:00',end_time:'',location:'',description:'',announcement:'',is_paid:false,price:0,max_per_order:1,one_order_per_account:false,is_active:true,payment_instructions:'',terms:defTerms()};S.paid=!!e.is_paid;
  const f=(k,l,v,ty)=>`<div><label>${t(l)}</label><input name="${k}" type="${ty||'text'}" value="${esc(v)}"></div>`;
- modal(`<button class="btn sm x" data-act="cm">&#10005;</button><h2>${id?t('edit'):t('new_ev')}</h2><form id="ef" onsubmit="return false"><input type="hidden" name="id" value="${id||''}">${f('name','f_name',e.name)}<div class="fg">${f('category','f_cat',e.category)}${f('quota','f_quota',e.quota,'number')}${f('walkin_quota','walkin_quota',e.walkin_quota||0,'number')}</div>${f('banner_url','f_banner',e.banner_url)}
+ modal(`<button class="btn sm x" data-act="cm">&#10005;</button><h2>${id?t('edit'):t('new_ev')}</h2><form id="ef" onsubmit="return false"><input type="hidden" name="id" value="${id||''}">${f('name','f_name',e.name)}<div class="fg">${f('category','f_cat',e.category)}${f('quota','f_quota',e.quota,'number')}${f('walkin_quota','walkin_quota',e.walkin_quota||0,'number')}</div>${renderBannerUploader(e.banner_url)}
 <div class="fg">${f('event_date','f_date',e.event_date,'date')}${f('start_time','f_start',String(e.start_time).slice(0,5),'time')}${f('end_time','f_end',e.end_time?String(e.end_time).slice(0,5):'','time')}</div>${f('location','f_loc',e.location)}
 ${rk()>=3?`<div style="margin:10px 0"><label>🏢 Penyelenggara (EO Workspace)</label><select name="organizer_id" class="in" style="width:100%">${(S.organizers||[]).map(o=>`<option value="${o.id}" ${(e.organizer_id===o.id)?'selected':''}>${esc(o.name)} (@${esc(o.slug)})</option>`).join('')}</select></div>`:''}
 <label>${t('f_desc')}</label><textarea name="description" rows="3">${esc(e.description)}</textarea><label>${t('f_ann')}</label><textarea name="announcement" rows="2">${esc(e.announcement)}</textarea><label>${t('f_terms')}</label><textarea name="terms" rows="6">${esc(e.terms)}</textarea>
@@ -1834,7 +2044,9 @@ ${rk()>=3?`<div style="margin:10px 0"><label>🏢 Penyelenggara (EO Workspace)</
     </div>
   </div>
 </div>
-</form><div class="acts"><button class="btn pri" data-act="saveEv">${t('save')}</button></div>`,1)}
+</form><div class="acts"><button class="btn pri" data-act="saveEv">${t('save')}</button></div>`,1);
+ initBannerUploader();
+}
 function renderCustomFieldRow(cf, idx){
  const id=(cf&&cf.id)||('cf_'+(idx!=null?idx:Date.now())+'_'+Math.random().toString(36).slice(2,6));
  const label=(cf&&cf.label)||'';
