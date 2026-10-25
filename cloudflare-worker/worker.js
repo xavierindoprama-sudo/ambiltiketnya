@@ -465,6 +465,74 @@ export default {
       return json({ ok: true, ping: 'pong', time: new Date().toISOString() });
     }
 
+    // Dynamic Invitation Link Preview for WhatsApp / Telegram / Social Media crawlers
+    if (url.pathname === '/invite' || url.pathname === '/inv') {
+      const code = String(url.searchParams.get('code') || url.searchParams.get('invite') || '').trim().toUpperCase();
+      const guestTo = String(url.searchParams.get('to') || '').trim();
+      let eventName = 'Undangan Acara';
+      let bannerUrl = 'https://ambiltiketnya.online/favicon.png';
+      let dateStr = '';
+      let locationStr = '';
+      let targetGuest = guestTo;
+
+      if (code) {
+        try {
+          const rows = await neonQuery(env, `
+            SELECT o.guest_name, e.name AS event_name, e.banner_url, e.event_date, e.start_time, e.location
+            FROM orders o JOIN events e ON e.id = o.event_id WHERE o.ticket_code = $1 LIMIT 1
+          `, [code]);
+          if (rows.length) {
+            const r = rows[0];
+            eventName = r.event_name || eventName;
+            bannerUrl = r.banner_url || bannerUrl;
+            targetGuest = targetGuest || r.guest_name || '';
+            dateStr = r.event_date ? new Date(r.event_date).toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }) : '';
+            locationStr = r.location || '';
+          }
+        } catch (e) {}
+      }
+
+      const redirectTarget = `https://ambiltiketnya.online/?invite=${encodeURIComponent(code)}&to=${encodeURIComponent(targetGuest)}`;
+      const title = targetGuest ? `Undangan untuk ${targetGuest} - ${eventName}` : `Undangan Resmi: ${eventName}`;
+      const desc = [dateStr, locationStr].filter(Boolean).join(' · ') || 'Buka tautan ini untuk informasi detail acara dan konfirmasi kehadiran (RSVP)';
+
+      const html = `<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>${title}</title>
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="AmbilTiketnya">
+<meta property="og:title" content="${title}">
+<meta property="og:description" content="${desc}">
+<meta property="og:image" content="${bannerUrl}">
+<meta property="og:image:alt" content="${eventName}">
+<meta property="og:url" content="${redirectTarget}">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="${title}">
+<meta name="twitter:description" content="${desc}">
+<meta name="twitter:image" content="${bannerUrl}">
+<meta http-equiv="refresh" content="0;url=${redirectTarget}">
+<script>location.replace(${JSON.stringify(redirectTarget)});</script>
+<style>body{background:#0b0f1e;color:#fff;font-family:sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;text-align:center}</style>
+</head>
+<body>
+<div>
+<p style="font-size:16px">Membuka undangan digital ${eventName}...</p>
+<p><a href="${redirectTarget}" style="color:#d4af37">Klik di sini jika tidak terbuka otomatis</a></p>
+</div>
+</body>
+</html>`;
+
+      return new Response(html, {
+        headers: {
+          'Content-Type': 'text/html; charset=utf-8',
+          'Cache-Control': 'public, max-age=300'
+        }
+      });
+    }
+
     if (request.method !== 'POST') {
       return json({ ok: true, service: 'ambiltiketnya-api', status: 'running' });
     }

@@ -5282,21 +5282,25 @@ const NL=String.fromCharCode(10),find=(a,id)=>a.find(x=>x.id===id),A={
   if(!o)return;
   const ev=(S.aev&&S.aev.find(e=>e.id===o.event_id))||{};
   const evDateStr=ev.event_date?fd(ev.event_date,{weekday:'long',day:'numeric',month:'long',year:'numeric'}):'';
-  const invUrl=location.origin+location.pathname+'?invite='+encodeURIComponent(o.ticket_code)+'&to='+encodeURIComponent(o.guest_name||'');
+  const fmtTime=t=>String(t||'').trim().replace(/^(\d{1,2}:\d{2})(?::\d{2})?$/, '$1');
+  const timeStr=ev.start_time?(fmtTime(ev.start_time)+(ev.end_time?' - '+fmtTime(ev.end_time):'')+' WIB'):'';
+  const apiUrl=window.APP_API_URL?window.APP_API_URL.replace(/\/$/,''):'';
+  const invUrl=(apiUrl&&ev.banner_url)?(apiUrl+'/invite?code='+encodeURIComponent(o.ticket_code)+'&to='+encodeURIComponent(o.guest_name||'')):(location.origin+location.pathname+'?invite='+encodeURIComponent(o.ticket_code)+'&to='+encodeURIComponent(o.guest_name||''));
   const isRsvp=hasMod(ev,'rsvp');
-  let msg='Kepada Yth. *'+(o.guest_name||'Bapak/Ibu/Saudara/i')+'*\n\n'+
-   'Tanpa mengurangi rasa hormat, kami bermaksud mengundang Anda untuk hadir pada acara kami:\n\n'+
+  let msg='Kepada Yth.\n*'+(o.guest_name||'Bapak/Ibu/Saudara/i')+'*\n\n'+
+   'Dengan hormat,\n'+
+   'Kami mengundang Bapak/Ibu/Saudara/i untuk menghadiri acara:\n\n'+
    '*'+(o.name||ev.name||'Undangan Acara')+'*\n'+
    (evDateStr?'📅 *Hari/Tanggal:* '+evDateStr+'\n':'')+
-   (ev.start_time?'⏰ *Waktu:* '+ev.start_time+(ev.end_time?' - '+ev.end_time:'')+' WIB\n':'')+
+   (timeStr?'⏰ *Waktu:* '+timeStr+'\n':'')+
    (ev.location?'📍 *Lokasi:* '+ev.location+'\n\n':'\n');
   if(isRsvp){
-   msg+='Untuk informasi detail acara dan konfirmasi kehadiran (RSVP), silakan buka tautan undangan digital Anda di bawah ini:\n'+
+   msg+='Untuk informasi lengkap acara dan konfirmasi kehadiran (RSVP), silakan buka tautan undangan digital berikut:\n'+
     invUrl+'\n\n'+
-    'Merupakan suatu kehormatan dan kebahagiaan bagi kami apabila Anda berkenan hadir dan memberikan doa restu.\n\n'+
+    'Kehadiran dan konfirmasi Bapak/Ibu/Saudara/i merupakan suatu kehormatan bagi kami.\n\n'+
     'Terima kasih.';
   } else {
-   msg+='Untuk informasi detail acara dan akses e-tiket masuk resmi Anda, silakan buka tautan di bawah ini:\n'+
+   msg+='Untuk informasi lengkap acara dan akses e-tiket masuk resmi Anda, silakan buka tautan di bawah ini:\n'+
     invUrl+'\n\n'+
     'Silakan tunjukkan kode QR pada e-tiket tersebut saat tiba di pintu masuk (gate) acara.\n\n'+
     'Terima kasih.';
