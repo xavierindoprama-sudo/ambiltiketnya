@@ -33,7 +33,7 @@ function doGet(e) {
 /* ---------- API JSON untuk tampilan yang dihosting di luar Apps Script (mis. GitHub Pages) ----------
  * Klien memanggil POST ke alamat /exec dengan isi {"fn":"nama","args":[...]} (Content-Type: text/plain agar tanpa preflight CORS).
  * Hanya fungsi pada daftar putih di bawah yang bisa dipanggil; semuanya sama dengan yang dipakai google.script.run. */
-const API_FNS = { init: init, register: register, loginPw: loginPw, loginGoogle: loginGoogle, forgotRequest: forgotRequest, forgotReset: forgotReset, legalPublic: legalPublic, ticketPublic: ticketPublic, eventsPublic: eventsPublic, feedbackPublic: feedbackPublic, surveyInfo: surveyInfo, surveyStagePoll: surveyStagePoll, api: api, migrateOauth: migrateOauth, gateLogin: gateLogin, ticketFacilities: ticketFacilities, sessionSelfCheckin: sessionSelfCheckin, checkpointPublicInfo: checkpointPublicInfo, sessionStageLiveCount: sessionStageLiveCount, certificateVerify: certificateVerify, organizerPublic: organizerPublic };
+const API_FNS = { init: init, register: register, loginPw: loginPw, loginGoogle: loginGoogle, forgotRequest: forgotRequest, forgotReset: forgotReset, legalPublic: legalPublic, ticketPublic: ticketPublic, eventsPublic: eventsPublic, feedbackPublic: feedbackPublic, surveyInfo: surveyInfo, surveyStagePoll: surveyStagePoll, api: api, migrateOauth: migrateOauth, gateLogin: gateLogin, ticketFacilities: ticketFacilities, sessionSelfCheckin: sessionSelfCheckin, checkpointPublicInfo: checkpointPublicInfo, sessionStageLiveCount: sessionStageLiveCount, certificateVerify: certificateVerify, organizerPublic: organizerPublic, guestbookWall: guestbookWall };
 function jsonOut(o) { return ContentService.createTextOutput(JSON.stringify(o === undefined ? null : o)).setMimeType(ContentService.MimeType.JSON); }
 function doPost(e) {
   let out;
@@ -521,6 +521,7 @@ const ACTIONS = {
   organizersList: { min: 2, fn: organizersList },
   organizerSave:  { min: 2, fn: organizerSave },
   userAssignOrganizer: { min: 3, fn: userAssignOrganizer },
+  assignTable:         { min: 2, fn: assignTable },
   migrateOauth:{ min: 3, fn: () => migrateOauth() },
   saveEvent:   { min: 3, fn: saveEvent },
   toggleEvent: { min: 3, fn: (u, p) => q(`UPDATE events SET is_active=$2::bool WHERE id=$1::uuid RETURNING id`, [p.id, !!p.active]) && true },
@@ -2180,5 +2181,34 @@ function userAssignOrganizer(u, p) {
   } else {
     neonQuery(`UPDATE users SET organizer_id=$1 WHERE id=$2::uuid`, [orgId, userId]);
   }
+  return true;
+}
+
+
+function guestbookWall(p) {
+  var evId = String(p && p.eventId || '').trim();
+  if (!evId) throw new Error('EVENT_REQUIRED');
+  var rows = neonQuery(`
+    SELECT o.id, o.ticket_code, o.guestbook_message AS message, o.created_at,
+      to_char(o.created_at AT TIME ZONE 'Asia/Jakarta', 'HH24:MI') AS time_str,
+      to_char(o.created_at AT TIME ZONE 'Asia/Jakarta', 'DD Mon YYYY') AS date_str,
+      CASE WHEN o.kind IN ('invitation','walk_in') THEN o.guest_name ELSE u.name END AS name,
+      CASE WHEN o.kind IN ('invitation','walk_in') THEN o.guest_org ELSE u.church END AS org,
+      coalesce(o.table_assignment, '') AS table_assignment
+    FROM orders o
+    JOIN users u ON u.id = o.user_id
+    WHERE o.event_id = $1::uuid AND o.guestbook_message <> '' AND o.status <> 'cancelled' AND o.status <> 'declined'
+    ORDER BY o.created_at DESC
+    LIMIT 100
+  `, [evId]);
+  var evs = neonQuery(`SELECT id, name, banner_url, coalesce(active_modules, '["ticketing"]'::jsonb) AS active_modules FROM events WHERE id=$1::uuid`, [evId]);
+  return { messages: rows, event: evs && evs[0] ? evs[0] : null };
+}
+
+function assignTable(u, p) {
+  var ordId = String(p.orderId || '').trim();
+  var table = String(p.tableAssignment || '').trim();
+  if (!ordId) throw new Error('ORDER_ID_REQUIRED');
+  neonQuery(`UPDATE orders SET table_assignment=$1 WHERE id=$2::uuid`, [table, ordId]);
   return true;
 }

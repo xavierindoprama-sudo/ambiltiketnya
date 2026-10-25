@@ -199,6 +199,8 @@ async function newSession(env, uid) {
 function eventsSql(uidExpr) {
   const mine = `FROM orders o WHERE o.event_id=e.id AND o.user_id=${uidExpr} AND o.status<>'cancelled' AND o.kind='order'`;
   return `SELECT e.id,e.name,e.category,e.banner_url,e.description,e.event_date,e.start_time,e.end_time,e.location,e.quota,e.is_paid,e.price,e.max_per_order,e.one_order_per_account,e.terms,coalesce(e.walkin_quota,0)::int AS walkin_quota,
+    coalesce(e.active_modules, '["ticketing"]'::jsonb) AS active_modules,
+    coalesce(e.module_config, '{}'::jsonb) AS module_config,
     coalesce(e.custom_fields, '[]'::jsonb) AS custom_fields,
     coalesce(e.enable_nametag, false)::boolean AS enable_nametag,
     coalesce(e.enable_certificate, false)::boolean AS enable_certificate,
@@ -213,6 +215,8 @@ function eventsSql(uidExpr) {
 
 async function publicEventsList(env) {
   return await neonQuery(env, `SELECT e.id,e.name,e.category,e.banner_url,e.description,e.event_date,e.start_time,e.end_time,e.location,e.quota,e.is_paid,e.price,e.max_per_order,e.one_order_per_account,e.terms,coalesce(e.walkin_quota,0)::int AS walkin_quota,
+    coalesce(e.active_modules, '["ticketing"]'::jsonb) AS active_modules,
+    coalesce(e.module_config, '{}'::jsonb) AS module_config,
     coalesce(e.custom_fields, '[]'::jsonb) AS custom_fields,
     coalesce(e.enable_nametag, false)::boolean AS enable_nametag,
     coalesce(e.enable_certificate, false)::boolean AS enable_certificate,
@@ -392,7 +396,14 @@ async function ensureFeatureTables(env) {
       ON CONFLICT (id) DO NOTHING`,
     `ALTER TABLE events ADD COLUMN IF NOT EXISTS organizer_id uuid REFERENCES organizers(id)`,
     `UPDATE events SET organizer_id = '00000000-0000-0000-0000-000000000001' WHERE organizer_id IS NULL`,
-    `ALTER TABLE users ADD COLUMN IF NOT EXISTS organizer_id uuid REFERENCES organizers(id)`
+    `ALTER TABLE users ADD COLUMN IF NOT EXISTS organizer_id uuid REFERENCES organizers(id)`,
+    `ALTER TABLE events ADD COLUMN IF NOT EXISTS active_modules jsonb NOT NULL DEFAULT '["ticketing"]'::jsonb`,
+    `ALTER TABLE events ADD COLUMN IF NOT EXISTS module_config jsonb NOT NULL DEFAULT '{}'::jsonb`,
+    `ALTER TABLE orders ADD COLUMN IF NOT EXISTS rsvp_status text NOT NULL DEFAULT 'attending'`,
+    `ALTER TABLE orders ADD COLUMN IF NOT EXISTS plus_one_count int NOT NULL DEFAULT 0`,
+    `ALTER TABLE orders ADD COLUMN IF NOT EXISTS guestbook_message text NOT NULL DEFAULT ''`,
+    `ALTER TABLE orders ADD COLUMN IF NOT EXISTS table_assignment text NOT NULL DEFAULT ''`,
+    `CREATE INDEX IF NOT EXISTS orders_guestbook_idx ON orders(event_id, created_at DESC) WHERE guestbook_message <> ''`
   ];
   for (const sql of ddlStatements) {
     try {
@@ -602,6 +613,28 @@ export default {
         return json({ ok: true, data: { session: sess, user: vol, role: 'gate_staff', name: 'Petugas Gerbang', eventId: ev.id, eventName: ev.name } });
       }
 
+      if (fn === 'guestbookWall') {
+        const [p] = args;
+        const evId = String(p && p.eventId || '').trim();
+        if (!evId) throw new Error('EVENT_REQUIRED');
+        await ensureFeatureTables(env);
+        const rows = await neonQuery(env, `
+          SELECT o.id, o.ticket_code, o.guestbook_message AS message, o.created_at,
+            to_char(o.created_at AT TIME ZONE 'Asia/Jakarta', 'HH24:MI') AS time_str,
+            to_char(o.created_at AT TIME ZONE 'Asia/Jakarta', 'DD Mon YYYY') AS date_str,
+            CASE WHEN o.kind IN ('invitation','walk_in') THEN o.guest_name ELSE u.name END AS name,
+            CASE WHEN o.kind IN ('invitation','walk_in') THEN o.guest_org ELSE u.church END AS org,
+            coalesce(o.table_assignment, '') AS table_assignment
+          FROM orders o
+          JOIN users u ON u.id = o.user_id
+          WHERE o.event_id = $1::uuid AND o.guestbook_message <> '' AND o.status <> 'cancelled' AND o.status <> 'declined'
+          ORDER BY o.created_at DESC
+          LIMIT 100
+        `, [evId]);
+        const ev = (await neonQuery(env, `SELECT id, name, banner_url, coalesce(active_modules, '["ticketing"]'::jsonb) AS active_modules FROM events WHERE id=$1::uuid`, [evId]))[0] || null;
+        return json({ ok: true, data: { messages: rows, event: ev } });
+      }
+
       if (fn === 'organizerPublic') {
         const [p] = args;
         const slug = String(p && p.slug || '').trim();
@@ -622,6 +655,10 @@ export default {
         const code = String(p.code || '').trim().toUpperCase();
         const rows = await neonQuery(env, `SELECT o.ticket_code AS code,o.qty,o.status,o.checked_in,o.checked_in_at,o.kind,
           coalesce(o.custom_answers, '{}'::jsonb) AS custom_answers,
+          coalesce(o.rsvp_status, 'attending') AS rsvp_status,
+          coalesce(o.plus_one_count, 0)::int AS plus_one_count,
+          coalesce(o.guestbook_message, '') AS guestbook_message,
+          coalesce(o.table_assignment, '') AS table_assignment,
           CASE WHEN o.kind IN ('invitation','walk_in') THEN o.guest_name ELSE u.name END AS guest_name,
           CASE WHEN o.kind IN ('invitation','walk_in') THEN o.guest_org ELSE u.church END AS guest_org,
           e.id AS event_id,e.name,e.event_date::text AS edate,to_char(e.start_time,'HH24:MI') AS stime,e.location,e.terms,
@@ -642,6 +679,10 @@ export default {
         await ensureFeatureTables(env);
         const rows = await neonQuery(env, `SELECT o.ticket_code, o.checked_in, o.checked_in_at,
           coalesce(o.custom_answers, '{}'::jsonb) AS custom_answers,
+          coalesce(o.rsvp_status, 'attending') AS rsvp_status,
+          coalesce(o.plus_one_count, 0)::int AS plus_one_count,
+          coalesce(o.guestbook_message, '') AS guestbook_message,
+          coalesce(o.table_assignment, '') AS table_assignment,
           CASE WHEN o.kind IN ('invitation','walk_in') THEN o.guest_name ELSE u.name END AS name,
           CASE WHEN o.kind IN ('invitation','walk_in') THEN o.guest_org ELSE u.church END AS org,
           e.name AS event_name, e.event_date::text AS event_date, to_char(e.start_time, 'HH24:MI') AS start_time, e.location,
@@ -993,6 +1034,10 @@ export default {
         if (action === 'myTickets') {
           const rows = await neonQuery(env, `SELECT o.id,o.order_code,o.ticket_code,o.qty,o.total,o.status,o.checked_in,o.created_at,
             coalesce(o.custom_answers, '{}'::jsonb) AS custom_answers,
+          coalesce(o.rsvp_status, 'attending') AS rsvp_status,
+          coalesce(o.plus_one_count, 0)::int AS plus_one_count,
+          coalesce(o.guestbook_message, '') AS guestbook_message,
+          coalesce(o.table_assignment, '') AS table_assignment,
             coalesce(e.enable_nametag, false)::boolean AS enable_nametag,
             coalesce(e.enable_certificate, false)::boolean AS enable_certificate,
             coalesce(e.certificate_config, '{}'::jsonb) AS certificate_config,
@@ -1009,20 +1054,30 @@ export default {
         }
 
         if (action === 'book') {
-          const qty = parseInt(params.qty, 10) || 1;
-          const ev = (await neonQuery(env, `SELECT name, quota, is_paid, price, max_per_order, one_order_per_account FROM events WHERE id=$1::uuid AND is_active`, [params.eventId]))[0];
+          const rsvpStatus = String(params.rsvp_status || 'attending').trim().toLowerCase();
+          const plusOne = Math.max(0, parseInt(params.plus_one_count, 10) || 0);
+          const isDeclined = rsvpStatus === 'declined';
+          const qty = isDeclined ? 1 : (parseInt(params.qty, 10) || (1 + plusOne));
+          const guestbookMsg = String(params.guestbook_message || '').trim().slice(0, 1000);
+          const tableAssign = String(params.table_assignment || '').trim().slice(0, 100);
+
+          const ev = (await neonQuery(env, `SELECT name, quota, is_paid, price, max_per_order, one_order_per_account,
+            coalesce(active_modules, '["ticketing"]'::jsonb) AS active_modules
+            FROM events WHERE id=$1::uuid AND is_active`, [params.eventId]))[0];
           if (!ev) throw new Error('NOT_FOUND');
           const prefix = (ev.name.replace(/[^A-Za-z]/g, '').slice(0, 4).toUpperCase() || 'EVNT');
-          const ticketCode = 'TKT-' + prefix + '-' + rnd(6);
+          const ticketCode = (isDeclined ? 'RSP-DECL-' : 'TKT-' + prefix + '-') + rnd(6);
           const orderCode = rnd(8);
 
           const customAnswers = typeof params.custom_answers === 'object' ? JSON.stringify(params.custom_answers || {}) : (params.custom_answers || '{}');
-          const r = await neonQuery(env, `INSERT INTO orders(order_code,ticket_code,user_id,event_id,qty,total,status,custom_answers)
-            SELECT $1,$2,$3::uuid,e.id,$4::int,e.price*$4::int, CASE WHEN e.is_paid THEN 'pending_payment' ELSE 'confirmed' END, $6::jsonb
-            FROM events e WHERE e.id=$5::uuid AND e.is_active AND $4::int>=1 AND $4::int<=e.max_per_order
-             AND (SELECT coalesce(sum(qty),0) FROM orders WHERE event_id=e.id AND status<>'cancelled' AND kind<>'walk_in') + $4::int <= e.quota
+          const initialStatus = isDeclined ? 'declined' : (ev.is_paid ? 'pending_payment' : 'confirmed');
+
+          const r = await neonQuery(env, `INSERT INTO orders(order_code,ticket_code,user_id,event_id,qty,total,status,custom_answers,rsvp_status,plus_one_count,guestbook_message,table_assignment)
+            SELECT $1,$2,$3::uuid,e.id,$4::int,CASE WHEN $7='declined' THEN 0 ELSE (e.price*$4::int) END, $7::text, $6::jsonb, $7::text, $8::int, $9::text, $10::text
+            FROM events e WHERE e.id=$5::uuid AND e.is_active
+             AND ($7='declined' OR ((SELECT coalesce(sum(qty),0) FROM orders WHERE event_id=e.id AND status<>'cancelled' AND status<>'declined' AND kind<>'walk_in') + $4::int <= e.quota))
              AND (NOT e.one_order_per_account OR NOT EXISTS(SELECT 1 FROM orders WHERE event_id=e.id AND user_id=$3::uuid AND status<>'cancelled' AND kind='order'))
-            RETURNING id,status,ticket_code`, [orderCode, ticketCode, u.id, qty, params.eventId, customAnswers]);
+            RETURNING id,status,ticket_code`, [orderCode, ticketCode, u.id, qty, params.eventId, customAnswers, initialStatus, plusOne, guestbookMsg, tableAssign]);
 
           if (!r.length) throw new Error('SOLDOUT');
 
@@ -1050,6 +1105,10 @@ export default {
           const cpKey = String(params.checkpoint || 'main_gate').trim();
           const rows = await neonQuery(env, `SELECT o.id,o.qty,o.status,o.checked_in,o.checked_in_at,o.kind,o.event_id,
             coalesce(o.custom_answers, '{}'::jsonb) AS custom_answers,
+          coalesce(o.rsvp_status, 'attending') AS rsvp_status,
+          coalesce(o.plus_one_count, 0)::int AS plus_one_count,
+          coalesce(o.guestbook_message, '') AS guestbook_message,
+          coalesce(o.table_assignment, '') AS table_assignment,
             CASE WHEN o.kind IN ('invitation','walk_in') THEN o.guest_name ELSE u.name END AS name,
             CASE WHEN o.kind IN ('invitation','walk_in') THEN o.guest_org ELSE u.church END AS church,
             CASE WHEN o.kind IN ('invitation','walk_in') THEN o.guest_age ELSE u.age END AS age,
@@ -1181,6 +1240,10 @@ export default {
           }
           const sql = `SELECT o.id,o.order_code,o.ticket_code,o.qty,o.total,o.status,o.checked_in,o.checked_in_at,o.created_at,o.kind,
             coalesce(o.custom_answers, '{}'::jsonb) AS custom_answers,
+          coalesce(o.rsvp_status, 'attending') AS rsvp_status,
+          coalesce(o.plus_one_count, 0)::int AS plus_one_count,
+          coalesce(o.guestbook_message, '') AS guestbook_message,
+          coalesce(o.table_assignment, '') AS table_assignment,
             coalesce(o.emailed, false) AS emailed, o.email_error, o.emailed_at,
             CASE WHEN o.kind IN ('invitation','walk_in') THEN o.guest_name ELSE u.name END AS name,
             CASE WHEN o.kind='invitation' THEN 'Undangan' WHEN o.kind='walk_in' THEN coalesce(nullif(o.guest_email,''), 'Walk-In') ELSE u.email END AS email,
@@ -1415,18 +1478,21 @@ export default {
           const enableNametag = !!params.enable_nametag;
           const enableCertificate = !!params.enable_certificate;
           const certConfig = typeof params.certificate_config === 'object' ? JSON.stringify(params.certificate_config || {}) : (params.certificate_config || '{}');
+          const activeModules = Array.isArray(params.active_modules) ? JSON.stringify(params.active_modules) : (params.active_modules || '["ticketing"]');
+          const moduleConfig = typeof params.module_config === 'object' ? JSON.stringify(params.module_config || {}) : (params.module_config || '{}');
 
           const v = [params.name.trim(), params.category || '', params.banner_url || '', params.description || '', params.announcement || '', params.event_date, params.start_time, params.end_time || null, params.location.trim(),
             quota, walkinQuota, paid, paid ? Math.max(0, parseInt(params.price, 10) || 0) : 0, maxp, !!params.one_order_per_account, params.is_active !== false, params.payment_instructions || '', String(params.terms || '').slice(0, 8000),
-            customFields, enableNametag, enableCertificate, certConfig, orgId];
-          const r = await neonQuery(env, `INSERT INTO events(name,category,banner_url,description,announcement,event_date,start_time,end_time,location,quota,walkin_quota,is_paid,price,max_per_order,one_order_per_account,is_active,payment_instructions,terms,custom_fields,enable_nametag,enable_certificate,certificate_config,organizer_id,id)
-            VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19::jsonb,$20::boolean,$21::boolean,$22::jsonb,$23::uuid,$24::uuid) ON CONFLICT(id) DO UPDATE SET
+            customFields, enableNametag, enableCertificate, certConfig, activeModules, moduleConfig, orgId];
+          const r = await neonQuery(env, `INSERT INTO events(name,category,banner_url,description,announcement,event_date,start_time,end_time,location,quota,walkin_quota,is_paid,price,max_per_order,one_order_per_account,is_active,payment_instructions,terms,custom_fields,enable_nametag,enable_certificate,certificate_config,active_modules,module_config,organizer_id,id)
+            VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19::jsonb,$20::boolean,$21::boolean,$22::jsonb,$23::jsonb,$24::jsonb,$25::uuid,$26::uuid) ON CONFLICT(id) DO UPDATE SET
             name=EXCLUDED.name,category=EXCLUDED.category,banner_url=EXCLUDED.banner_url,description=EXCLUDED.description,announcement=EXCLUDED.announcement,
             quota=EXCLUDED.quota,walkin_quota=EXCLUDED.walkin_quota,is_paid=EXCLUDED.is_paid,is_active=EXCLUDED.is_active,price=EXCLUDED.price,
             event_date=EXCLUDED.event_date,start_time=EXCLUDED.start_time,end_time=EXCLUDED.end_time,location=EXCLUDED.location,
             max_per_order=EXCLUDED.max_per_order,one_order_per_account=EXCLUDED.one_order_per_account,
             payment_instructions=EXCLUDED.payment_instructions,terms=EXCLUDED.terms,
             custom_fields=EXCLUDED.custom_fields,enable_nametag=EXCLUDED.enable_nametag,enable_certificate=EXCLUDED.enable_certificate,certificate_config=EXCLUDED.certificate_config,
+            active_modules=EXCLUDED.active_modules,module_config=EXCLUDED.module_config,
             organizer_id=EXCLUDED.organizer_id
             RETURNING id`, [...v, params.id || crypto.randomUUID()]);
           return json({ ok: true, data: r[0] });
@@ -1773,6 +1839,16 @@ export default {
           const id = String(params.id || '').trim();
           await ensureFeatureTables(env);
           await neonQuery(env, `DELETE FROM event_feedbacks WHERE id=$1::uuid`, [id]);
+          return json({ ok: true, data: true });
+        }
+
+        if (action === 'assignTable') {
+          needRole(2);
+          const ordId = String(params.orderId || '').trim();
+          const table = String(params.tableAssignment || '').trim();
+          if (!ordId) throw new Error('ORDER_ID_REQUIRED');
+          await ensureFeatureTables(env);
+          await neonQuery(env, `UPDATE orders SET table_assignment=$1 WHERE id=$2::uuid`, [table, ordId]);
           return json({ ok: true, data: true });
         }
 

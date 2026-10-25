@@ -379,6 +379,7 @@ async function boot(){applyTheme();
  const gateEv=qp.get('gate'),gateKey=qp.get('k');
  const stage=qp.get('stage');
  if(stage==='survey'){return surveyStageView(qp.get('ev')||'');}
+ if(stage==='greeting'){return greetingStageView(qp.get('ev')||'');}
  const surveyEv=qp.get('survey')||qp.get('fb');
  if(surveyEv){return publicSurveyView(surveyEv);}
  if(stage==='doorprize'){applyTheme();const evId=qp.get('ev')||'';if(evId)S_dp.evId=evId;if(qp.get('mode')==='screen'){return doorprizeStageScreen(evId);}S.token=ls.g('tk')||'';if(!S.token)return gate();try{S.user=await api('me',{});S.mode='admin';S.view='doorprize';$('#app').innerHTML='<div style="min-height:100vh;background:#080b18;padding:20px" id="ac"></div>';doorprizeView($('#ac'));return}catch(x){return gate()}}
@@ -460,14 +461,15 @@ function renderUser(){if(!S.user)return renderGuest();
  }
  $('#app').innerHTML=hdr()+`<main class="wrap"><div class="hero"><h1>${t('title')}</h1><p>${t('sub')}</p></div><div class="tabs">${seg([['catalog',t('catalog')],['tickets',t('mytix')]],S.tab,'tab')}</div><div id="uc">${skel(3)}</div>${legalFooter()}</main>`;userTab()}
 async function userTab(){const uc=$('#uc');if(!uc)return;uc.innerHTML=skel(3);try{if(S.tab==='catalog'){if(!S.ev||!S.ev.length){S.ev=S.pre||(S.user?await api('events'):(await call('init','')).events||[])}S.pre=null;uc.innerHTML=S.ev.length?'<div class="grid">'+S.ev.map(evCard).join('')+'</div>':`<p class="muted">${t('none')}</p>`}else{if(!S.user){gateModal();return}S.tix=S.preT||await api('myTickets');S.preT=null;uc.innerHTML=S.tix.length?S.tix.map(tixRow).join(''):`<p class="muted">${t('none')}</p>`}}catch(e){fail(e)}}
+const hasMod=(e,m)=>((e&&e.active_modules)?(Array.isArray(e.active_modules)?e.active_modules:JSON.parse(e.active_modules||'[]')):['ticketing']).includes(m);
 const stPill=s=>`<span class="pill ${s==='confirmed'?'ok':s==='cancelled'?'er':'wn'}">${t('st_'+s)}</span>`;
-function evCard(e){const used=e.quota-e.remaining;return `<article class="card ev" data-act="open" data-id="${e.id}"><div class="ban">${e.banner_url?`<img loading="lazy" decoding="async" src="${esc(e.banner_url)}" onerror="this.remove()">`:''}<div class="bd"><span class="pill">${rp(e.is_paid?e.price:0)}</span>${e.max_per_order>1?`<span class="pill y">${t('maxp')}: ${e.max_per_order}</span>`:''}</div><div class="dt"><span>&#128197; ${fd(e.event_date)}</span><span>&#128338; ${tm(e)}</span></div></div>
-<div class="eb"><div class="cat">${esc(e.category)}</div><h3>${esc(e.name)}</h3><div class="ds">${esc(e.description)}</div><div class="row" style="margin-top:10px"><span class="muted">${t('left')}</span><b class="mono">${e.remaining} ${t('tix')}</b></div><div class="qb"><i style="width:${pc(e.remaining,e.quota)}%"></i></div><button class="btn pri" style="width:100%">${e.remaining<=0?t('soldout'):e.has_order&&e.one_order_per_account?t('ordered'):t('book')} &#8250;</button></div></article>`}
-function evModal(e){const mx=Math.max(1,Math.min(e.max_per_order,e.remaining)),dis=e.remaining<=0||(e.has_order&&e.one_order_per_account),mine=e.my_order?`<button class="btn ${dis?'pri':''}" data-act="pass" data-id="${e.my_order}">${e.my_status==='pending_payment'?t('pay'):t('view')}</button>`:'',hideBook=dis&&e.my_order&&e.remaining>0;
+function evCard(e){const isRsvp=hasMod(e,'rsvp')&&!hasMod(e,'ticketing');const used=e.quota-e.remaining;return `<article class="card ev" data-act="open" data-id="${e.id}"><div class="ban">${e.banner_url?`<img loading="lazy" decoding="async" src="${esc(e.banner_url)}" onerror="this.remove()">`:''}<div class="bd"><span class="pill ${isRsvp?'ok':''}">${isRsvp?'✉️ RSVP':rp(e.is_paid?e.price:0)}</span>${e.max_per_order>1&&!isRsvp?`<span class="pill y">${t('maxp')}: ${e.max_per_order}</span>`:''}</div><div class="dt"><span>&#128197; ${fd(e.event_date)}</span><span>&#128338; ${tm(e)}</span></div></div>
+<div class="eb"><div class="cat">${esc(e.category)}</div><h3>${esc(e.name)}</h3><div class="ds">${esc(e.description)}</div><div class="row" style="margin-top:10px"><span class="muted">${isRsvp?'Kapasitas:':t('left')}</span><b class="mono">${e.remaining} ${isRsvp?'Kursi':t('tix')}</b></div><div class="qb"><i style="width:${pc(e.remaining,e.quota)}%"></i></div><button class="btn pri" style="width:100%">${e.remaining<=0?t('soldout'):e.has_order&&e.one_order_per_account?(isRsvp?'✓ Sudah RSVP':t('ordered')):(isRsvp?'✉️ RSVP Sekarang':t('book'))} &#8250;</button></div></article>`}
+function evModal(e){const isRsvp=hasMod(e,'rsvp')&&!hasMod(e,'ticketing');const mx=Math.max(1,Math.min(e.max_per_order,e.remaining)),dis=e.remaining<=0||(e.has_order&&e.one_order_per_account),mine=e.my_order?`<button class="btn ${dis?'pri':''}" data-act="pass" data-id="${e.my_order}">${isRsvp?'Lihat RSVP':(e.my_status==='pending_payment'?t('pay'):t('view'))}</button>`:'',hideBook=dis&&e.my_order&&e.remaining>0;
  modal(`<button class="btn sm x" data-act="cm">&#10005;</button><div class="ban mban">${e.banner_url?`<img src="${esc(e.banner_url)}" onerror="this.remove()">`:''}</div><div class="cat evc">${esc(e.category)}</div><h2>${esc(e.name)}</h2>
-<div class="info"><div><small>${t('date')}</small><b>${fd(e.event_date,{weekday:'long',day:'numeric',month:'long',year:'numeric'})}</b></div><div><small>${t('time')}</small><b>${tm(e)}</b></div><div><small>${t('place')}</small><b>${esc(e.location)}</b></div><div><small>${t('left')}</small><b>${e.remaining} ${t('tix')}</b></div></div>
-<p class="edesc" data-act="xdesc">${esc(e.description)}</p>${e.terms?`<button class="lnk tcl" data-act="evTerms" data-id="${e.id}">${t('ev_terms')} &#8250;</button>`:''}<div class="row"><b style="font-size:18px">${rp(e.is_paid?e.price:0)}</b>${mx>1&&!dis?`<div class="qtyb"><label style="margin:0">${t('qty')}</label><input id="bq" type="number" min="1" max="${mx}" value="1"></div>`:''}</div>
-<div class="acts">${mine}${hideBook?'':`<button class="btn pri" data-act="book" data-id="${e.id}" ${dis?'disabled':''}>${dis?t('soldout'):(e.my_order?t('bookagain'):t('book'))}</button>`}</div>${hideBook?`<p class="muted">${t('already')}</p>`:''}`)}
+<div class="info"><div><small>${t('date')}</small><b>${fd(e.event_date,{weekday:'long',day:'numeric',month:'long',year:'numeric'})}</b></div><div><small>${t('time')}</small><b>${tm(e)}</b></div><div><small>${t('place')}</small><b>${esc(e.location)}</b></div><div><small>${isRsvp?'Kapasitas':t('left')}</small><b>${e.remaining} ${isRsvp?'Kursi':t('tix')}</b></div></div>
+<p class="edesc" data-act="xdesc">${esc(e.description)}</p>${e.terms?`<button class="lnk tcl" data-act="evTerms" data-id="${e.id}">${t('ev_terms')} &#8250;</button>`:''}<div class="row">${isRsvp?`<b style="font-size:16px;color:#059669">✉️ Konfirmasi Kehadiran (RSVP)</b>`:`<b style="font-size:18px">${rp(e.is_paid?e.price:0)}</b>`}${(!isRsvp&&mx>1&&!dis)?`<div class="qtyb"><label style="margin:0">${t('qty')}</label><input id="bq" type="number" min="1" max="${mx}" value="1"></div>`:''}</div>
+<div class="acts">${mine}${hideBook?'':(isRsvp?`<button class="btn pri" data-act="openRsvp" data-id="${e.id}" ${dis?'disabled':''}>${dis?'Kapasitas Penuh':'✉️ Isi RSVP Kehadiran'}</button>`:`<button class="btn pri" data-act="book" data-id="${e.id}" ${dis?'disabled':''}>${dis?t('soldout'):(e.my_order?t('bookagain'):t('book'))}</button>`)}</div>${hideBook?`<p class="muted">${isRsvp?'Anda sudah mengonfirmasi kehadiran':t('already')}</p>`:''}`)}
 function printHtml(o){const inv=o.kind==='invitation',wlk=o.kind==='walk_in';
  const f=(l,v)=>'<small>'+l+'</small><b>'+esc(v)+'</b>',nm=o.guest_name||(S.user?S.user.name:'');
  const ev=(S.ev&&find(S.ev,o.event_id))||(S.aev&&find(S.aev,o.event_id))||{};
@@ -1652,15 +1654,72 @@ function paintOfflineStatus(){const badge=$('#off_badge_area'),info=$('#off_info
   else{const totalTix=evIds.reduce((a,k)=>a+(store[k].count||0),0);info.innerHTML=`<span style="color:var(--ok)">✓ <b>${totalTix}</b> ${t('off_cached_cnt')} (${evIds.map(k=>esc(store[k].eventName)).join(', ')})</span>`}}}
 
 async function evList(c){try{S.aev=await api('adminEvents')}catch(e){return fail(e)}
- c.innerHTML=(canEdit()?`<div class="acts"><button class="btn pri" data-act="evForm" style="flex:none">+ ${t('new_ev')}</button></div>`:'')+S.aev.map(e=>`<div class="card er"><img src="${esc(e.banner_url)}" onerror="this.style.visibility='hidden'"><div style="flex:1;min-width:0"><b>${esc(e.name)}</b>${e.organizer_name?`<span class="badge" style="background:var(--card-sub);font-size:11px;margin-left:6px;padding:2px 8px;border-radius:10px">🏢 ${esc(e.organizer_name)}</span>`:''}<div class="muted">${fd(e.event_date)} &#183; Online: ${e.sold}/${e.quota} ${t('tix')}${e.walkin_quota?` &#183; Walk-in: ${e.walkin_sold||0}/${e.walkin_quota}`:''} &#183; ${rp(e.is_paid?e.price:0)}</div></div>${canEdit()?`<label class="sw"><input type="checkbox" data-ch="tgl" data-id="${e.id}" ${e.is_active?'checked':''}><i></i></label><button class="btn sm" data-act="cpManageModal" data-id="${e.id}" title="Kelola Pos Check-In &amp; Fasilitas">📍 Pos Check-In</button><button class="btn sm" data-act="gatelink" data-id="${e.id}" title="${t('gate_pass')}">📋 ${t('gate_pass')}</button><button class="btn sm" data-act="evForm" data-id="${e.id}">${t('edit')}</button>`:stPill(e.is_active?'confirmed':'cancelled')}</div>`).join('')}
+ c.innerHTML=(canEdit()?`<div class="acts"><button class="btn pri" data-act="evForm" style="flex:none">+ ${t('new_ev')}</button></div>`:'')+S.aev.map(e=>`<div class="card er"><img src="${esc(e.banner_url)}" onerror="this.style.visibility='hidden'"><div style="flex:1;min-width:0"><b>${esc(e.name)}</b>${e.organizer_name?`<span class="badge" style="background:var(--card-sub);font-size:11px;margin-left:6px;padding:2px 8px;border-radius:10px">🏢 ${esc(e.organizer_name)}</span>`:''}<div class="muted">${fd(e.event_date)} &#183; Online: ${e.sold}/${e.quota} ${t('tix')}${e.walkin_quota?` &#183; Walk-in: ${e.walkin_sold||0}/${e.walkin_quota}`:''} &#183; ${rp(e.is_paid?e.price:0)}</div></div>${canEdit()?`<label class="sw"><input type="checkbox" data-ch="tgl" data-id="${e.id}" ${e.is_active?'checked':''}><i></i></label>${hasMod(e,'guestbook')?`<a class="btn sm" href="${location.pathname}?stage=greeting&ev=${e.id}" target="_blank" title="Buka Layar Panggung Ucapan (Live Wall)">📺 Layar Ucapan</a>`:""}<button class="btn sm" data-act="cpManageModal" data-id="${e.id}" title="Kelola Pos Check-In &amp; Fasilitas">📍 Pos Check-In</button><button class="btn sm" data-act="gatelink" data-id="${e.id}" title="${t('gate_pass')}">📋 ${t('gate_pass')}</button><button class="btn sm" data-act="evForm" data-id="${e.id}">${t('edit')}</button>`:stPill(e.is_active?'confirmed':'cancelled')}</div>`).join('')}
 function evForm(id){if(rk()>=3&&(!S.organizers||!S.organizers.length)){api('organizersList').then(r=>{S.organizers=r;if($('#ef'))paintDash();}).catch(()=>{});}const e=S.aev.find(x=>x.id===id)||{name:'',category:'',quota:100,walkin_quota:0,banner_url:'',event_date:'',start_time:'19:00',end_time:'',location:'',description:'',announcement:'',is_paid:false,price:0,max_per_order:1,one_order_per_account:false,is_active:true,payment_instructions:'',terms:defTerms()};S.paid=!!e.is_paid;
  const f=(k,l,v,ty)=>`<div><label>${t(l)}</label><input name="${k}" type="${ty||'text'}" value="${esc(v)}"></div>`;
  modal(`<button class="btn sm x" data-act="cm">&#10005;</button><h2>${id?t('edit'):t('new_ev')}</h2><form id="ef" onsubmit="return false"><input type="hidden" name="id" value="${id||''}">${f('name','f_name',e.name)}<div class="fg">${f('category','f_cat',e.category)}${f('quota','f_quota',e.quota,'number')}${f('walkin_quota','walkin_quota',e.walkin_quota||0,'number')}</div>${f('banner_url','f_banner',e.banner_url)}
 <div class="fg">${f('event_date','f_date',e.event_date,'date')}${f('start_time','f_start',String(e.start_time).slice(0,5),'time')}${f('end_time','f_end',e.end_time?String(e.end_time).slice(0,5):'','time')}</div>${f('location','f_loc',e.location)}
 ${rk()>=3?`<div style="margin:10px 0"><label>🏢 Penyelenggara (EO Workspace)</label><select name="organizer_id" class="in" style="width:100%">${(S.organizers||[]).map(o=>`<option value="${o.id}" ${(e.organizer_id===o.id)?'selected':''}>${esc(o.name)} (@${esc(o.slug)})</option>`).join('')}</select></div>`:''}
 <label>${t('f_desc')}</label><textarea name="description" rows="3">${esc(e.description)}</textarea><label>${t('f_ann')}</label><textarea name="announcement" rows="2">${esc(e.announcement)}</textarea><label>${t('f_terms')}</label><textarea name="terms" rows="6">${esc(e.terms)}</textarea>
-<div style="margin:12px 0">${seg([['0',t('f_free')],['1',t('f_paid')]],S.paid?'1':'0','paid')}</div><div class="fg"><div><label>${t('f_price')}</label><input name="price" id="pr" type="number" min="0" value="${e.price}" ${S.paid?'':'disabled'}></div>${f('max_per_order','f_max',e.max_per_order,'number')}</div>
-<label>${t('f_pay')}</label><textarea name="payment_instructions" rows="2">${esc(e.payment_instructions)}</textarea>
+<div style="background:var(--in,rgba(0,0,0,.03));border:1px solid var(--bd,rgba(0,0,0,.08));border-radius:12px;padding:14px;margin:12px 0">
+  <b style="display:flex;align-items:center;gap:6px;font-size:13px;margin-bottom:6px">🧩 Paket Modul Acara (Fitur Aktif)</b>
+  <p class="muted" style="margin:0 0 12px;font-size:11px">Pilih modul yang sesuai dengan jenis acara Anda. Antarmuka formulir &amp; pendaftaran akan menyesuaikan secara dinamis.</p>
+
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px">
+    <label style="display:flex;gap:8px;align-items:flex-start;background:var(--card,#fff);padding:10px;border-radius:10px;border:1px solid var(--bd);cursor:pointer">
+      <input type="checkbox" name="active_mod_ticketing" id="mod_tkt" style="width:auto;margin-top:3px" ${hasMod(e,'ticketing')?'checked':''} onchange="$('#ef_pricing_box').style.display=this.checked?'block':'none'">
+      <div>
+        <b style="font-size:12px;display:block">🎟️ Tiket Komersial</b>
+        <small style="opacity:.7;font-size:10px">Penjualan tiket berbayar/gratis untuk konser &amp; workshop</small>
+      </div>
+    </label>
+
+    <label style="display:flex;gap:8px;align-items:flex-start;background:var(--card,#fff);padding:10px;border-radius:10px;border:1px solid var(--bd);cursor:pointer">
+      <input type="checkbox" name="active_mod_rsvp" id="mod_rsvp" style="width:auto;margin-top:3px" ${hasMod(e,'rsvp')?'checked':''} onchange="$('#ef_rsvp_box').style.display=this.checked?'block':'none'">
+      <div>
+        <b style="font-size:12px;display:block">✉️ RSVP &amp; Undangan</b>
+        <small style="opacity:.7;font-size:10px">Konfirmasi kehadiran, pendamping &amp; alokasi meja</small>
+      </div>
+    </label>
+
+    <label style="display:flex;gap:8px;align-items:flex-start;background:var(--card,#fff);padding:10px;border-radius:10px;border:1px solid var(--bd);cursor:pointer">
+      <input type="checkbox" name="active_mod_guestbook" id="mod_gb" style="width:auto;margin-top:3px" ${hasMod(e,'guestbook')?'checked':''} onchange="$('#ef_gb_box').style.display=this.checked?'block':'none'">
+      <div>
+        <b style="font-size:12px;display:block">📖 Buku Tamu &amp; Layar</b>
+        <small style="opacity:.7;font-size:10px">Kotak ucapan/doa tamu &amp; live greeting wall panggung</small>
+      </div>
+    </label>
+  </div>
+
+  <div id="ef_rsvp_box" style="display:${hasMod(e,'rsvp')?'block':'none'};background:var(--card,#fff);border:1px dashed var(--bd);border-radius:10px;padding:12px;margin-top:12px">
+    <small style="font-weight:700;text-transform:uppercase;letter-spacing:1px;font-size:10px;color:var(--mu);display:block;margin-bottom:8px">Opsi Modul RSVP</small>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px">
+      <label style="display:flex;gap:6px;align-items:center;font-size:12px;cursor:pointer">
+        <input type="checkbox" name="rsvp_allow_plus_one" style="width:auto" ${e.module_config?.allow_plus_one?'checked':''}> Izinkan Bawa Pendamping (Plus-One)
+      </label>
+      <div style="display:flex;align-items:center;gap:6px">
+        <label style="font-size:11px;white-space:nowrap;margin:0">Maks. Pendamping:</label>
+        <input name="rsvp_max_plus_one" type="number" min="1" max="10" value="${e.module_config?.max_plus_one||2}" style="width:60px;padding:4px">
+      </div>
+      <label style="display:flex;gap:6px;align-items:center;font-size:12px;cursor:pointer">
+        <input type="checkbox" name="rsvp_enable_table" style="width:auto" ${e.module_config?.enable_table?'checked':''}> Aktifkan Alokasi Nomor Meja Tamu
+      </label>
+    </div>
+  </div>
+
+  <div id="ef_gb_box" style="display:${hasMod(e,'guestbook')?'block':'none'};background:var(--card,#fff);border:1px dashed var(--bd);border-radius:10px;padding:12px;margin-top:12px">
+    <small style="font-weight:700;text-transform:uppercase;letter-spacing:1px;font-size:10px;color:var(--mu);display:block;margin-bottom:8px">Opsi Modul Buku Tamu (Guestbook)</small>
+    <label style="display:flex;gap:6px;align-items:center;font-size:12px;cursor:pointer">
+      <input type="checkbox" name="gb_enable_live_wall" style="width:auto" ${e.module_config?.enable_live_wall!==false?'checked':''}> Tampilkan Layar Panggung Ucapan (Live Greeting Wall)
+    </label>
+    ${id?`<div style="margin-top:8px"><a class="btn sm" href="${location.pathname}?stage=greeting&ev=${id}" target="_blank" style="text-decoration:none">📺 Buka Layar Panggung Ucapan Sekarang ↗</a></div>`:''}
+  </div>
+</div>
+
+<div id="ef_pricing_box" style="display:${hasMod(e,'ticketing')?'block':'none'}">
+  <div style="margin:12px 0">${seg([['0',t('f_free')],['1',t('f_paid')]],S.paid?'1':'0','paid')}</div><div class="fg"><div><label>${t('f_price')}</label><input name="price" id="pr" type="number" min="0" value="${e.price}" ${S.paid?'':'disabled'}></div>${f('max_per_order','f_max',e.max_per_order,'number')}</div>
+  <label>${t('f_pay')}</label><textarea name="payment_instructions" rows="2">${esc(e.payment_instructions)}</textarea>
+</div>
 <label style="display:flex;gap:8px;align-items:center"><input type="checkbox" name="one_order_per_account" style="width:auto" ${e.one_order_per_account?'checked':''}>${t('f_one')}</label><label style="display:flex;gap:8px;align-items:center"><input type="checkbox" name="is_active" style="width:auto" ${e.is_active?'checked':''}>${t('f_act')}</label>
 
 <div style="background:var(--in,rgba(0,0,0,.03));border:1px solid var(--bd,rgba(0,0,0,.08));border-radius:12px;padding:14px;margin:16px 0">
@@ -1789,7 +1848,7 @@ function paintOrders(){const k=($('#oq').value||'').toLowerCase(),emF=$('#oem')?
   if(rk()>=2&&o.status==='confirmed'&&o.checked_in<o.qty)b+=`<button class="btn sm pri" data-act="ci" data-id="${o.id}">${t('ci')}</button>`;
   if(canEdit()||rk()>=2){if(o.status==='pending_payment'&&canEdit())b+=`<button class="btn sm pri" data-act="cpay" data-id="${o.id}">${t('confirmpay')}</button>`;if(o.status==='confirmed'&&o.kind==='order')b+=`<button class="btn sm" data-act="resend" data-id="${o.id}" title="${t('resend')}">✉️ ${t('resend')}</button>`;if(o.status!=='cancelled'&&canEdit())b+=`<button class="btn sm dg" data-act="cxl" data-id="${o.id}">${t('cancel')}</button>`}
   return b?`<div class="acts" style="margin:0;justify-content:flex-end">${b}</div>`:''};
- $('#ot').innerHTML=`<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:8px"><div><b style="font-size:20px">${l.reduce((a,o)=>a+o.qty,0)}</b> ${t('tix')} / ${n} pemesan ${pendingCnt>0?`<span class="pill wn" style="font-weight:700;margin-left:6px">⚠️ ${pendingCnt} ${t('em_pending')}</span>`:''}</div></div>${S.ordTr?'<p class="muted">'+t('pg_trunc')+'</p>':''}<div class="tw"><table class="rt"><tr>${th}</tr>${rows.map(o=>`<tr><td data-l="${t('c_code')}" class="mono"><b>${esc(o.ticket_code)}</b><br><small class="muted">${new Date(o.created_at).toLocaleString(loc())}</small></td><td data-l="${t('c_name')}">${esc(o.name)}${o.kind==='invitation'?' <span class="pill gd">'+t('inv_badge')+'</span>':o.kind==='walk_in'?' <span class="pill wn" style="background:#10b981;color:#fff;font-weight:700">'+t('walkin_badge')+'</span>':''}<br><small class="muted">${o.kind==='invitation'?esc(o.church):o.kind==='walk_in'?(o.guest_org?esc(o.guest_org)+'<br>':'')+(o.guest_phone?'+'+esc(o.guest_phone)+' &#183; ':'')+(o.guest_email?esc(o.guest_email):'Di tempat'):esc(o.email)+'<br>+'+esc(o.whatsapp)+' &#183; '+esc(o.age)+' &#183; '+esc(o.church)}</small>${(o.custom_answers&&typeof o.custom_answers==='object'&&Object.keys(o.custom_answers).length>0)?`<div style="margin-top:4px;display:flex;flex-wrap:wrap;gap:3px">${Object.values(o.custom_answers).map(a=>`<span style="background:var(--in,rgba(0,0,0,.05));border:1px solid var(--bd,rgba(0,0,0,.1));padding:1px 6px;border-radius:4px;font-size:10px;font-weight:600">${esc(a.label)}: <b>${esc(a.value)}</b></span>`).join('')}</div>`:''}${o.kind==='order'&&o.status==='confirmed'?`<div style="margin-top:3px;display:flex;align-items:center;flex-wrap:wrap;gap:4px"><span class="pill ${o.emailed?'ok':'er'}" style="font-size:10px;padding:2px 7px;font-weight:700" title="${esc(o.email_error||(o.emailed?'Terkirim pada '+(o.emailed_at?new Date(o.emailed_at).toLocaleString(loc()):'-'):'Belum terkirim'))}">${o.emailed?'✓ '+t('em_sent'):'⚠️ '+t('em_pending')}</span>${o.emailed&&o.email_error?`<span class="muted" style="font-size:10px;font-weight:600">(${esc(o.email_error)})</span>`:''}${!o.emailed&&o.email_error?`<div style="font-size:10px;color:var(--er);margin-top:2px;width:100%;white-space:normal;line-height:1.2">${esc(o.email_error)}</div>`:''}</div>`:''}</td><td data-l="${t('c_event')}">${esc(o.event_name)}</td><td data-l="${t('c_qty')}">${o.qty}</td><td data-l="${t('c_status')}">${stPill(o.status)}</td><td data-l="${t('c_chk')}" class="mono">${o.checked_in}/${o.qty}</td><td>${acts(o)}</td></tr>`).join('')}</table></div>${pagerHtml(n,S.ordPage,pages,from,rows.length)}`}
+ $('#ot').innerHTML=`<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:8px"><div><b style="font-size:20px">${l.reduce((a,o)=>a+o.qty,0)}</b> ${t('tix')} / ${n} pemesan ${pendingCnt>0?`<span class="pill wn" style="font-weight:700;margin-left:6px">⚠️ ${pendingCnt} ${t('em_pending')}</span>`:''}</div></div>${S.ordTr?'<p class="muted">'+t('pg_trunc')+'</p>':''}<div class="tw"><table class="rt"><tr>${th}</tr>${rows.map(o=>`<tr><td data-l="${t('c_code')}" class="mono"><b>${esc(o.ticket_code)}</b><br><small class="muted">${new Date(o.created_at).toLocaleString(loc())}</small></td><td data-l="${t('c_name')}">${esc(o.name)}${o.kind==='invitation'?' <span class="pill gd">'+t('inv_badge')+'</span>':o.kind==='walk_in'?' <span class="pill wn" style="background:#10b981;color:#fff;font-weight:700">'+t('walkin_badge')+'</span>':''}<br><small class="muted">${o.kind==='invitation'?esc(o.church):o.kind==='walk_in'?(o.guest_org?esc(o.guest_org)+'<br>':'')+(o.guest_phone?'+'+esc(o.guest_phone)+' &#183; ':'')+(o.guest_email?esc(o.guest_email):'Di tempat'):esc(o.email)+'<br>+'+esc(o.whatsapp)+' &#183; '+esc(o.age)+' &#183; '+esc(o.church)}</small>${o.rsvp_status?`<div style="margin-top:2px">${o.rsvp_status==='declined'?'<span class="pill er" style="font-size:10px">🔴 Tidak Hadir</span>':o.rsvp_status==='tentative'?'<span class="pill wn" style="font-size:10px">🟡 Ragu-ragu</span>':(o.plus_one_count>0?`<span class="pill ok" style="font-size:10px">🟢 Hadir (+${o.plus_one_count})</span>`:'')}</div>`:''}${rk()>=2?`<div style="margin-top:3px"><button class="btn sm" data-act="openTableModal" data-id="${o.id}" data-tbl="${esc(o.table_assignment||'')}" style="font-size:10px;padding:1px 6px;border-radius:4px;border:1px dashed var(--bd);background:var(--in)">🪑 ${esc(o.table_assignment||'+ Set Meja')}</button></div>`:''}${o.guestbook_message?`<div style="font-size:11px;color:var(--mu);margin-top:3px;font-style:italic">💌 "${esc(o.guestbook_message)}"</div>`:''}${(o.custom_answers&&typeof o.custom_answers==='object'&&Object.keys(o.custom_answers).length>0)?`<div style="margin-top:4px;display:flex;flex-wrap:wrap;gap:3px">${Object.values(o.custom_answers).map(a=>`<span style="background:var(--in,rgba(0,0,0,.05));border:1px solid var(--bd,rgba(0,0,0,.1));padding:1px 6px;border-radius:4px;font-size:10px;font-weight:600">${esc(a.label)}: <b>${esc(a.value)}</b></span>`).join('')}</div>`:''}${o.kind==='order'&&o.status==='confirmed'?`<div style="margin-top:3px;display:flex;align-items:center;flex-wrap:wrap;gap:4px"><span class="pill ${o.emailed?'ok':'er'}" style="font-size:10px;padding:2px 7px;font-weight:700" title="${esc(o.email_error||(o.emailed?'Terkirim pada '+(o.emailed_at?new Date(o.emailed_at).toLocaleString(loc()):'-'):'Belum terkirim'))}">${o.emailed?'✓ '+t('em_sent'):'⚠️ '+t('em_pending')}</span>${o.emailed&&o.email_error?`<span class="muted" style="font-size:10px;font-weight:600">(${esc(o.email_error)})</span>`:''}${!o.emailed&&o.email_error?`<div style="font-size:10px;color:var(--er);margin-top:2px;width:100%;white-space:normal;line-height:1.2">${esc(o.email_error)}</div>`:''}</div>`:''}</td><td data-l="${t('c_event')}">${esc(o.event_name)}</td><td data-l="${t('c_qty')}">${o.qty}</td><td data-l="${t('c_status')}">${stPill(o.status)}</td><td data-l="${t('c_chk')}" class="mono">${o.checked_in}/${o.qty}</td><td>${acts(o)}</td></tr>`).join('')}</table></div>${pagerHtml(n,S.ordPage,pages,from,rows.length)}`}
 
 /* ===== Scanner Engine (Continuous, Audio, Torch, Haptic) ===== */
 let _muted=false,_stream=null,_track=null,_torch=false,_facing='environment',_scanning=false,_cooldown=false,_lastCode='',_lastTime=0,_sessionCount=0,_resTimer=null;
@@ -3352,7 +3411,7 @@ function printThermalNametag(d){
  </style></head><body>
    <div class="ev">${esc(evName)}</div>
    <div class="nm">${esc(name)}</div>
-   ${org?`<div class="og">${esc(org)}</div>`:''}
+   ${org?`<div class="og">${esc(org)}</div>`:''}${d.table_assignment?`<div style="font-size:13px;font-weight:900;border:1.5px solid #000;padding:2px 6px;margin:3px auto;display:inline-block">MEJA: ${esc(d.table_assignment)}</div>`:''}
    ${tags?`<div style="margin:3px 0">${tags}</div>`:''}
    <div class="qr">${typeof qrcode!=='undefined'?qr(code):''}</div>
    <div class="cd">${esc(code)}</div>
@@ -3860,7 +3919,259 @@ async function publicEoView(slug){
  `;
 }
 
+
+function showRsvpModal(ev){
+ if(!S.user)return gateModal();
+ const fields=(ev&&Array.isArray(ev.custom_fields))?ev.custom_fields:[];
+ const cfg=ev.module_config||{};
+ const maxPlus=cfg.max_plus_one||2;
+ modal(`
+ <button class="btn sm x" data-act="cm">&#10005;</button>
+ <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
+   <div style="font-size:28px">✉️</div>
+   <div>
+     <h2 style="margin:0;font-size:18px">Konfirmasi Kehadiran (RSVP)</h2>
+     <b style="font-size:14px;color:var(--ac,#5b4ef0)">${esc(ev.name)}</b>
+   </div>
+ </div>
+ <p class="muted" style="margin:0 0 14px;font-size:12px">📅 ${fd(ev.event_date)} &#183; 📍 ${esc(ev.location)}</p>
+
+ <form id="rsvp_form" onsubmit="return false">
+   <label style="font-size:12px;font-weight:700;display:block;margin-bottom:6px">Apakah Anda dapat menghadiri acara ini?</label>
+   
+   <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px;margin-bottom:14px">
+     <label style="display:flex;flex-direction:column;align-items:center;padding:10px;border-radius:10px;border:2px solid var(--ok,#10b981);background:var(--card,#fff);cursor:pointer;text-align:center">
+       <input type="radio" name="rsvp_status" value="attending" checked style="margin-bottom:6px" onchange="$('#rsvp_attending_box').style.display='block'">
+       <b style="color:var(--ok,#10b981);font-size:13px">🟢 Pasti Hadir</b>
+       <small class="muted" style="font-size:10px">Saya akan datang</small>
+     </label>
+     
+     <label style="display:flex;flex-direction:column;align-items:center;padding:10px;border-radius:10px;border:1px solid var(--bd);background:var(--card,#fff);cursor:pointer;text-align:center">
+       <input type="radio" name="rsvp_status" value="declined" style="margin-bottom:6px" onchange="$('#rsvp_attending_box').style.display='none'">
+       <b style="color:var(--er,#ef4444);font-size:13px">🔴 Berhalangan</b>
+       <small class="muted" style="font-size:10px">Tidak dapat hadir</small>
+     </label>
+
+     <label style="display:flex;flex-direction:column;align-items:center;padding:10px;border-radius:10px;border:1px solid var(--bd);background:var(--card,#fff);cursor:pointer;text-align:center">
+       <input type="radio" name="rsvp_status" value="tentative" style="margin-bottom:6px" onchange="$('#rsvp_attending_box').style.display='block'">
+       <b style="color:var(--wn,#f59e0b);font-size:13px">🟡 Ragu-ragu</b>
+       <small class="muted" style="font-size:10px">Belum pasti</small>
+     </label>
+   </div>
+
+   <div id="rsvp_attending_box">
+     ${cfg.allow_plus_one ? `
+       <div style="margin-bottom:12px">
+         <label style="font-size:12px;font-weight:700">Membawa Pendamping / Pasangan?</label>
+         <select name="plus_one_count" style="width:100%;padding:10px;border-radius:8px;border:1px solid var(--bd);font-size:13px">
+           <option value="0">Hadir Sendiri (1 Orang)</option>
+           ${Array.from({length: maxPlus}, (_, i) => `<option value="${i+1}">Hadir Bersama +${i+1} Orang (Total ${i+2} Orang)</option>`).join('')}
+         </select>
+       </div>
+     ` : ''}
+
+     ${fields.length > 0 ? `
+       <div style="background:var(--in,rgba(0,0,0,.03));border:1px solid var(--bd);border-radius:10px;padding:12px;margin-bottom:12px">
+         <b style="font-size:12px;display:block;margin-bottom:8px">Informasi Tambahan:</b>
+         ${fields.map(f=>{
+           let inp='';
+           if(f.type==='select'){
+             const opts=(Array.isArray(f.options)?f.options:(f.options||'').split(',')).map(s=>s.trim()).filter(Boolean);
+             inp=`<select class="cq-val" data-id="${esc(f.id)}" data-lbl="${esc(f.label)}" data-req="${f.required?'1':'0'}" style="width:100%;padding:8px;border-radius:6px;border:1px solid var(--bd);font-size:13px">
+               <option value="">-- Pilih ${esc(f.label)} --</option>
+               ${opts.map(o=>`<option value="${esc(o)}">${esc(o)}</option>`).join('')}
+             </select>`;
+           } else {
+             inp=`<input class="cq-val" data-id="${esc(f.id)}" data-lbl="${esc(f.label)}" data-req="${f.required?'1':'0'}" type="${f.type||'text'}" placeholder="Jawaban Anda..." style="width:100%;padding:8px;border-radius:6px;border:1px solid var(--bd);font-size:13px">`;
+           }
+           return `<div style="margin-bottom:8px"><label style="font-size:11px">${esc(f.label)} ${f.required?'<span style="color:var(--er)">*</span>':''}</label>${inp}</div>`;
+         }).join('')}
+       </div>
+     ` : ''}
+   </div>
+
+   <div style="margin-bottom:14px">
+     <label style="font-size:12px;font-weight:700">💌 Buku Tamu &amp; Ucapan Hangat (Opsional)</label>
+     <textarea name="guestbook_message" rows="3" placeholder="Tuliskan ucapan selamat, doa, atau pesan untuk penyelenggara..." style="width:100%;border-radius:8px;border:1px solid var(--bd);padding:10px;font-size:13px;box-sizing:border-box"></textarea>
+     <small class="muted" style="font-size:10px">Pesan Anda akan tampil di buku tamu digital &amp; layar acara.</small>
+   </div>
+
+   <div class="acts" style="display:flex;gap:8px;justify-content:flex-end">
+     <button class="btn" data-act="cm">Batal</button>
+     <button class="btn pri" data-act="submitRsvp" data-id="${ev.id}">Kirim Konfirmasi Kehadiran</button>
+   </div>
+ </form>
+ `);
+}
+
+let S_greetingTimer = null;
+async function greetingStageView(evId){
+ const c = $('#app');
+ if(S_greetingTimer) clearInterval(S_greetingTimer);
+ c.innerHTML = `
+ <div id="greeting_stage" style="min-height:100vh;background:linear-gradient(135deg,#090d16 0%,#0f172a 50%,#020617 100%);color:#f8fafc;font-family:system-ui,-apple-system,sans-serif;position:relative;overflow-x:hidden;padding:24px 20px 40px">
+   <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;margin-bottom:24px;border-bottom:1px solid rgba(255,255,255,.08);padding-bottom:16px">
+     <div style="display:flex;align-items:center;gap:12px">
+       <span style="font-size:32px">📖</span>
+       <div>
+         <div style="font-size:11px;letter-spacing:3px;text-transform:uppercase;color:#38bdf8;font-weight:800">BUKU TAMU &amp; UCAPAN RESMI</div>
+         <h1 id="gb_title" style="margin:2px 0 0;font-size:24px;font-weight:800;color:#fff">Memuat Acara...</h1>
+       </div>
+     </div>
+     <div style="display:flex;align-items:center;gap:10px">
+       <span id="gb_badge" class="badge" style="background:rgba(56,189,248,.15);color:#38bdf8;border:1px solid rgba(56,189,248,.3);font-size:12px;padding:6px 14px;border-radius:20px;font-weight:700">0 Pesan Ucapan</span>
+       <button class="btn sm" onclick="document.fullscreenElement?document.exitFullscreen():document.documentElement.requestFullscreen()" style="background:rgba(255,255,255,.1);color:#fff;border:none">⛶ Layar Penuh</button>
+       <a href="${location.pathname}?ev=${evId}" target="_blank" class="btn sm pri" style="text-decoration:none">✉️ Kirim Ucapan</a>
+     </div>
+   </div>
+
+   <div id="gb_grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:16px;max-width:1400px;margin:0 auto">
+     <div style="grid-column:1/-1;text-align:center;padding:60px 20px;color:#94a3b8">
+       <p>Memuat pesan ucapan terbaru...</p>
+     </div>
+   </div>
+ </div>
+ `;
+
+ async function loadGreetings(){
+   try {
+     const res = await pub('guestbookWall', { eventId: evId });
+     if(!res || !res.messages) return;
+     if(res.event && $('#gb_title')) $('#gb_title').textContent = res.event.name;
+     if($('#gb_badge')) $('#gb_badge').textContent = res.messages.length + ' Pesan Ucapan';
+     const grid = $('#gb_grid');
+     if(!grid) return;
+
+     if(res.messages.length === 0){
+       grid.innerHTML = `
+         <div style="grid-column:1/-1;text-align:center;padding:80px 20px;background:rgba(255,255,255,.02);border:1px dashed rgba(255,255,255,.1);border-radius:16px">
+           <div style="font-size:48px;margin-bottom:12px">💌</div>
+           <h3 style="margin:0 0 6px;color:#e2e8f0">Belum Ada Pesan Ucapan</h3>
+           <p style="color:#94a3b8;margin:0">Jadilah yang pertama menuliskan ucapan dan doa hangat untuk acara ini!</p>
+         </div>`;
+       return;
+     }
+
+     grid.innerHTML = res.messages.map(m => `
+       <div class="card" style="background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.09);backdrop-filter:blur(8px);border-radius:14px;padding:18px;display:flex;flex-direction:column;position:relative">
+         <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:10px">
+           <div style="display:flex;align-items:center;gap:10px">
+             <div style="width:38px;height:38px;border-radius:50%;background:linear-gradient(135deg,#38bdf8,#6366f1);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:15px;flex:none">
+               ${esc(m.name.slice(0,2).toUpperCase())}
+             </div>
+             <div>
+               <b style="font-size:14px;color:#fff;display:block">${esc(m.name)}</b>
+               <small style="color:#94a3b8;font-size:11px">${esc(m.org || 'Tamu Undangan')}</small>
+             </div>
+           </div>
+           <span style="font-size:11px;color:#64748b" class="mono">${esc(m.time_str || '')}</span>
+         </div>
+
+         <div style="font-size:14px;color:#e2e8f0;line-height:1.5;margin-bottom:12px;font-style:italic">
+           "${esc(m.message)}"
+         </div>
+
+         ${m.table_assignment ? `
+           <div style="margin-top:auto;display:inline-flex;align-items:center;gap:6px;font-size:11px;color:#38bdf8;background:rgba(56,189,248,.1);padding:3px 8px;border-radius:6px;align-self:flex-start">
+             🪑 Meja: <b>${esc(m.table_assignment)}</b>
+           </div>
+         ` : ''}
+       </div>
+     `).join('');
+   } catch(e) {
+     console.error('loadGreetings error:', e);
+   }
+ }
+
+ loadGreetings();
+ S_greetingTimer = setInterval(loadGreetings, 8000);
+}
+
 const NL=String.fromCharCode(10),find=(a,id)=>a.find(x=>x.id===id),A={
+ openRsvp(el){
+  const ev = (S.ev&&find(S.ev, el.dataset.id)) || (S.aev&&find(S.aev, el.dataset.id));
+  if(ev) showRsvpModal(ev);
+ },
+ async submitRsvp(el){
+  const evId = el.dataset.id;
+  const ev = (S.ev&&find(S.ev, evId)) || (S.aev&&find(S.aev, evId));
+  if(!ev) return;
+  const f = $('#rsvp_form');
+  if(!f) return;
+  const rsvpStatus = f.rsvp_status?.value || 'attending';
+  const plusOne = parseInt(f.plus_one_count?.value || 0, 10) || 0;
+  const guestbookMsg = (f.guestbook_message?.value || '').trim();
+
+  const customAnswers = {};
+  if(rsvpStatus !== 'declined'){
+    const inps = Array.from(f.querySelectorAll('.cq-val'));
+    for(const inp of inps){
+      const val = (inp.value || '').trim();
+      const isReq = inp.dataset.req === '1';
+      const lbl = inp.dataset.lbl || 'Bidang';
+      if(isReq && !val){
+        return toast('Mohon isi ' + lbl, 1);
+      }
+      if(val) customAnswers[inp.dataset.id] = { label: lbl, value: val };
+    }
+  }
+
+  const qty = rsvpStatus === 'declined' ? 1 : (1 + plusOne);
+  try {
+    const res = await api('book', {
+      eventId: evId,
+      qty: qty,
+      rsvp_status: rsvpStatus,
+      plus_one_count: plusOne,
+      guestbook_message: guestbookMsg,
+      custom_answers: customAnswers
+    }, t('loading'));
+    cm();
+    if(rsvpStatus === 'declined'){
+      toast('Terima kasih. Konfirmasi Anda bahwa Anda berhalangan hadir telah tercatat.', 0);
+    } else {
+      toast('Konfirmasi kehadiran berhasil dikirim!', 0);
+      try {
+        const order = await api('orderDetail', { id: res.id });
+        passModal(order, 'Terima kasih telah mengonfirmasi kehadiran Anda!');
+      } catch(x){}
+    }
+    S.ev = null;
+    userTab();
+  } catch(e){
+    fail(e);
+  }
+ },
+ openTableModal(el){
+  const ordId = el.dataset.id, currTbl = el.dataset.tbl || '';
+  modal(`
+    <button class="btn sm x" data-act="cm">&#10005;</button>
+    <h2>🪑 Alokasi Nomor Meja</h2>
+    <p class="muted">Tentukan nomor meja / tempat duduk untuk tamu ini:</p>
+    <form id="table_form" onsubmit="return false">
+      <input type="hidden" name="order_id" value="${esc(ordId)}">
+      <div><label>Nomor / Nama Meja</label><input name="table_assignment" value="${esc(currTbl)}" placeholder="Contoh: Table 04 / VIP A-1" required></div>
+      <div class="acts" style="margin-top:14px;display:flex;gap:8px;justify-content:flex-end">
+        <button class="btn" data-act="cm">Batal</button>
+        <button class="btn pri" data-act="saveTableSubmit">Simpan Meja</button>
+      </div>
+    </form>
+  `);
+ },
+ async saveTableSubmit(){
+  const f = $('#table_form');
+  if(!f) return;
+  const ordId = f.order_id?.value;
+  const tbl = (f.table_assignment?.value || '').trim();
+  try {
+    await api('assignTable', { orderId: ordId, tableAssignment: tbl }, t('loading'));
+    cm();
+    toast('Nomor meja berhasil disimpan!', 0);
+    loadOrders();
+  } catch(e){
+    fail(e);
+  }
+ },
  openOrgModal(){openOrgModal(null)},
  editOrg(el){openOrgModal(el.dataset.id)},
  copyOrgLink(el){navigator.clipboard.writeText(el.dataset.url).then(()=>toast('Tautan portal EO disalin!',0)).catch(()=>toast('Gagal menyalin',1))},
@@ -3980,6 +4291,17 @@ const NL=String.fromCharCode(10),find=(a,id)=>a.find(x=>x.id===id),A={
     title: (f.cert_title?f.cert_title.value:'').trim()||'SERTIFIKAT PARTISIPASI',
     signatory: (f.cert_signatory?f.cert_signatory.value:'').trim(),
     signatory_title: (f.cert_signatory_title?f.cert_signatory_title.value:'').trim()||'Ketua Panitia'
+  };
+  const mods=[];
+  if(f.active_mod_ticketing&&f.active_mod_ticketing.checked)mods.push('ticketing');
+  if(f.active_mod_rsvp&&f.active_mod_rsvp.checked)mods.push('rsvp');
+  if(f.active_mod_guestbook&&f.active_mod_guestbook.checked)mods.push('guestbook');
+  d.active_modules=mods.length?mods:['ticketing'];
+  d.module_config={
+    allow_plus_one:!!(f.rsvp_allow_plus_one&&f.rsvp_allow_plus_one.checked),
+    max_plus_one:parseInt(f.rsvp_max_plus_one?f.rsvp_max_plus_one.value:2,10)||2,
+    enable_table:!!(f.rsvp_enable_table&&f.rsvp_enable_table.checked),
+    enable_live_wall:!!(f.gb_enable_live_wall&&f.gb_enable_live_wall.checked)
   };
   d.custom_fields=getCustomFieldsFromEditor();
   if(!d.id)delete d.id;
