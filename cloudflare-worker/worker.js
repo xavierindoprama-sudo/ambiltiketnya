@@ -1516,18 +1516,40 @@ export default {
 
         if (action === 'invitations') {
           needRole(2);
+          const qParams = [];
+          const whereClauses = ["o.kind='invitation'"];
+          if (params.eventId) {
+            qParams.push(params.eventId);
+            whereClauses.push(`o.event_id = $${qParams.length}::uuid`);
+          }
+          if (u.role === 2 && u.organizer_id) {
+            qParams.push(u.organizer_id);
+            whereClauses.push(`e.organizer_id = $${qParams.length}::uuid`);
+          }
+          const whereSql = `WHERE ${whereClauses.join(' AND ')}`;
           const r = await neonQuery(env, `SELECT o.id,o.order_code,o.ticket_code,o.qty,o.total,o.status,o.checked_in,o.created_at,o.kind,o.guest_name,o.guest_org,o.guest_phone,o.guest_age,
             e.id AS event_id,e.name,e.banner_url,e.event_date,e.start_time,e.end_time,e.location,e.announcement,e.is_paid,e.payment_instructions,e.terms
-            FROM orders o JOIN events e ON e.id=o.event_id WHERE o.kind='invitation' ORDER BY o.created_at DESC LIMIT 500`);
+            FROM orders o JOIN events e ON e.id=o.event_id ${whereSql} ORDER BY o.created_at DESC LIMIT 1000`, qParams);
           return json({ ok: true, data: r });
         }
 
         if (action === 'waitingList') {
           needRole(2);
+          const qParams = [];
+          const whereClauses = ["w.status='waiting'"];
+          if (params.eventId) {
+            qParams.push(params.eventId);
+            whereClauses.push(`w.event_id = $${qParams.length}::uuid`);
+          }
+          if (u.role === 2 && u.organizer_id) {
+            qParams.push(u.organizer_id);
+            whereClauses.push(`e.organizer_id = $${qParams.length}::uuid`);
+          }
+          const whereSql = `WHERE ${whereClauses.join(' AND ')}`;
           const r = await neonQuery(env, `SELECT w.id, w.event_id, w.guest_name, w.guest_org, w.guest_phone, w.guest_age, w.qty, w.status, w.order_id,
             w.created_at, e.name AS event_name, e.event_date,
             (e.quota - coalesce((SELECT sum(qty) FROM orders o WHERE o.event_id=e.id AND o.status<>'cancelled' AND o.kind<>'walk_in'),0))::int AS remaining
-            FROM invitation_waiting_list w JOIN events e ON e.id=w.event_id WHERE w.status='waiting' ORDER BY w.created_at ASC`);
+            FROM invitation_waiting_list w JOIN events e ON e.id=w.event_id ${whereSql} ORDER BY w.created_at ASC`, qParams);
           return json({ ok: true, data: r });
         }
 

@@ -3214,10 +3214,13 @@ async function invView(c){
 function mergeInvTix(){const ids={};S.inv.forEach(i=>ids[i.id]=1);S.tix=(S.tix||[]).filter(x=>!ids[x.id]).concat(S.inv)}
 function paintInv(){
  const c=$('#ac'),keep=$('#ivev')?$('#ivev').value:'';
+ const curEvId=getCurEvId();
+ const curEv=getCurEv();
  const maxQty=(S.invCfg&&S.invCfg.maxQty)||50;
  const opts=S.aev.map(e=>{
   const rem=Math.max(0,e.quota-e.sold);
-  return '<option value="'+e.id+'">'+esc(e.name)+' ('+fd(e.event_date,{day:'numeric',month:'short',year:'numeric'})+') - '+t('inv_quota')+' '+rem+'</option>';
+  const isSel=(keep?e.id===keep:(curEvId?e.id===curEvId:false));
+  return '<option value="'+e.id+'" '+(isSel?'selected':'')+'>'+esc(e.name)+' ('+fd(e.event_date,{day:'numeric',month:'short',year:'numeric'})+') - '+t('inv_quota')+' '+rem+'</option>';
  }).join('');
 
  let cfgCard='';
@@ -3226,16 +3229,17 @@ function paintInv(){
  }
 
  const curTab=S.invSubTab||'issued';
- const waitCnt=(S.waitList||[]).length;
+ const filteredInv=curEvId?(S.inv||[]).filter(o=>String(o.event_id||'').toLowerCase()===String(curEvId).toLowerCase()):(S.inv||[]);
+ const filteredWait=curEvId?(S.waitList||[]).filter(w=>String(w.event_id||'').toLowerCase()===String(curEvId).toLowerCase()):(S.waitList||[]);
  const subNav=`<div style="display:flex;gap:10px;margin-bottom:14px;border-bottom:1px solid var(--bd);padding-bottom:10px">
-  <button class="btn ${curTab==='issued'?'pri':'sm'}" data-act="invSubTab" data-v="issued" style="font-weight:700">📋 ${t('inv_tab_issued')} (${S.inv.length})</button>
-  <button class="btn ${curTab==='waiting'?'pri':'sm'}" data-act="invSubTab" data-v="waiting" style="font-weight:700">⏳ ${t('inv_tab_wait')} ${waitCnt?`<span class="pill wn" style="font-size:11px;margin-left:4px;vertical-align:middle">${waitCnt}</span>`:''}</button>
+  <button class="btn ${curTab==='issued'?'pri':'sm'}" data-act="invSubTab" data-v="issued" style="font-weight:700">📋 ${t('inv_tab_issued')} (${filteredInv.length})</button>
+  <button class="btn ${curTab==='waiting'?'pri':'sm'}" data-act="invSubTab" data-v="waiting" style="font-weight:700">⏳ ${t('inv_tab_wait')} ${filteredWait.length?`<span class="pill wn" style="font-size:11px;margin-left:4px;vertical-align:middle">${filteredWait.length}</span>`:''}</button>
  </div>`;
 
  let bodyHtml='';
  if(curTab==='waiting'){
-  const totalWaitQty=(S.waitList||[]).reduce((a,w)=>a+w.qty,0);
-  const waitRows=(S.waitList||[]).map(w=>{
+  const totalWaitQty=filteredWait.reduce((a,w)=>a+w.qty,0);
+  const waitRows=filteredWait.map(w=>{
    const ev=S.aev.find(e=>e.id===w.event_id)||{};
    const rem=Math.max(0,(ev.quota||0)-(ev.sold||0));
    const canPromote=rem>=w.qty;
@@ -3257,7 +3261,7 @@ function paintInv(){
    </tr>`;
   }).join('');
 
-  const anyCanPromote=(S.waitList||[]).some(w=>{
+  const anyCanPromote=filteredWait.some(w=>{
    const ev=S.aev.find(e=>e.id===w.event_id)||{};
    return Math.max(0,(ev.quota||0)-(ev.sold||0))>=w.qty;
   });
@@ -3283,27 +3287,28 @@ function paintInv(){
   </div>
 
   <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin:20px 0 12px">
-   <h3 style="margin:0">Antrean Waiting List (${S.waitList.length} orang · Total ${totalWaitQty} tiket)</h3>
-   ${S.waitList.length?`<button class="btn ok" data-act="promoteAllWait" ${anyCanPromote?'':'disabled'} style="font-weight:700;display:inline-flex;align-items:center;gap:6px">${t('wait_promote_all_btn')}</button>`:''}
+   <h3 style="margin:0">Antrean Waiting List ${curEv?`— ${esc(curEv.name)} `:''}(${filteredWait.length} orang · Total ${totalWaitQty} tiket)</h3>
+   ${filteredWait.length?`<button class="btn ok" data-act="promoteAllWait" ${anyCanPromote?'':'disabled'} style="font-weight:700;display:inline-flex;align-items:center;gap:6px">${t('wait_promote_all_btn')}</button>`:''}
   </div>
-  ${S.waitList.length?`<div class="tw"><table class="rt"><tr><th>${t('inv_who')}</th><th>${t('c_event')}</th><th>${t('c_qty')}</th><th>Status Kuota</th><th></th></tr>${waitRows}</table></div>`:`<p class="muted" style="padding:20px;text-align:center">Tidak ada peserta dalam daftar tunggu.</p>`}`;
+  ${filteredWait.length?`<div class="tw"><table class="rt"><tr><th>${t('inv_who')}</th><th>${t('c_event')}</th><th>${t('c_qty')}</th><th>Status Kuota</th><th></th></tr>${waitRows}</table></div>`:`<p class="muted" style="padding:20px;text-align:center">Tidak ada peserta dalam daftar tunggu${curEv?` untuk acara ${esc(curEv.name)}`:''}.</p>`}`;
 
  } else {
-  const rows=S.inv.map(o=>{
+  const rows=filteredInv.map(o=>{
    const meta=[];
    if(o.guest_age)meta.push(esc(o.guest_age)+' '+t('years_old'));
    if(o.guest_phone)meta.push('+'+esc(o.guest_phone));
    const metaStr=meta.length?`<div style="font-size:11px;color:var(--mu);margin-top:2px">${meta.join(' · ')}</div>`:'';
-   return `<tr><td data-l="${t('inv_who')}"><b>${esc(o.guest_name)}</b><br><small class="muted">${esc(o.guest_org)}</small>${metaStr}</td><td data-l="${t('c_event')}">${esc(o.name)}</td><td data-l="${t('c_qty')}">${o.qty}</td><td data-l="${t('c_status')}">${stPill(o.status)}</td><td data-l="${t('c_chk')}" class="mono">${o.checked_in}/${o.qty}</td><td><div class="acts" style="margin:0;justify-content:flex-end;gap:4px"><button class="btn sm" data-act="invopen" data-id="${o.id}">${t('view')}</button><button class="btn sm" data-act="invLink" data-id="${o.id}" style="border-color:#d4af37;color:#d4af37" title="Buka Landing Page Undangan Digital">💌 Undangan</button><button class="btn sm" data-act="copyInvLink" data-id="${o.id}" title="Salin Link Undangan">📋 Salin</button>${o.status==='confirmed'?`<button class="btn sm wa" data-act="waInv" data-id="${o.id}" title="Kirim Undangan Digital lewat WhatsApp">💬 WhatsApp</button>`:''}${o.status!=='cancelled'&&canEdit()?`<button class="btn sm dg" data-act="cxl" data-id="${o.id}">${t('cancel')}</button>`:''}</div></td></tr>`;
+   return `<tr><td data-l="${t('inv_who')}"><b>${esc(o.guest_name)}</b><br><small class="muted">${esc(o.guest_org)}</small>${metaStr}</td><td data-l="${t('c_event')}">${esc(o.name)}</td><td data-l="${t('c_qty')}">${o.qty}</td><td data-l="${t('c_status')}">${stPill(o.status)}</td><td data-l="${t('c_chk')}" class="mono">${o.checked_in}/${o.qty}</td><td><div class="acts" style="margin:0;justify-content:flex-end;gap:4px"><button class="btn sm" data-act="invopen" data-id="${o.id}">${t('view')}</button><button class="btn sm" data-act="invLink" data-id="${o.id}" style="border-color:#d4af37;color:#d4af37" title="Buka Landing Page Undangan Digital">✉️ Undangan</button><button class="btn sm" data-act="copyInvLink" data-id="${o.id}" title="Salin Link Undangan">📋 Salin</button>${o.status==='confirmed'?`<button class="btn sm wa" data-act="waInv" data-id="${o.id}" title="Kirim Undangan Digital lewat WhatsApp">💬 WhatsApp</button>`:''}${o.status!=='cancelled'&&canEdit()?`<button class="btn sm dg" data-act="cxl" data-id="${o.id}">${t('cancel')}</button>`:''}</div></td></tr>`;
   }).join('');
 
   bodyHtml=`<div class="card" style="padding:16px;margin:8px 0 18px;border-color:#d4af37"><h3>${t('inv_title')}</h3><div class="fg" style="margin-top:6px"><div style="grid-column:1/-1"><label>${t('inv_event')}</label><select id="ivev">${opts}</select></div><div><label>${t('inv_name')}</label><input id="ivnm" autocomplete="off" placeholder="Nama tamu / PIC"></div><div><label>${t('inv_org')}</label><input id="ivog" autocomplete="off" placeholder="Instansi / Gereja"></div><div><label>${t('inv_age')}</label><input id="ivag" type="number" min="1" max="120" placeholder="Opsional" autocomplete="off"></div><div><label>${t('inv_phone')}</label><input id="ivph" type="tel" placeholder="0812xxxxxxxx (opsional)" autocomplete="off"></div><div><label>${t('inv_qty')}</label><input id="ivq" type="number" min="1" max="${maxQty}" value="1"><small class="muted" style="display:block;margin-top:3px">${t('inv_max_hint')} ${maxQty} ${t('tix')}</small></div></div><div class="acts"><button class="btn pri" data-act="invmake" style="flex:none">${t('inv_make')}</button></div></div>
-  <h3>${t('inv_list')} (${S.inv.length})</h3>${S.inv.length?`<div class="tw"><table class="rt"><tr><th>${t('inv_who')}</th><th>${t('c_event')}</th><th>${t('c_qty')}</th><th>${t('c_status')}</th><th>${t('c_chk')}</th><th></th></tr>${rows}</table></div>`:`<p class="muted">${t('none')}</p>`}`;
+  <h3>${t('inv_list')} ${curEv?`— ${esc(curEv.name)} `:''}(${filteredInv.length})</h3>${filteredInv.length?`<div class="tw"><table class="rt"><tr><th>${t('inv_who')}</th><th>${t('c_event')}</th><th>${t('c_qty')}</th><th>${t('c_status')}</th><th>${t('c_chk')}</th><th></th></tr>${rows}</table></div>`:`<p class="muted" style="padding:20px;text-align:center">Belum ada undangan yang diterbitkan${curEv?` untuk acara ${esc(curEv.name)}`:''}.</p>`}`;
  }
 
  c.innerHTML=cfgCard+subNav+bodyHtml;
- if(keep&&$('#ivev'))$('#ivev').value=keep;
- if(keep&&$('#wtev'))$('#wtev').value=keep;
+ const selEvId = keep || curEvId || '';
+ if(selEvId&&$('#ivev'))$('#ivev').value=selEvId;
+ if(selEvId&&$('#wtev'))$('#wtev').value=selEvId;
 }
 const LGK={syarat:'lg_terms',privasi:'lg_priv',cookie:'lg_cookie'};
 async function legalView(c){try{S.lg=await api('legalGet')}catch(e){return fail(e)}if(!S.lgk)S.lgk='syarat';paintLegal()}
