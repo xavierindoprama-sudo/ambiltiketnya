@@ -547,6 +547,7 @@ const ACTIONS = {
     q(`UPDATE users SET role=$2 WHERE id=$1::uuid RETURNING id`, [p.id, p.role]); return true; } },
   feedbackSubmit: { min: 0, fn: feedbackSubmit },
   feedbacksGet:    { min: 2, fn: feedbacksGet },
+  feedbackDelete:  { min: 2, fn: feedbackDelete },
   doorprizePool:   { min: 2, fn: doorprizePool },
   doorprizeSaveWinner: { min: 2, fn: doorprizeSaveWinner },
   doorprizeDeleteWinner: { min: 2, fn: doorprizeDeleteWinner },
@@ -1581,12 +1582,16 @@ function surveyInfo(p) { return pubRun(surveyInfoImpl, p); }
 function surveyInfoImpl(p) {
   const evId = String(p && p.eventId || '').trim();
   const fid = String(p && p.feedbackId || '').trim();
+  const clientToken = String(p && (p.clientToken || p.deviceId) || '').trim();
   if (!evId) throw new Error('EVENT_NOT_FOUND');
   const ev = q(`SELECT id, name, banner_url, event_date::text AS edate, to_char(start_time,'HH24:MI') AS stime, location FROM events WHERE id=$1::uuid`, [evId])[0];
   if (!ev) throw new Error('EVENT_NOT_FOUND');
   let myFeedback = null;
   if (fid) {
     myFeedback = q(`SELECT id, rating AS rating_overall, coalesce(rating_content,5) AS rating_content, coalesce(rating_service,5) AS rating_service, coalesce(rating_venue,5) AS rating_venue, coalesce(rating_sound,5) AS rating_sound, aspects, comment, is_anonymous, guest_name, guest_org FROM event_feedbacks WHERE id=$1::uuid AND event_id=$2::uuid`, [fid, evId])[0] || null;
+  }
+  if (!myFeedback && clientToken) {
+    myFeedback = q(`SELECT id, rating AS rating_overall, coalesce(rating_content,5) AS rating_content, coalesce(rating_service,5) AS rating_service, coalesce(rating_venue,5) AS rating_venue, coalesce(rating_sound,5) AS rating_sound, aspects, comment, is_anonymous, guest_name, guest_org FROM event_feedbacks WHERE event_id=$1::uuid AND client_token=$2 ORDER BY created_at DESC LIMIT 1`, [evId, clientToken])[0] || null;
   }
   const cnt = q(`SELECT count(*)::int AS count FROM event_feedbacks WHERE event_id=$1::uuid`, [evId])[0];
   return { event: ev, count: cnt ? cnt.count : 0, myFeedback: myFeedback };
@@ -1606,6 +1611,7 @@ function feedbackPublic(p) { return pubRun(feedbackPublicImpl, p); }
 function feedbackPublicImpl(p) {
   const code = String(p && p.code || '').trim().toUpperCase();
   const eventId = String(p && p.eventId || '').trim();
+  const clientToken = String(p && (p.clientToken || p.deviceId) || '').trim();
   const ratings = (p && (p.ratings || p.aspects)) || {};
   const rOverall = Math.min(Math.max(parseInt(ratings.overall || (p && p.rating), 10) || 5, 1), 5);
   const rContent = Math.min(Math.max(parseInt(ratings.content, 10) || 5, 1), 5);
@@ -1623,15 +1629,30 @@ function feedbackPublicImpl(p) {
   }
   if (!targetEventId) throw new Error('EVENT_NOT_FOUND');
 
-  // Edit existing feedback if feedbackId provided
+  // 1. Edit existing feedback if feedbackId provided
   if (p && p.feedbackId) {
     const fid = String(p.feedbackId).trim();
-    const upd = q(`UPDATE event_feedbacks SET rating=$1, rating_content=$2, rating_service=$3, rating_venue=$4, rating_sound=$5, aspects=$6::jsonb, is_anonymous=$7, guest_name=$8, guest_org=$9, comment=$10, created_at=now() WHERE id=$11::uuid AND event_id=$12::uuid RETURNING id`, [rOverall, rContent, rService, rVenue, rSound, aspectsJson, isAnon, isAnon ? '' : (gName || (p.guestName || '')), isAnon ? '' : (gOrg || (p.guestOrg || '')), comment, fid, targetEventId]);
+    const upd = q(`UPDATE event_feedbacks SET rating=$1, rating_content=$2, rating_service=$3, rating_venue=$4, rating_sound=$5, aspects=$6::jsonb, is_anonymous=$7, guest_name=$8, guest_org=$9, comment=$10, client_token=coalesce(nullif($11,''),client_token), created_at=now() WHERE id=$12::uuid AND event_id=$13::uuid RETURNING id`, [rOverall, rContent, rService, rVenue, rSound, aspectsJson, isAnon, isAnon ? '' : (gName || (p.guestName || '')), isAnon ? '' : (gOrg || (p.guestOrg || '')), comment, clientToken, fid, targetEventId]);
     if (upd.length) return { success: true, id: upd[0].id, updated: true };
   }
 
-  const ins = q(`INSERT INTO event_feedbacks(event_id, order_id, ticket_code, guest_name, guest_org, is_anonymous, rating, rating_content, rating_service, rating_venue, rating_sound, aspects, category, comment) VALUES($1::uuid, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12::jsonb, $13, $14) RETURNING id`, [targetEventId, targetOrderId, code, isAnon ? '' : (gName || (p && p.guestName || '')), isAnon ? '' : (gOrg || (p && p.guestOrg || '')), isAnon, rOverall, rContent, rService, rVenue, rSound, aspectsJson, category, comment]);
+  // 2. Anti-duplication by clientToken
+  if (clientToken) {
+    const existing = q(`SELECT id FROM event_feedbacks WHERE event_id=$1::uuid AND client_token=$2 ORDER BY created_at DESC LIMIT 1`, [targetEventId, clientToken]);
+    if (existing.length) {
+      const upd = q(`UPDATE event_feedbacks SET rating=$1, rating_content=$2, rating_service=$3, rating_venue=$4, rating_sound=$5, aspects=$6::jsonb, is_anonymous=$7, guest_name=$8, guest_org=$9, comment=$10, created_at=now() WHERE id=$11::uuid RETURNING id`, [rOverall, rContent, rService, rVenue, rSound, aspectsJson, isAnon, isAnon ? '' : (gName || (p.guestName || '')), isAnon ? '' : (gOrg || (p.guestOrg || '')), comment, existing[0].id]);
+      return { success: true, id: upd[0].id, updated: true };
+    }
+  }
+
+  const ins = q(`INSERT INTO event_feedbacks(event_id, order_id, ticket_code, guest_name, guest_org, is_anonymous, rating, rating_content, rating_service, rating_venue, rating_sound, aspects, category, comment, client_token) VALUES($1::uuid, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12::jsonb, $13, $14, $15) RETURNING id`, [targetEventId, targetOrderId, code, isAnon ? '' : (gName || (p && p.guestName || '')), isAnon ? '' : (gOrg || (p && p.guestOrg || '')), isAnon, rOverall, rContent, rService, rVenue, rSound, aspectsJson, category, comment, clientToken]);
   return { success: true, id: ins[0].id };
+}
+
+function feedbackDelete(u, p) {
+  const id = String(p.id || '').trim();
+  q(`DELETE FROM event_feedbacks WHERE id=$1::uuid`, [id]);
+  return true;
 }
 function feedbackSubmit(u, p) {
   const eventId = String(p.eventId || '').trim();

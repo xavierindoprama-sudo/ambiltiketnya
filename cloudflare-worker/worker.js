@@ -310,7 +310,9 @@ async function ensureFeatureTables(env) {
     `ALTER TABLE event_feedbacks ADD COLUMN IF NOT EXISTS rating_venue int NOT NULL DEFAULT 5`,
     `ALTER TABLE event_feedbacks ADD COLUMN IF NOT EXISTS rating_sound int NOT NULL DEFAULT 5`,
     `ALTER TABLE event_feedbacks ADD COLUMN IF NOT EXISTS aspects jsonb NOT NULL DEFAULT '{}'::jsonb`,
+    `ALTER TABLE event_feedbacks ADD COLUMN IF NOT EXISTS client_token text DEFAULT ''`,
     `CREATE INDEX IF NOT EXISTS event_feedbacks_ev_idx ON event_feedbacks (event_id, created_at DESC)`,
+    `CREATE INDEX IF NOT EXISTS event_feedbacks_client_idx ON event_feedbacks (event_id, client_token)`,
     `CREATE TABLE IF NOT EXISTS doorprize_winners (
       id           uuid PRIMARY KEY DEFAULT gen_random_uuid(),
       event_id     uuid NOT NULL REFERENCES events(id) ON DELETE CASCADE,
@@ -537,17 +539,20 @@ export default {
         const [p] = args;
         const evId = String(p && p.eventId || '').trim();
         const fid = String(p && p.feedbackId || '').trim();
+        const clientToken = String(p && (p.clientToken || p.deviceId) || '').trim();
         if (!evId) throw new Error('EVENT_NOT_FOUND');
         const ev = (await neonQuery(env, `SELECT id, name, banner_url, event_date::text AS edate, to_char(start_time,'HH24:MI') AS stime, location FROM events WHERE id=$1::uuid`, [evId]))[0];
         if (!ev) throw new Error('EVENT_NOT_FOUND');
 
         let myFeedback = null;
+        await ensureFeatureTables(env);
         if (fid) {
-          await ensureFeatureTables(env);
           myFeedback = (await neonQuery(env, `SELECT id, rating AS rating_overall, coalesce(rating_content,5) AS rating_content, coalesce(rating_service,5) AS rating_service, coalesce(rating_venue,5) AS rating_venue, coalesce(rating_sound,5) AS rating_sound, aspects, comment, is_anonymous, guest_name, guest_org FROM event_feedbacks WHERE id=$1::uuid AND event_id=$2::uuid`, [fid, evId]))[0] || null;
         }
+        if (!myFeedback && clientToken) {
+          myFeedback = (await neonQuery(env, `SELECT id, rating AS rating_overall, coalesce(rating_content,5) AS rating_content, coalesce(rating_service,5) AS rating_service, coalesce(rating_venue,5) AS rating_venue, coalesce(rating_sound,5) AS rating_sound, aspects, comment, is_anonymous, guest_name, guest_org FROM event_feedbacks WHERE event_id=$1::uuid AND client_token=$2 ORDER BY created_at DESC LIMIT 1`, [evId, clientToken]))[0] || null;
+        }
 
-        await ensureFeatureTables(env);
         const cnt = (await neonQuery(env, `SELECT count(*)::int AS count FROM event_feedbacks WHERE event_id=$1::uuid`, [evId]))[0];
 
         return json({ ok: true, data: { event: ev, count: cnt ? cnt.count : 0, myFeedback: myFeedback } });
@@ -568,6 +573,7 @@ export default {
         const [p] = args;
         const code = String(p && p.code || '').trim().toUpperCase();
         const eventId = String(p && p.eventId || '').trim();
+        const clientToken = String(p && (p.clientToken || p.deviceId) || '').trim();
         const ratings = (p && (p.ratings || p.aspects)) || {};
         const rOverall = Math.min(Math.max(parseInt(ratings.overall || (p && p.rating), 10) || 5, 1), 5);
         const rContent = Math.min(Math.max(parseInt(ratings.content, 10) || 5, 1), 5);
@@ -600,25 +606,41 @@ export default {
 
         await ensureFeatureTables(env);
 
-        // Edit Feedback yang sudah ada jika feedbackId dikirimkan
+        // 1. Edit Feedback berdasarkan feedbackId jika dikirimkan
         if (p && p.feedbackId) {
           const fid = String(p.feedbackId).trim();
           const upd = await neonQuery(env, `
             UPDATE event_feedbacks
             SET rating=$1, rating_content=$2, rating_service=$3, rating_venue=$4, rating_sound=$5, aspects=$6::jsonb,
-                is_anonymous=$7, guest_name=$8, guest_org=$9, comment=$10, created_at=now()
-            WHERE id=$11::uuid AND event_id=$12::uuid
+                is_anonymous=$7, guest_name=$8, guest_org=$9, comment=$10, client_token=coalesce(nullif($11,''), client_token), created_at=now()
+            WHERE id=$12::uuid AND event_id=$13::uuid
             RETURNING id
-          `, [rOverall, rContent, rService, rVenue, rSound, aspectsJson, isAnon, isAnon ? '' : (gName || (p.guestName || '')), isAnon ? '' : (gOrg || (p.guestOrg || '')), comment, fid, targetEventId]);
+          `, [rOverall, rContent, rService, rVenue, rSound, aspectsJson, isAnon, isAnon ? '' : (gName || (p.guestName || '')), isAnon ? '' : (gOrg || (p.guestOrg || '')), comment, clientToken, fid, targetEventId]);
           if (upd.length) {
             return json({ ok: true, data: { success: true, id: upd[0].id, updated: true } });
           }
         }
 
-        const ins = await neonQuery(env, `INSERT INTO event_feedbacks(event_id, order_id, ticket_code, guest_name, guest_org, is_anonymous, rating, rating_content, rating_service, rating_venue, rating_sound, aspects, category, comment)
-          VALUES($1::uuid, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12::jsonb, $13, $14)
+        // 2. Anti-duplikasi: Cek apakah perangkat HP ini (clientToken) sudah pernah mengisi untuk acara ini
+        if (clientToken) {
+          const existing = await neonQuery(env, `SELECT id FROM event_feedbacks WHERE event_id=$1::uuid AND client_token=$2 ORDER BY created_at DESC LIMIT 1`, [targetEventId, clientToken]);
+          if (existing.length) {
+            const upd = await neonQuery(env, `
+              UPDATE event_feedbacks
+              SET rating=$1, rating_content=$2, rating_service=$3, rating_venue=$4, rating_sound=$5, aspects=$6::jsonb,
+                  is_anonymous=$7, guest_name=$8, guest_org=$9, comment=$10, created_at=now()
+              WHERE id=$11::uuid
+              RETURNING id
+            `, [rOverall, rContent, rService, rVenue, rSound, aspectsJson, isAnon, isAnon ? '' : (gName || (p.guestName || '')), isAnon ? '' : (gOrg || (p.guestOrg || '')), comment, existing[0].id]);
+            return json({ ok: true, data: { success: true, id: upd[0].id, updated: true } });
+          }
+        }
+
+        // 3. Simpan ulasan baru
+        const ins = await neonQuery(env, `INSERT INTO event_feedbacks(event_id, order_id, ticket_code, guest_name, guest_org, is_anonymous, rating, rating_content, rating_service, rating_venue, rating_sound, aspects, category, comment, client_token)
+          VALUES($1::uuid, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12::jsonb, $13, $14, $15)
           RETURNING id`,
-          [targetEventId, targetOrderId, code, isAnon ? '' : (gName || (p && p.guestName || '')), isAnon ? '' : (gOrg || (p && p.guestOrg || '')), isAnon, rOverall, rContent, rService, rVenue, rSound, aspectsJson, category, comment]);
+          [targetEventId, targetOrderId, code, isAnon ? '' : (gName || (p && p.guestName || '')), isAnon ? '' : (gOrg || (p && p.guestOrg || '')), isAnon, rOverall, rContent, rService, rVenue, rSound, aspectsJson, category, comment, clientToken]);
         return json({ ok: true, data: { success: true, id: ins[0].id } });
       }
 
@@ -1117,6 +1139,14 @@ export default {
             if (r.is_anonymous) anonCount++;
           });
           return json({ ok: true, data: { rows, total, avg: avgOverall, aspectAvgs, dist, anonCount } });
+        }
+
+        if (action === 'feedbackDelete') {
+          needRole(2);
+          const id = String(params.id || '').trim();
+          await ensureFeatureTables(env);
+          await neonQuery(env, `DELETE FROM event_feedbacks WHERE id=$1::uuid`, [id]);
+          return json({ ok: true, data: true });
         }
 
         if (action === 'doorprizePool') {

@@ -978,7 +978,10 @@ function paintFeedback(c) {
                   <span style="color:#f59e0b;font-size:16px;letter-spacing:1px">${'★'.repeat(r.rating_overall || r.rating)}${'☆'.repeat(5 - (r.rating_overall || r.rating))}</span>
                   ${r.is_anonymous ? `<span class="pill wn" style="font-size:11px;font-weight:700">🎭 Anonim</span>` : `<b>${esc(r.author_name)}</b> ${r.author_org ? `<span class="muted" style="font-size:12px">(${esc(r.author_org)})</span>` : ''}`}
                 </div>
-                <small class="muted" style="font-size:11px">${esc(r.created_at_fmt)} · ${esc(r.event_name)}</small>
+                <div style="display:flex;align-items:center;gap:10px">
+                  <small class="muted" style="font-size:11px">${esc(r.created_at_fmt)} · ${esc(r.event_name)}</small>
+                  <button class="btn sm dg" data-act="fbDelFeedback" data-id="${r.id}" title="Hapus ulasan ini" style="padding:2px 8px;font-size:10px">&#10005; Hapus</button>
+                </div>
               </div>
               <div style="display:flex;flex-wrap:wrap;gap:6px;margin:8px 0">
                 <span class="pill" style="font-size:11px">🎤 Konten: <b>${r.rating_content || 5}★</b></span>
@@ -1036,9 +1039,19 @@ function feedbackModal({ eventId, orderId, code, eventName, isPublic }) {
   `);
 }
 
+function getDeviceId(){
+  let id = localStorage.getItem('atk_device_id');
+  if(!id){
+    id = 'dev_' + Math.random().toString(36).slice(2,10) + '_' + Date.now().toString(36);
+    localStorage.setItem('atk_device_id', id);
+  }
+  return id;
+}
+
 /* ===== HALAMAN SURVEY PUBLIK (TANPA LOGIN + BISA EDIT) ===== */
 async function publicSurveyView(evId) {
   applyTheme();
+  const devId = getDeviceId();
   const savedFid = localStorage.getItem('atk_fb_' + evId) || '';
   $('#app').innerHTML = `
     <div style="min-height:100vh;display:flex;justify-content:center;align-items:flex-start;padding:24px 16px;background:var(--bg)">
@@ -1051,7 +1064,7 @@ async function publicSurveyView(evId) {
 
   let info;
   try {
-    info = await pub('surveyInfo', { eventId: evId, feedbackId: savedFid });
+    info = await pub('surveyInfo', { eventId: evId, feedbackId: savedFid, clientToken: devId });
   } catch (e) {
     $('#survey_box').innerHTML = `
       <div style="text-align:center;padding:20px">
@@ -1065,7 +1078,11 @@ async function publicSurveyView(evId) {
   }
 
   const ev = info.event;
-  const myFb = info.myFeedback;
+  let myFb = info.myFeedback;
+  if (myFb && myFb.id) {
+    localStorage.setItem('atk_fb_' + evId, myFb.id);
+    window._currentFid = myFb.id;
+  }
   window._fbAspects = (myFb && myFb.aspects) ? myFb.aspects : {
     overall: (myFb && myFb.rating_overall) || 5,
     content: (myFb && myFb.rating_content) || 5,
@@ -1075,7 +1092,8 @@ async function publicSurveyView(evId) {
   };
 
   function renderSurveyForm(isEditing) {
-    const isEdit = isEditing !== undefined ? isEditing : !!myFb;
+    const activeFid = window._currentFid || localStorage.getItem('atk_fb_' + evId) || (myFb && myFb.id) || '';
+    const isEdit = isEditing !== undefined ? isEditing : !!activeFid;
     const box = $('#survey_box');
     if (!box) return;
 
@@ -1131,7 +1149,7 @@ async function publicSurveyView(evId) {
       <label style="font-weight:700;margin-bottom:4px;display:block">Kritik, Saran & Masukan Anda (Opsional)</label>
       <textarea id="pub_fb_comment" rows="3" placeholder="Tuliskan kesan atau masukan berharga Anda untuk acara ini..." style="width:100%;box-sizing:border-box;margin-bottom:20px">${esc((myFb && myFb.comment) || '')}</textarea>
 
-      <button class="btn pri lg" id="btn_pub_submit" data-act="pubSurveySubmit" data-ev="${esc(evId)}" data-fid="${esc((myFb && myFb.id) || savedFid)}" style="width:100%;font-size:16px;font-weight:800;padding:14px;border-radius:12px;box-shadow:0 6px 20px rgba(99,102,241,.3)">
+      <button class="btn pri lg" id="btn_pub_submit" data-act="pubSurveySubmit" data-ev="${esc(evId)}" data-fid="${esc(activeFid)}" style="width:100%;font-size:16px;font-weight:800;padding:14px;border-radius:12px;box-shadow:0 6px 20px rgba(99,102,241,.3)">
         ${isEdit ? '💾 Perbarui Ulasan Saya' : '🚀 Kirim Ulasan Saya'}
       </button>
 
@@ -2223,7 +2241,9 @@ const NL=String.fromCharCode(10),find=(a,id)=>a.find(x=>x.id===id),A={
    else{if(document.exitFullscreen)document.exitFullscreen().catch(()=>{});}
   },
   async pubSurveySubmit(el){
-   const evId=el.dataset.ev,fid=el.dataset.fid||'';
+   const evId=el.dataset.ev;
+   const devId=getDeviceId();
+   const fid=el.dataset.fid||window._currentFid||localStorage.getItem('atk_fb_'+evId)||'';
    const ratings=window._fbAspects||{overall:5,content:5,service:5,venue:5,sound:5};
    const isAnon=$('#pub_fb_anon')?$('#pub_fb_anon').checked:true;
    const gName=($('#pub_fb_name')?$('#pub_fb_name').value:'').trim();
@@ -2232,11 +2252,14 @@ const NL=String.fromCharCode(10),find=(a,id)=>a.find(x=>x.id===id),A={
 
    try{
     const res=await pub('feedbackPublic',{
-     eventId:evId,feedbackId:fid,ratings:ratings,rating:ratings.overall||5,
+     eventId:evId,feedbackId:fid,clientToken:devId,ratings:ratings,rating:ratings.overall||5,
      isAnonymous:isAnon,guestName:gName,guestOrg:gOrg,comment:comment
     },t('loading'));
 
-    if(res&&res.id){localStorage.setItem('atk_fb_'+evId,res.id);}
+    if(res&&res.id){
+     localStorage.setItem('atk_fb_'+evId,res.id);
+     window._currentFid=res.id;
+    }
     triggerConfetti('survey_confetti');
     const box=$('#survey_box');
     if(box){
@@ -2244,12 +2267,12 @@ const NL=String.fromCharCode(10),find=(a,id)=>a.find(x=>x.id===id),A={
       <div style="text-align:center;padding:20px 8px">
        <div style="font-size:54px;margin-bottom:8px">🎉</div>
        <span class="pill ok" style="font-size:12px;font-weight:800;letter-spacing:1px;margin-bottom:12px">✓ TERIMA KASIH BANYAK!</span>
-       <h2 style="margin:10px 0 8px;font-size:24px">Ulasan Anda Berhasil Disimpan</h2>
+       <h2 style="margin:10px 0 8px;font-size:24px">${res.updated?'Ulasan Anda Berhasil Diperbarui':'Ulasan Anda Berhasil Disimpan'}</h2>
        <p class="muted" style="font-size:14px;line-height:1.6;margin:0 0 24px">
         Masukan dan penilaian Anda sangat berharga bagi kami untuk terus meningkatkan kualitas dan pelayanan acara selanjutnya.
        </p>
        <div style="display:flex;flex-direction:column;gap:10px;max-width:320px;margin:0 auto">
-        <button class="btn" onclick="window._renderSurveyForm&&window._renderSurveyForm(true)" style="padding:12px;font-weight:700;border-radius:10px">
+        <button class="btn" onclick="window._currentFid=localStorage.getItem('atk_fb_' + '${esc(evId)}');window._renderSurveyForm&&window._renderSurveyForm(true)" style="padding:12px;font-weight:700;border-radius:10px">
          ✏️ Ubah / Edit Ulasan Saya
         </button>
         <a href="/" class="btn pri" style="padding:12px;font-weight:700;border-radius:10px;text-align:center">
@@ -2259,7 +2282,16 @@ const NL=String.fromCharCode(10),find=(a,id)=>a.find(x=>x.id===id),A={
       </div>
      `;
     }
-    toast('Terima kasih atas ulasan Anda! ⭐',0);
+    toast(res.updated?'Ulasan berhasil diperbarui! ⭐':'Terima kasih atas ulasan Anda! ⭐',0);
+   }catch(e){fail(e)}
+  },
+  async fbDelFeedback(el){
+   if(!await ask('Hapus ulasan ini dari rekap?'))return;
+   try{
+    await api('feedbackDelete',{id:el.dataset.id},t('loading'));
+    toast('Ulasan berhasil dihapus',0);
+    await fbLoadData();
+    paintFeedback();
    }catch(e){fail(e)}
   },
   fbExportCsv(){
