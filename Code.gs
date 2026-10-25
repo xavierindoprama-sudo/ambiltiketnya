@@ -33,7 +33,7 @@ function doGet(e) {
 /* ---------- API JSON untuk tampilan yang dihosting di luar Apps Script (mis. GitHub Pages) ----------
  * Klien memanggil POST ke alamat /exec dengan isi {"fn":"nama","args":[...]} (Content-Type: text/plain agar tanpa preflight CORS).
  * Hanya fungsi pada daftar putih di bawah yang bisa dipanggil; semuanya sama dengan yang dipakai google.script.run. */
-const API_FNS = { init: init, register: register, loginPw: loginPw, loginGoogle: loginGoogle, forgotRequest: forgotRequest, forgotReset: forgotReset, legalPublic: legalPublic, ticketPublic: ticketPublic, eventsPublic: eventsPublic, feedbackPublic: feedbackPublic, surveyInfo: surveyInfo, surveyStagePoll: surveyStagePoll, api: api, migrateOauth: migrateOauth, gateLogin: gateLogin };
+const API_FNS = { init: init, register: register, loginPw: loginPw, loginGoogle: loginGoogle, forgotRequest: forgotRequest, forgotReset: forgotReset, legalPublic: legalPublic, ticketPublic: ticketPublic, eventsPublic: eventsPublic, feedbackPublic: feedbackPublic, surveyInfo: surveyInfo, surveyStagePoll: surveyStagePoll, api: api, migrateOauth: migrateOauth, gateLogin: gateLogin, ticketFacilities: ticketFacilities, sessionSelfCheckin: sessionSelfCheckin, checkpointPublicInfo: checkpointPublicInfo, sessionStageLiveCount: sessionStageLiveCount };
 function jsonOut(o) { return ContentService.createTextOutput(JSON.stringify(o === undefined ? null : o)).setMimeType(ContentService.MimeType.JSON); }
 function doPost(e) {
   let out;
@@ -1882,6 +1882,172 @@ function checkpointsResetDefaults(u, p) {
   }
   return true;
 }
+
+function ticketFacilities(p) { return pubRun(ticketFacilitiesImpl, p); }
+function ticketFacilitiesImpl(p) {
+  const code = String(p && p.code || '').trim().toUpperCase().replace(/\s/g, '');
+  if (!code) throw new Error('NOT_FOUND');
+  const ord = q(`SELECT id, event_id, status, checked_in, checked_in_at, qty FROM orders WHERE ticket_code=$1`, [code])[0];
+  if (!ord) return { items: [] };
+
+  ensureDefaultCheckpointsGS(ord.event_id);
+
+  const checkpoints = q(`
+    SELECT cp.checkpoint_key, cp.name, cp.icon, cp.checkpoint_type,
+      cl.claimed_at, cl.qty AS claimed_qty
+    FROM event_checkpoints cp
+    LEFT JOIN checkpoint_claims cl ON cl.event_id=cp.event_id AND cl.checkpoint_key=cp.checkpoint_key AND cl.order_id=$1::uuid
+    WHERE cp.event_id=$2::uuid AND cp.is_active=true
+    ORDER BY cp.sort_order, cp.created_at
+  `, [ord.id, ord.event_id]);
+
+  const items = checkpoints.map(cp => {
+    let status = 'ready';
+    if (cp.checkpoint_key === 'main_gate') {
+      status = ord.checked_in > 0 ? 'claimed' : 'ready';
+    } else if (cp.claimed_at) {
+      status = 'claimed';
+    } else if (ord.checked_in <= 0) {
+      status = 'gate_required';
+    }
+    return {
+      key: cp.checkpoint_key,
+      name: cp.name,
+      icon: cp.icon,
+      type: cp.checkpoint_type,
+      status: status,
+      claimed_at: cp.claimed_at || (cp.checkpoint_key === 'main_gate' ? ord.checked_in_at : null),
+      qty: cp.claimed_qty || ord.qty
+    };
+  });
+
+  return { items: items };
+}
+
+function sessionStageLiveCount(p) { return pubRun(sessionStageLiveCountImpl, p); }
+function sessionStageLiveCountImpl(p) {
+  const evId = String(p && p.eventId || '').trim();
+  const cpKey = String(p && p.checkpointKey || '').trim();
+  if (!evId || !cpKey) throw new Error('PARAMS_REQUIRED');
+  const countRes = q(`
+    SELECT count(DISTINCT order_id)::int AS cnt
+    FROM checkpoint_claims
+    WHERE event_id=$1::uuid AND checkpoint_key=$2
+  `, [evId, cpKey])[0];
+  return { count: countRes ? countRes.cnt : 0 };
+}
+
+function checkpointPublicInfo(p) { return pubRun(checkpointPublicInfoImpl, p); }
+function checkpointPublicInfoImpl(p) {
+  const evId = String(p && p.eventId || '').trim();
+  const cpKey = String(p && p.checkpointKey || '').trim();
+  if (!evId || !cpKey) throw new Error('PARAMS_REQUIRED');
+  const ev = q(`SELECT id, name, event_date, banner_url, location, start_time FROM events WHERE id=$1::uuid`, [evId])[0];
+  if (!ev) throw new Error('EVENT_NOT_FOUND');
+  const cp = q(`SELECT * FROM event_checkpoints WHERE event_id=$1::uuid AND checkpoint_key=$2 AND is_active=true`, [evId, cpKey])[0];
+  if (!cp) throw new Error('CHECKPOINT_NOT_FOUND');
+  const liveCnt = q(`SELECT count(DISTINCT order_id)::int AS cnt FROM checkpoint_claims WHERE event_id=$1::uuid AND checkpoint_key=$2`, [evId, cpKey])[0];
+  return { event: ev, checkpoint: cp, attendeesCount: liveCnt ? liveCnt.cnt : 0 };
+}
+
+function sessionSelfCheckin(p) { return pubRun(sessionSelfCheckinImpl, p); }
+function sessionSelfCheckinImpl(p) {
+  const evId = String(p && p.eventId || '').trim();
+  const cpKey = String(p && p.checkpointKey || '').trim();
+  const rawInput = String(p && (p.ticketCode || p.code || p.phone || '')).trim();
+
+  if (!evId || !cpKey) throw new Error('PARAMS_REQUIRED');
+  if (!rawInput) throw new Error('TICKET_OR_PHONE_REQUIRED');
+
+  const cp = q(`SELECT * FROM event_checkpoints WHERE event_id=$1::uuid AND checkpoint_key=$2 AND is_active=true`, [evId, cpKey])[0];
+  if (!cp) return { ok: false, error: 'CHECKPOINT_NOT_FOUND', message: 'Sesi / pos check-in ini tidak aktif atau tidak ditemukan.' };
+
+  const ev = q(`SELECT id, name FROM events WHERE id=$1::uuid`, [evId])[0];
+  if (!ev) return { ok: false, error: 'EVENT_NOT_FOUND', message: 'Acara tidak ditemukan.' };
+
+  let ord = null;
+  const cleanInput = rawInput.toUpperCase().replace(/\s/g, '');
+  const cleanDigits = rawInput.replace(/[^0-9]/g, '');
+
+  if (cleanInput.startsWith('TKT-') || cleanInput.length >= 6) {
+    ord = q(`
+      SELECT o.*, u.name AS user_name, u.whatsapp AS user_phone, u.church AS user_church
+      FROM orders o
+      LEFT JOIN users u ON u.id=o.user_id
+      WHERE o.event_id=$1::uuid AND (upper(o.ticket_code)=$2 OR upper(o.order_code)=$2) AND o.status='confirmed'
+      LIMIT 1
+    `, [evId, cleanInput])[0];
+  }
+
+  if (!ord && cleanDigits.length >= 8) {
+    const suffix = cleanDigits.slice(-8);
+    ord = q(`
+      SELECT o.*, u.name AS user_name, u.whatsapp AS user_phone, u.church AS user_church
+      FROM orders o
+      LEFT JOIN users u ON u.id=o.user_id
+      WHERE o.event_id=$1::uuid AND o.status='confirmed' AND (
+        replace(replace(coalesce(o.guest_phone, ''), '+', ''), ' ', '') LIKE '%' || $2 || '%' OR
+        replace(replace(coalesce(u.whatsapp, ''), '+', ''), ' ', '') LIKE '%' || $2 || '%'
+      )
+      ORDER BY o.created_at DESC LIMIT 1
+    `, [evId, suffix])[0];
+  }
+
+  if (!ord) {
+    return {
+      ok: false,
+      error: 'NOT_FOUND',
+      message: 'Tiket tidak ditemukan untuk acara ini. Pastikan Kode Tiket atau Nomor WhatsApp terdaftar sudah benar.'
+    };
+  }
+
+  const attendeeName = (ord.kind === 'invitation' || ord.kind === 'walk_in') ? (ord.guest_name || 'Peserta') : (ord.user_name || 'Peserta');
+  const attendeeOrg = (ord.kind === 'invitation' || ord.kind === 'walk_in') ? (ord.guest_org || '') : (ord.user_church || '');
+
+  if (cpKey !== 'main_gate' && (ord.checked_in || 0) <= 0) {
+    return {
+      ok: false,
+      error: 'NOT_CHECKED_IN',
+      message: 'Anda belum melakukan check-in di Pintu Gerbang Utama. Silakan registrasi di meja kedatangan depan terlebih dahulu.',
+      attendeeName: attendeeName,
+      checkpoint: cp
+    };
+  }
+
+  const existingClaim = q(`SELECT * FROM checkpoint_claims WHERE order_id=$1::uuid AND checkpoint_key=$2`, [ord.id, cpKey])[0];
+  if (existingClaim) {
+    const claimedTime = new Date(existingClaim.claimed_at).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
+    return {
+      ok: false,
+      error: 'ALREADY_CLAIMED',
+      message: `Anda sudah tercatat hadir di ${cp.name} pada pukul ${claimedTime} WIB.`,
+      attendeeName: attendeeName,
+      checkpoint: cp,
+      claimed_at: existingClaim.claimed_at
+    };
+  }
+
+  const qtyToClaim = Math.max(1, ord.qty || 1);
+  q(`
+    INSERT INTO checkpoint_claims (event_id, checkpoint_key, order_id, ticket_code, qty, claimed_by_name)
+    VALUES ($1::uuid, $2, $3::uuid, $4, $5, 'Presensi Mandiri (Self-Checkin)')
+  `, [evId, cpKey, ord.id, ord.ticket_code, qtyToClaim]);
+
+  return {
+    ok: true,
+    data: {
+      result: 'VALID',
+      eventName: ev.name,
+      checkpoint: cp,
+      attendeeName: attendeeName,
+      attendeeOrg: attendeeOrg,
+      ticketCode: ord.ticket_code,
+      claimedQty: qtyToClaim,
+      time: new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })
+    }
+  };
+}
+
 
 function checkpointExportCsv(u, p) {
   const evId = String(p.eventId || '').trim();

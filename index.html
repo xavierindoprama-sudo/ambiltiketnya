@@ -355,17 +355,24 @@ async function ticketView(code){
  pub('ticketFacilities',{code:r.code}).then(fac=>{
   const box=$('#tk_facilities_box');
   if(!box||!fac||!fac.checkpoints||!fac.checkpoints.length)return;
-  const items=fac.checkpoints.map(cp=>{
-   const isMain=cp.key==='main_gate';
-   const isDone=!!cp.claimed;
+  try{ls.s('atk_last_tkt',r.code)}catch(x){}
+  const list=(fac&&(fac.items||fac.checkpoints))||[];
+  if(!list.length)return;
+  const items=list.map(cp=>{
+   const isMain=cp.key==='main_gate'||cp.checkpoint_key==='main_gate';
+   const isDone=cp.status==='claimed'||!!cp.claimed;
    const badgeStyle=isDone?'background:var(--ok,#10b981);color:#fff':'background:var(--in,rgba(0,0,0,.08));color:var(--mu,#666)';
-   const badgeText=isDone?(isMain?'✓ Hadir':'✓ Sudah Diklaim'+(cp.claimed_qty>1?' ('+cp.claimed_qty+')':'')):(isMain?'Belum Masuk':'Belum Diklaim');
+   const badgeText=isDone?(isMain?'✓ Hadir':'✓ Sudah Hadir / Diklaim'+(cp.claimed_qty>1?' ('+cp.claimed_qty+')':'')):(isMain?'Belum Masuk':'Belum Hadir');
    return '<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;background:var(--in,rgba(0,0,0,.03));border-radius:10px;margin-bottom:6px;border:1px solid var(--bd,rgba(0,0,0,.06))"><div style="display:flex;align-items:center;gap:8px"><span style="font-size:18px">'+(cp.icon||'📍')+'</span><div><b style="font-size:13px">'+esc(cp.name)+'</b>'+(cp.description?'<br><small style="opacity:.7">'+esc(cp.description)+'</small>':'')+'</div></div><span style="font-size:11px;font-weight:700;padding:3px 8px;border-radius:12px;'+badgeStyle+'">'+badgeText+'</span></div>';
   }).join('');
-  box.innerHTML='<div style="text-align:left;margin-bottom:8px"><small style="text-transform:uppercase;letter-spacing:1.5px;font-weight:700;color:var(--mu,#666);font-size:11px">Fasilitas &amp; Sesi Acara</small></div>'+items;
+  box.innerHTML='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><small style="text-transform:uppercase;letter-spacing:1.5px;font-weight:700;color:var(--mu,#666);font-size:11px">Fasilitas &amp; Sesi Acara</small><button class="btn sm" data-act="openSelfScan" data-code="'+esc(r.code)+'" style="font-size:11px;padding:3px 9px;border-radius:8px;background:var(--ac,#5b4ef0);color:#fff;border-color:var(--ac,#5b4ef0)">📷 Scan Sesi</button></div>'+items;
  }).catch(()=>{});}
-async function boot(){applyTheme();const tkc=ticketParam();if(tkc)return ticketView(tkc);
- const qp=new URLSearchParams(location.search),gateEv=qp.get('gate'),gateKey=qp.get('k');
+async function boot(){applyTheme();
+ const qp=new URLSearchParams(location.search);
+ if(qp.get('session_checkin'))return sessionCheckinView(qp.get('ev')||'',qp.get('cp')||'');
+ if(qp.get('stage')==='session_qr')return sessionQrStageView(qp.get('ev')||'',qp.get('cp')||'');
+ const tkc=ticketParam();if(tkc)return ticketView(tkc);
+ const gateEv=qp.get('gate'),gateKey=qp.get('k');
  const stage=qp.get('stage');
  if(stage==='survey'){return surveyStageView(qp.get('ev')||'');}
  const surveyEv=qp.get('survey')||qp.get('fb');
@@ -2062,6 +2069,7 @@ function paintAdminCheckpoints(){
     </div>
    </div>
    <div style="display:flex;align-items:center;gap:6px;flex:none">
+    <button class="btn sm" data-act="cpShowQr" data-id="${cp.id}" data-key="${cp.checkpoint_key}" title="Tampilkan QR Presensi Sesi" style="padding:4px 8px;font-size:12px;background:var(--ac,#5b4ef0);color:#fff;border-color:var(--ac,#5b4ef0)">🔲 QR Sesi</button>
     <label class="sw" title="${isActive?'Nonaktifkan pos':'Aktifkan pos'}" style="margin:0">
      <input type="checkbox" data-act="cpToggleActive" data-id="${cp.id}" data-key="${cp.checkpoint_key}" ${isActive?'checked':''}><i></i>
     </label>
@@ -2265,6 +2273,413 @@ async function A_cpExport(){
   fail(err);
  }
 }
+
+
+function cpShowQrModal(cp){
+ if(!cp)return;
+ const evId=S_cpAdmin.eventId;
+ const evName=S_cpAdmin.eventName;
+ const base=(B&&B.siteUrl?String(B.siteUrl).trim().replace(/\/+$/,''):location.origin+location.pathname);
+ const checkinUrl=base+(base.includes('?')?'&':'?')+'session_checkin=1&ev='+encodeURIComponent(evId)+'&cp='+encodeURIComponent(cp.checkpoint_key);
+ const stageUrl=base+(base.includes('?')?'&':'?')+'stage=session_qr&ev='+encodeURIComponent(evId)+'&cp='+encodeURIComponent(cp.checkpoint_key);
+
+ modal2(`<button class="btn sm x" data-act="cm2">&#10005;</button>
+  <div style="text-align:center">
+   <span style="font-size:32px">${cp.icon||'📍'}</span>
+   <h2 style="margin:4px 0 2px;font-size:18px">${esc(cp.name)}</h2>
+   <p class="muted" style="margin:0 0 14px;font-size:12px">${esc(evName)}</p>
+
+   <div style="background:#fff;padding:16px;border-radius:16px;display:inline-block;box-shadow:0 8px 24px rgba(0,0,0,.15);margin-bottom:12px">
+    <div style="width:220px;height:220px;display:grid;place-items:center">
+     ${typeof qrcode!=='undefined'?qr(checkinUrl):'<p class="muted">Memuat QR...</p>'}
+    </div>
+   </div>
+
+   <p style="font-size:12px;color:var(--mu,#666);margin:0 0 14px;line-height:1.4">
+    Tampilkan QR code ini di videotron, proyektor, atau standing banner di awal sesi agar peserta dapat melakukan presensi mandiri dari HP masing-masing.
+   </p>
+
+   <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap">
+    <a class="btn pri sm" href="${esc(stageUrl)}" target="_blank" style="text-decoration:none;display:inline-flex;align-items:center;gap:6px">
+     ⛶ Layar Penuh Videotron / Proyektor &#8599;
+    </a>
+    <button class="btn sm" data-act="copySessionLink" data-url="${esc(checkinUrl)}" style="display:inline-flex;align-items:center;gap:6px">
+     📋 Salin Tautan
+    </button>
+   </div>
+
+   <div style="margin-top:14px;padding:8px 10px;background:var(--in,rgba(0,0,0,.04));border-radius:8px;font-size:11px;word-break:break-all" class="mono">
+    ${esc(checkinUrl)}
+   </div>
+  </div>
+  <div class="acts" style="margin-top:16px">
+   <button class="btn" data-act="cm2">${t('close')}</button>
+  </div>`);
+}
+
+async function sessionQrStageView(evId, cpKey){
+ applyTheme();
+ const base=(B&&B.siteUrl?String(B.siteUrl).trim().replace(/\/+$/,''):location.origin+location.pathname);
+ const checkinUrl=base+(base.includes('?')?'&':'?')+'session_checkin=1&ev='+encodeURIComponent(evId)+'&cp='+encodeURIComponent(cpKey);
+
+ $('#app').innerHTML=`
+  <div style="min-height:100vh;background:radial-gradient(circle at 50% 20%, #1e1b4b, #090a15 70%);color:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;box-sizing:border-box;font-family:'Plus Jakarta Sans',sans-serif;text-align:center">
+   <div style="max-width:720px;width:100%">
+    <div style="display:inline-flex;align-items:center;gap:8px;padding:6px 14px;background:rgba(99,102,241,.2);border:1px solid rgba(99,102,241,.4);border-radius:99px;font-size:13px;font-weight:700;color:#c7d2fe;margin-bottom:14px;letter-spacing:1px;text-transform:uppercase">
+     <span>📍</span> PRESENSI MANDIRI SESI SEMINAR
+    </div>
+    <h1 id="sqr_session_name" style="font-size:clamp(24px, 4vw, 36px);font-weight:800;margin:0 0 6px;line-height:1.2;font-family:'Outfit',sans-serif">
+     Memuat Sesi...
+    </h1>
+    <p id="sqr_event_name" style="font-size:clamp(14px, 2vw, 17px);color:#94a3b8;margin:0 0 24px">
+     Mohon tunggu sebentar...
+    </p>
+
+    <div style="background:#fff;padding:24px;border-radius:24px;display:inline-block;box-shadow:0 20px 50px rgba(0,0,0,.6);margin-bottom:20px">
+     <div style="width:260px;height:260px;display:grid;place-items:center" id="sqr_qr_box">
+      ${typeof qrcode!=='undefined'?qr(checkinUrl):'<p style="color:#000">Memuat QR...</p>'}
+     </div>
+    </div>
+
+    <div style="display:flex;justify-content:center;gap:14px;margin-bottom:24px;flex-wrap:wrap">
+     <div style="background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);border-radius:14px;padding:10px 18px;display:flex;align-items:center;gap:10px">
+      <span style="font-size:22px">📱</span>
+      <span style="font-size:13px;text-align:left;line-height:1.3">Arahkan kamera HP ke QR Code<br><small style="opacity:.7">Buka notifikasi tautan yang muncul</small></span>
+     </div>
+     <div style="background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);border-radius:14px;padding:10px 18px;display:flex;align-items:center;gap:10px">
+      <span style="font-size:22px">👥</span>
+      <div style="text-align:left">
+       <div style="font-size:18px;font-weight:800;color:#38bdf8"><span id="sqr_live_cnt">0</span> Peserta</div>
+       <small style="opacity:.7;font-size:11px">Tercatat Hadir di Sesi Ini</small>
+      </div>
+     </div>
+    </div>
+
+    <div style="display:flex;gap:10px;justify-content:center">
+     <button class="btn sm" onclick="document.fullscreenElement?document.exitFullscreen():document.documentElement.requestFullscreen()" style="background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.2);color:#fff">
+      ⛶ Layar Penuh
+     </button>
+     <a class="btn sm" href="${esc(location.pathname)}" style="text-decoration:none;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.15);color:#fff">
+      Tutup
+     </a>
+    </div>
+   </div>
+  </div>`;
+
+ try {
+  const info=await pub('checkpointPublicInfo',{eventId:evId,checkpointKey:cpKey});
+  if(info&&info.event&&info.checkpoint){
+   const sName=$('#sqr_session_name');if(sName)sName.textContent=(info.checkpoint.icon||'📍')+' '+info.checkpoint.name;
+   const eName=$('#sqr_event_name');if(eName)eName.textContent=info.event.name+(info.checkpoint.description?' · '+info.checkpoint.description:'');
+   const lCnt=$('#sqr_live_cnt');if(lCnt)lCnt.textContent=info.attendeesCount||0;
+  }
+ }catch(e){}
+
+ setInterval(async ()=>{
+  try{
+   const res=await pub('sessionStageLiveCount',{eventId:evId,checkpointKey:cpKey});
+   const cntEl=$('#sqr_live_cnt');
+   if(cntEl&&res&&res.count!=null)cntEl.textContent=res.count;
+  }catch(x){}
+ },4000);
+}
+
+async function sessionCheckinView(evId, cpKey){
+ applyTheme();
+ const shell=b=>`<div class="gate"><div class="card tkc" style="max-width:440px;margin:20px auto;padding:24px 20px;text-align:center">${b}</div></div>`;
+ $('#app').innerHTML=shell(`<div class="tkt"><i></i></div><p class="muted">${t('loading')}</p>`);
+
+ let info=null;
+ try{
+  info=await pub('checkpointPublicInfo',{eventId:evId,checkpointKey:cpKey});
+ }catch(e){
+  $('#app').innerHTML=shell(`
+   <div style="font-size:42px;margin-bottom:8px">❌</div>
+   <h2>Sesi Tidak Ditemukan</h2>
+   <p class="muted" style="font-size:13px;margin:8px 0 16px">Tautan presensi sesi ini tidak valid atau pos check-in sudah ditutup oleh panitia.</p>
+   <a class="btn pri" style="text-decoration:none" href="${esc(location.pathname)}">${t('open_app')}</a>
+  `);
+  return;
+ }
+
+ const cp=info.checkpoint;
+ const ev=info.event;
+ const lastTkt=ls.g('atk_last_tkt')||'';
+
+ function renderForm(showManual){
+  const hasDetected=!!(lastTkt&&!showManual);
+  $('#app').innerHTML=shell(`
+   <div style="font-size:38px;margin-bottom:4px">${cp.icon||'📍'}</div>
+   <div style="display:inline-block;padding:3px 10px;background:rgba(99,102,241,.12);color:var(--ac,#5b4ef0);border-radius:99px;font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;margin-bottom:6px">
+    PRESENSI MANDIRI SESI
+   </div>
+   <h1 style="font-size:20px;font-weight:800;margin:0 0 4px;line-height:1.25">${esc(cp.name)}</h1>
+   <p class="muted" style="font-size:12px;margin:0 0 16px">${esc(ev.name)}</p>
+
+   <div id="self_res_box"></div>
+
+   ${hasDetected?`
+    <div style="background:var(--in,rgba(0,0,0,.04));border:1.5px solid var(--bd,rgba(0,0,0,.1));border-radius:14px;padding:14px;margin-bottom:14px;text-align:center">
+     <small class="muted" style="font-size:11px;text-transform:uppercase;letter-spacing:1px;font-weight:700">Tiket Terdeteksi di HP Ini</small>
+     <div class="mono" style="font-size:18px;font-weight:800;color:var(--ac,#5b4ef0);margin:6px 0">${esc(lastTkt)}</div>
+     <button class="btn pri" id="btn_confirm_detected" style="width:100%;padding:12px;font-size:14px;font-weight:700;margin-top:6px">
+      ✓ Konfirmasi Kehadiran Sekarang
+     </button>
+    </div>
+    <button class="lnk" id="btn_toggle_manual" style="font-size:12px;color:var(--mu,#666)">
+     Bukan tiket Anda? Ketik kode / nomor WhatsApp lain &#8594;
+    </button>
+   `:`
+    <div style="text-align:left;margin-bottom:14px">
+     <label style="font-size:12px;font-weight:700">Kode Tiket atau Nomor WhatsApp *</label>
+     <input id="self_input_code" placeholder="Contoh: TKT-SEMN-XXXXXX atau 08123456789" style="font-size:15px;padding:12px;text-align:center" autocomplete="off" value="${esc(lastTkt)}">
+     <small class="muted" style="display:block;margin-top:6px;font-size:11px;text-align:center">
+      Masukkan kode tiket atau nomor WhatsApp yang Anda gunakan saat pemesanan tiket.
+     </small>
+    </div>
+    <button class="btn pri" id="btn_submit_manual" style="width:100%;padding:12px;font-size:14px;font-weight:700">
+     Konfirmasi Kehadiran Sesi
+    </button>
+   `}
+
+   <div style="margin-top:20px;border-top:1px solid var(--bd,rgba(0,0,0,.08));padding-top:14px">
+    <a class="lnk" style="font-size:12px;color:var(--mu,#888);text-decoration:none" href="${esc(location.pathname)}">
+     ${t('open_app')}
+    </a>
+   </div>
+  `);
+
+  const btnDet=$('#btn_confirm_detected');
+  if(btnDet)btnDet.onclick=()=>doSelfCheckin(lastTkt);
+
+  const btnTgl=$('#btn_toggle_manual');
+  if(btnTgl)btnTgl.onclick=()=>renderForm(true);
+
+  const btnMan=$('#btn_submit_manual');
+  if(btnMan)btnMan.onclick=()=>{
+   const val=($('#self_input_code')?$('#self_input_code').value:'').trim();
+   if(!val)return toast('Masukkan kode tiket atau nomor WhatsApp terlebih dahulu',1);
+   doSelfCheckin(val);
+  };
+
+  const inp=$('#self_input_code');
+  if(inp)inp.onkeydown=e=>{if(e.key==='Enter')btnMan.click()};
+ }
+
+ async function doSelfCheckin(inputVal){
+  const box=$('#self_res_box');
+  bz(1,'Memverifikasi presensi...');
+  try{
+   const res=await pub('sessionSelfCheckin',{
+    eventId:evId,
+    checkpointKey:cpKey,
+    ticketCode:inputVal,
+    phone:inputVal
+   });
+   bz(-1);
+
+   if(!res||!res.ok){
+    snd(res&&res.error==='ALREADY_CLAIMED'?'USED':'ERROR');
+    vib(res&&res.error==='ALREADY_CLAIMED'?'USED':'ERROR');
+    const isAlready=res&&res.error==='ALREADY_CLAIMED';
+    const isNotGate=res&&res.error==='NOT_CHECKED_IN';
+    box.innerHTML=`
+     <div style="padding:14px;border-radius:12px;margin-bottom:14px;background:${isAlready?'rgba(245,158,11,.15)':'rgba(239,68,68,.12)'};border:1.5px solid ${isAlready?'#f59e0b':'#ef4444'};text-align:center">
+      <div style="font-size:24px;margin-bottom:4px">${isAlready?'⚠':isNotGate?'⛔':'❌'}</div>
+      <b style="color:${isAlready?'#d97706':'#ef4444'};font-size:14px;display:block">${isAlready?'SUDAH TERCATAT HADIR':isNotGate?'BELUM CHECK-IN GERBANG':t('e_E_GENERIC')}</b>
+      <p style="font-size:12px;margin:6px 0 0;line-height:1.4">${esc(res.message||'Gagal memproses presensi.')}</p>
+     </div>
+    `;
+    return;
+   }
+
+   const d=res.data;
+   snd('VALID');vib('VALID');
+   if(d.ticketCode)ls.s('atk_last_tkt',d.ticketCode);
+
+   $('#app').innerHTML=shell(`
+    <div style="font-size:52px;margin-bottom:8px">🎉</div>
+    <div style="display:inline-block;padding:4px 12px;background:rgba(16,185,129,.15);color:#10b981;border-radius:99px;font-size:12px;font-weight:800;letter-spacing:1px;text-transform:uppercase;margin-bottom:8px">
+     PRESENSI BERHASIL!
+    </div>
+    <h2 style="font-size:22px;font-weight:800;margin:0 0 4px">${esc(cp.name)}</h2>
+    <p class="muted" style="font-size:13px;margin:0 0 16px">${esc(ev.name)}</p>
+
+    <div style="background:var(--in,rgba(0,0,0,.03));border:1px solid var(--bd,rgba(0,0,0,.08));border-radius:14px;padding:14px;margin-bottom:16px;text-align:left;font-size:13px;line-height:1.5">
+     <div style="display:flex;justify-content:space-between;border-bottom:1px solid var(--bd,rgba(0,0,0,.06));padding-bottom:6px;margin-bottom:6px">
+      <span class="muted">Nama Peserta:</span>
+      <b>${esc(d.attendeeName)}</b>
+     </div>
+     ${d.attendeeOrg?`
+     <div style="display:flex;justify-content:space-between;border-bottom:1px solid var(--bd,rgba(0,0,0,.06));padding-bottom:6px;margin-bottom:6px">
+      <span class="muted">Instansi / Gereja:</span>
+      <b>${esc(d.attendeeOrg)}</b>
+     </div>`:''}
+     <div style="display:flex;justify-content:space-between;border-bottom:1px solid var(--bd,rgba(0,0,0,.06));padding-bottom:6px;margin-bottom:6px">
+      <span class="muted">Kode Tiket:</span>
+      <b class="mono">${esc(d.ticketCode)}</b>
+     </div>
+     <div style="display:flex;justify-content:space-between">
+      <span class="muted">Waktu Presensi:</span>
+      <b style="color:var(--ok,#10b981)">${esc(d.time)} WIB (Sah)</b>
+     </div>
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:8px">
+     <a class="btn pri" style="text-decoration:none;padding:12px;font-weight:700" href="${esc(location.pathname+'?ticket='+encodeURIComponent(d.ticketCode))}">
+      🎟️ Buka E-Tiket Saya
+     </a>
+     <a class="btn" style="text-decoration:none;padding:10px" href="${esc(location.pathname)}">
+      ${t('open_app')}
+     </a>
+    </div>
+   `);
+  }catch(err){
+   bz(-1);
+   snd('ERROR');vib('ERROR');
+   box.innerHTML=`
+    <div style="padding:12px;border-radius:10px;margin-bottom:12px;background:rgba(239,68,68,.12);border:1px solid #ef4444;color:#ef4444;font-size:13px">
+     ${esc(err.message||'Terjadi kesalahan sistem.')}
+    </div>
+   `;
+  }
+ }
+
+ renderForm(false);
+}
+
+let _selfScannerStream=null,_selfScanning=false;
+
+function openSelfScanModal(ticketCode){
+ modal(`<button class="btn sm x" data-act="closeSelfScan">&#10005;</button>
+  <div style="text-align:center;margin-bottom:10px">
+   <h3 style="margin:0 0 2px;font-size:16px">📷 Scan QR Presensi Sesi</h3>
+   <p class="muted" style="margin:0;font-size:12px">Arahkan kamera ke QR Code di videotron atau standing banner sesi</p>
+  </div>
+  <div style="position:relative;width:100%;max-width:320px;height:260px;margin:0 auto;background:#000;border-radius:16px;overflow:hidden">
+   <video id="self_scan_vid" playsinline muted autoplay style="width:100%;height:100%;object-fit:cover"></video>
+   <canvas id="self_scan_cvs" style="display:none"></canvas>
+   <div style="position:absolute;inset:20px;border:2px dashed rgba(255,255,255,.7);border-radius:14px;box-shadow:0 0 0 2000px rgba(0,0,0,.45);pointer-events:none"></div>
+  </div>
+  <div class="acts" style="margin-top:14px">
+   <button class="btn" data-act="closeSelfScan">${t('close')}</button>
+  </div>`);
+
+ startSelfScanCamera(ticketCode);
+}
+
+async function startSelfScanCamera(ticketCode){
+ const vid=$('#self_scan_vid'),cvs=$('#self_scan_cvs');
+ if(!vid||!cvs)return;
+ _selfScanning=true;
+
+ try{
+  const stream=await navigator.mediaDevices.getUserMedia({
+   video:{facingMode:'environment',width:{ideal:1280},height:{ideal:720}}
+  });
+  _selfScannerStream=stream;
+  vid.srcObject=stream;
+  await vid.play();
+
+  const ctx=cvs.getContext('2d',{willReadFrequently:true});
+
+  function tick(){
+   if(!_selfScanning)return;
+   if(vid.readyState===vid.HAVE_ENOUGH_DATA&&typeof jsQR!=='undefined'){
+    cvs.width=vid.videoWidth;
+    cvs.height=vid.videoHeight;
+    ctx.drawImage(vid,0,0,cvs.width,cvs.height);
+    const imgData=ctx.getImageData(0,0,cvs.width,cvs.height);
+    const code=jsQR(imgData.data,imgData.width,imgData.height,{inversionAttempts:'dontInvert'});
+    if(code&&code.data){
+     handleScannedSessionUrl(code.data,ticketCode);
+     return;
+    }
+   }
+   requestAnimationFrame(tick);
+  }
+  requestAnimationFrame(tick);
+ }catch(err){
+  toast('Tidak dapat mengakses kamera: '+(err.message||err),1);
+  closeSelfScanModal();
+ }
+}
+
+function closeSelfScanModal(){
+ _selfScanning=false;
+ if(_selfScannerStream){
+  _selfScannerStream.getTracks().forEach(t=>t.stop());
+  _selfScannerStream=null;
+ }
+ cm();
+}
+
+async function handleScannedSessionUrl(urlStr,ticketCode){
+ closeSelfScanModal();
+ let evId='',cpKey='';
+ try{
+  const u=new URL(urlStr);
+  evId=u.searchParams.get('ev')||'';
+  cpKey=u.searchParams.get('cp')||'';
+ }catch(x){
+  const mEv=urlStr.match(/[?&]ev=([^&]+)/);
+  const mCp=urlStr.match(/[?&]cp=([^&]+)/);
+  if(mEv)evId=decodeURIComponent(mEv[1]);
+  if(mCp)cpKey=decodeURIComponent(mCp[1]);
+ }
+
+ if(!evId||!cpKey){
+  toast('QR Code yang discan bukan QR presensi sesi acara ini.',1);
+  return;
+ }
+
+ bz(1,'Memverifikasi presensi sesi...');
+ try{
+  const res=await pub('sessionSelfCheckin',{
+   eventId:evId,
+   checkpointKey:cpKey,
+   ticketCode:ticketCode
+  });
+  bz(-1);
+
+  if(!res||!res.ok){
+   snd(res&&res.error==='ALREADY_CLAIMED'?'USED':'ERROR');
+   vib(res&&res.error==='ALREADY_CLAIMED'?'USED':'ERROR');
+   modal(`<button class="btn sm x" data-act="cm">&#10005;</button>
+    <div style="text-align:center;padding:10px">
+     <div style="font-size:42px;margin-bottom:6px">${res&&res.error==='ALREADY_CLAIMED'?'⚠':'⛔'}</div>
+     <h2 style="font-size:18px;margin:0 0 6px">${res&&res.error==='ALREADY_CLAIMED'?'Sudah Tercatat Hadir':'Presensi Ditolak'}</h2>
+     <p style="font-size:13px;color:var(--mu,#666);margin:0 0 16px;line-height:1.4">${esc(res?res.message:'Gagal presensi.')}</p>
+     <div class="acts"><button class="btn pri" data-act="cm">${t('close')}</button></div>
+    </div>`);
+   return;
+  }
+
+  snd('VALID');vib('VALID');
+  const d=res.data;
+  modal(`<button class="btn sm x" data-act="cm">&#10005;</button>
+   <div style="text-align:center;padding:10px">
+    <div style="font-size:48px;margin-bottom:6px">🎉</div>
+    <div style="display:inline-block;padding:3px 10px;background:rgba(16,185,129,.15);color:#10b981;border-radius:99px;font-size:11px;font-weight:800;letter-spacing:1px;text-transform:uppercase;margin-bottom:8px">
+     PRESENSI BERHASIL!
+    </div>
+    <h2 style="font-size:19px;font-weight:800;margin:0 0 4px">${esc(d.checkpoint.name)}</h2>
+    <p class="muted" style="font-size:12px;margin:0 0 14px">${esc(d.eventName)}</p>
+    <div style="background:var(--in,rgba(0,0,0,.03));border:1px solid var(--bd,rgba(0,0,0,.08));border-radius:12px;padding:12px;font-size:13px;text-align:left;line-height:1.4;margin-bottom:14px">
+     <div>Peserta: <b>${esc(d.attendeeName)}</b></div>
+     <div style="margin-top:4px">Waktu: <b style="color:var(--ok,#10b981)">${esc(d.time)} WIB (Sah)</b></div>
+    </div>
+    <div class="acts"><button class="btn pri" data-act="cm">${t('close')}</button></div>
+   </div>`);
+
+  ticketView(ticketCode);
+ }catch(err){
+  bz(-1);
+  snd('ERROR');vib('ERROR');
+  toast('Gagal melakukan presensi: '+(err.message||err),1);
+ }
+}
+
 
 let sw=null,nonce=null;
 function openScan(){const a=new Uint8Array(16);crypto.getRandomValues(a);nonce=[...a].map(b=>b.toString(16).padStart(2,'0')).join('');
@@ -2834,7 +3249,7 @@ const NL=String.fromCharCode(10),find=(a,id)=>a.find(x=>x.id===id),A={
  evTerms(el){const e=S.ev&&find(S.ev,el.dataset.id);if(!e||!e.terms)return;modal2('<button class="btn sm x" data-act="cm2">&#10005;</button><h2>'+t('ev_terms')+'</h2><p class="muted" style="margin:0">'+esc(e.name)+'</p><div class="tcb">'+esc(e.terms)+'</div><div class="acts"><button class="btn pri" data-act="cm2">'+t('close')+'</button></div>')},
  async dlpng(el){const o=find(S.tix,el.dataset.id);if(!o)return;const f=await ticketImg(o);if(!f)return toast(t('e_E_GENERIC'),1);const a=document.createElement('a');a.href=URL.createObjectURL(f);a.download=f.name;document.body.append(a);a.click();a.remove()},
  async dl(el){bz(1,t('preparing'));try{let o=S.tix&&find(S.tix,el.dataset.id);if(!o){S.tix=await api('myTickets');o=find(S.tix,el.dataset.id)}if(!o)throw new Error('NOT_FOUND');await generateTicketPdf(o)}catch(e){fail(e)}finally{bz(-1,t('preparing'))}},
- scOpen(){openScannerModal()},scClose(){closeScannerModal()},scTorch(){toggleTorch()},scAudio(){toggleAudio()},scFlip(){toggleCamera()},scFs(){toggleFullscreen()},cpRefresh(){A_cpRefresh()},cpExport(){A_cpExport()},cpManageModal(el){cpManageModal(el.dataset.id)},cpAddAdmin(){cpEditFormModal(null)},cpEditAdmin(el){const id=el.dataset.id,key=el.dataset.key,cp=S_cpAdmin.checkpoints.find(x=>(id&&x.id===id)||(key&&x.checkpoint_key===key));cpEditFormModal(cp)},cpDeleteAdmin(el){A_cpDeleteAdmin(el)},cpToggleActive(el){A_cpToggleActive(el)},cpSaveAdminSubmit(el){A_cpSaveAdminSubmit(el)},cpResetDefaults(){A_cpResetDefaults()},evForm(el){evForm(el.dataset.id)},paid(el){S.paid=el.dataset.v==='1';document.querySelectorAll('[data-act=paid]').forEach(b=>b.classList.toggle('on',b===el));const p=$('#pr');p.disabled=!S.paid;if(!S.paid)p.value=0},
+ scOpen(){openScannerModal()},scClose(){closeScannerModal()},scTorch(){toggleTorch()},scAudio(){toggleAudio()},scFlip(){toggleCamera()},scFs(){toggleFullscreen()},cpRefresh(){A_cpRefresh()},cpExport(){A_cpExport()},cpManageModal(el){cpManageModal(el.dataset.id)},cpAddAdmin(){cpEditFormModal(null)},cpEditAdmin(el){const id=el.dataset.id,key=el.dataset.key,cp=S_cpAdmin.checkpoints.find(x=>(id&&x.id===id)||(key&&x.checkpoint_key===key));cpEditFormModal(cp)},cpDeleteAdmin(el){A_cpDeleteAdmin(el)},cpToggleActive(el){A_cpToggleActive(el)},cpSaveAdminSubmit(el){A_cpSaveAdminSubmit(el)},cpResetDefaults(){A_cpResetDefaults()},cpShowQr(el){const id=el.dataset.id,key=el.dataset.key,cp=S_cpAdmin.checkpoints.find(x=>(id&&x.id===id)||(key&&x.checkpoint_key===key));cpShowQrModal(cp)},copySessionLink(el){navigator.clipboard.writeText(el.dataset.url).then(()=>toast('Tautan presensi disalin!',0)).catch(()=>toast('Gagal menyalin',1))},openSelfScan(el){openSelfScanModal(el.dataset.code)},closeSelfScan(){closeSelfScanModal()},evForm(el){evForm(el.dataset.id)},paid(el){S.paid=el.dataset.v==='1';document.querySelectorAll('[data-act=paid]').forEach(b=>b.classList.toggle('on',b===el));const p=$('#pr');p.disabled=!S.paid;if(!S.paid)p.value=0},
  async saveEv(){const f=$('#ef'),d=Object.fromEntries(new FormData(f));d.one_order_per_account=f.one_order_per_account.checked;d.is_active=f.is_active.checked;d.is_paid=S.paid;d.price=S.paid?d.price:0;d.quota=parseInt(d.quota,10)||0;d.walkin_quota=parseInt(d.walkin_quota,10)||0;if(!d.id)delete d.id;try{await api('saveEvent',d,t('loading'));cm();toast(t('saved'));S.aev=null;adminView()}catch(e){fail(e)}},
  async cxl(el){if(await ask(t('ask_cancel')))try{await api('cancelOrder',{id:el.dataset.id},t('loading'));S.view==='inv'?invView($('#ac')):loadOrders()}catch(e){fail(e)}},
  ordpg(el){S.ordPage=parseInt(el.dataset.v,10)||1;paintOrders();const tb=$('#ot');if(tb&&tb.scrollIntoView)tb.scrollIntoView({block:'start'})},

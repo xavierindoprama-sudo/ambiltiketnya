@@ -625,6 +625,134 @@ export default {
         return json({ ok: true, data: { items } });
       }
 
+      if (fn === 'sessionStageLiveCount') {
+        const [p] = args;
+        const evId = String(p && p.eventId || '').trim();
+        const cpKey = String(p && p.checkpointKey || '').trim();
+        if (!evId || !cpKey) throw new Error('PARAMS_REQUIRED');
+        await ensureFeatureTables(env);
+        const countRes = (await neonQuery(env, `
+          SELECT count(DISTINCT order_id)::int AS cnt
+          FROM checkpoint_claims
+          WHERE event_id=$1::uuid AND checkpoint_key=$2
+        `, [evId, cpKey]))[0];
+        return json({ ok: true, data: { count: countRes ? countRes.cnt : 0 } });
+      }
+
+      if (fn === 'sessionSelfCheckin') {
+        const [p] = args;
+        const evId = String(p && p.eventId || '').trim();
+        const cpKey = String(p && p.checkpointKey || '').trim();
+        const rawInput = String(p && (p.ticketCode || p.code || p.phone || '')).trim();
+
+        if (!evId || !cpKey) throw new Error('PARAMS_REQUIRED');
+        if (!rawInput) throw new Error('TICKET_OR_PHONE_REQUIRED');
+
+        await ensureFeatureTables(env);
+
+        const cp = (await neonQuery(env, `SELECT * FROM event_checkpoints WHERE event_id=$1::uuid AND checkpoint_key=$2 AND is_active=true`, [evId, cpKey]))[0];
+        if (!cp) return json({ ok: false, error: 'CHECKPOINT_NOT_FOUND', message: 'Sesi / pos check-in ini tidak aktif atau tidak ditemukan.' });
+
+        const ev = (await neonQuery(env, `SELECT id, name FROM events WHERE id=$1::uuid`, [evId]))[0];
+        if (!ev) return json({ ok: false, error: 'EVENT_NOT_FOUND', message: 'Acara tidak ditemukan.' });
+
+        let ord = null;
+        const cleanInput = rawInput.toUpperCase().replace(/\s/g, '');
+        const cleanDigits = rawInput.replace(/[^0-9]/g, '');
+
+        if (cleanInput.startsWith('TKT-') || cleanInput.length >= 6) {
+          ord = (await neonQuery(env, `
+            SELECT o.*, u.name AS user_name, u.whatsapp AS user_phone, u.church AS user_church
+            FROM orders o
+            LEFT JOIN users u ON u.id=o.user_id
+            WHERE o.event_id=$1::uuid AND (upper(o.ticket_code)=$2 OR upper(o.order_code)=$2) AND o.status='confirmed'
+            LIMIT 1
+          `, [evId, cleanInput]))[0];
+        }
+
+        if (!ord && cleanDigits.length >= 8) {
+          const suffix = cleanDigits.slice(-8);
+          ord = (await neonQuery(env, `
+            SELECT o.*, u.name AS user_name, u.whatsapp AS user_phone, u.church AS user_church
+            FROM orders o
+            LEFT JOIN users u ON u.id=o.user_id
+            WHERE o.event_id=$1::uuid AND o.status='confirmed' AND (
+              replace(replace(coalesce(o.guest_phone, ''), '+', ''), ' ', '') LIKE '%' || $2 || '%' OR
+              replace(replace(coalesce(u.whatsapp, ''), '+', ''), ' ', '') LIKE '%' || $2 || '%'
+            )
+            ORDER BY o.created_at DESC LIMIT 1
+          `, [evId, suffix]))[0];
+        }
+
+        if (!ord) {
+          return json({
+            ok: false,
+            error: 'NOT_FOUND',
+            message: 'Tiket tidak ditemukan untuk acara ini. Pastikan Kode Tiket atau Nomor WhatsApp terdaftar sudah benar.'
+          });
+        }
+
+        const attendeeName = (ord.kind === 'invitation' || ord.kind === 'walk_in') ? (ord.guest_name || 'Peserta') : (ord.user_name || 'Peserta');
+        const attendeeOrg = (ord.kind === 'invitation' || ord.kind === 'walk_in') ? (ord.guest_org || '') : (ord.user_church || '');
+
+        if (cpKey !== 'main_gate' && (ord.checked_in || 0) <= 0) {
+          return json({
+            ok: false,
+            error: 'NOT_CHECKED_IN',
+            message: 'Anda belum melakukan check-in di Pintu Gerbang Utama. Silakan registrasi di meja kedatangan depan terlebih dahulu.',
+            attendeeName: attendeeName,
+            checkpoint: cp
+          });
+        }
+
+        const existingClaim = (await neonQuery(env, `SELECT * FROM checkpoint_claims WHERE order_id=$1::uuid AND checkpoint_key=$2`, [ord.id, cpKey]))[0];
+        if (existingClaim) {
+          const claimedTime = new Date(existingClaim.claimed_at).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
+          return json({
+            ok: false,
+            error: 'ALREADY_CLAIMED',
+            message: `Anda sudah tercatat hadir di ${cp.name} pada pukul ${claimedTime} WIB.`,
+            attendeeName: attendeeName,
+            checkpoint: cp,
+            claimed_at: existingClaim.claimed_at
+          });
+        }
+
+        const qtyToClaim = Math.max(1, ord.qty || 1);
+        await neonQuery(env, `
+          INSERT INTO checkpoint_claims (event_id, checkpoint_key, order_id, ticket_code, qty, claimed_by_name)
+          VALUES ($1::uuid, $2, $3::uuid, $4, $5, 'Presensi Mandiri (Self-Checkin)')
+        `, [evId, cpKey, ord.id, ord.ticket_code, qtyToClaim]);
+
+        return json({
+          ok: true,
+          data: {
+            result: 'VALID',
+            eventName: ev.name,
+            checkpoint: cp,
+            attendeeName: attendeeName,
+            attendeeOrg: attendeeOrg,
+            ticketCode: ord.ticket_code,
+            claimedQty: qtyToClaim,
+            time: new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })
+          }
+        });
+      }
+
+      if (fn === 'checkpointPublicInfo') {
+        const [p] = args;
+        const evId = String(p && p.eventId || '').trim();
+        const cpKey = String(p && p.checkpointKey || '').trim();
+        if (!evId || !cpKey) throw new Error('PARAMS_REQUIRED');
+        await ensureFeatureTables(env);
+        const ev = (await neonQuery(env, `SELECT id, name, event_date, banner_url, location, start_time FROM events WHERE id=$1::uuid`, [evId]))[0];
+        if (!ev) throw new Error('EVENT_NOT_FOUND');
+        const cp = (await neonQuery(env, `SELECT * FROM event_checkpoints WHERE event_id=$1::uuid AND checkpoint_key=$2 AND is_active=true`, [evId, cpKey]))[0];
+        if (!cp) throw new Error('CHECKPOINT_NOT_FOUND');
+        const liveCnt = (await neonQuery(env, `SELECT count(DISTINCT order_id)::int AS cnt FROM checkpoint_claims WHERE event_id=$1::uuid AND checkpoint_key=$2`, [evId, cpKey]))[0];
+        return json({ ok: true, data: { event: ev, checkpoint: cp, attendeesCount: liveCnt ? liveCnt.cnt : 0 } });
+      }
+
       if (fn === 'surveyInfo') {
         const [p] = args;
         const evId = String(p && p.eventId || '').trim();
