@@ -471,6 +471,11 @@ const hasMod=(e,m)=>{
   return Array.isArray(a)?a.includes(m):(m==='ticketing');
 };
 window.hasMod=hasMod;
+function getCurEvId(){return S.curEvId||ls.g('atk_cur_ev')||'';}
+function setCurEvId(evId){S.curEvId=evId||'';if(evId)ls.s('atk_cur_ev',evId);else ls.d('atk_cur_ev');S.sel=evId;S.anSelEv=evId;S_fb.evId=evId;S_dp.evId=evId;}
+function getCurEv(){const id=getCurEvId();if(!id||!S.aev)return null;return S.aev.find(e=>e.id===id)||null;}
+function isCurRsvpMode(){const ev=getCurEv();return !!(ev&&hasMod(ev,'rsvp'));}
+window.getCurEvId=getCurEvId;window.setCurEvId=setCurEvId;window.getCurEv=getCurEv;window.isCurRsvpMode=isCurRsvpMode;
 const stPill=s=>`<span class="pill ${s==='confirmed'?'ok':s==='cancelled'?'er':'wn'}">${t('st_'+s)}</span>`;
 function evCard(e){const isRsvp=hasMod(e,'rsvp')&&!hasMod(e,'ticketing');const used=e.quota-e.remaining;return `<article class="card ev" data-act="open" data-id="${e.id}"><div class="ban">${e.banner_url?`<img loading="lazy" decoding="async" src="${esc(e.banner_url)}" onerror="this.remove()">`:''}<div class="bd"><span class="pill ${isRsvp?'ok':''}">${isRsvp?'✉️ RSVP':rp(e.is_paid?e.price:0)}</span>${e.max_per_order>1&&!isRsvp?`<span class="pill y">${t('maxp')}: ${e.max_per_order}</span>`:''}</div><div class="dt"><span>&#128197; ${fd(e.event_date)}</span><span>&#128338; ${tm(e)}</span></div></div>
 <div class="eb"><div class="cat">${esc(e.category)}</div><h3>${esc(e.name)}</h3><div class="ds">${esc(e.description)}</div><div class="row" style="margin-top:10px"><span class="muted">${isRsvp?'Kapasitas:':t('left')}</span><b class="mono">${e.remaining} ${isRsvp?'Kursi':t('tix')}</b></div><div class="qb"><i style="width:${pc(e.remaining,e.quota)}%"></i></div><button class="btn pri" style="width:100%">${e.remaining<=0?t('soldout'):e.has_order&&e.one_order_per_account?(isRsvp?'✓ Sudah RSVP':t('ordered')):(isRsvp?'✉️ RSVP Sekarang':t('book'))} &#8250;</button></div></article>`}
@@ -528,14 +533,57 @@ ${ok?`<div class="pacts noprint">${(o.guest_phone||inv||(S.user&&S.user.whatsapp
  }
 }
 /* ===== ADMIN ===== */
-function renderAdmin(){const nav=[['dash',1],['events',2],['orders',2],['scan',1],['analytics',2],['doorprize',2],['feedback',2],['inv',2],['organizers',3],['legal',2],['users',3]].filter(n=>rk()>=n[1]);if(!nav.find(n=>n[0]===S.view))S.view=nav[0][0];
+function renderAdmin(){
+ const curEvId=getCurEvId();
+ const curEv=getCurEv();
+ const isRsvp=isCurRsvpMode();
+ const ordersNavLabel=isRsvp?'Rekap Peserta':t('n_orders');
+ const pageTitle=(S.view==='orders')?(isRsvp?'📋 Rekap Peserta & Konfirmasi RSVP':t('n_orders')):t('n_'+S.view);
+
+ const nav=[['dash',1],['events',2],['orders',2],['scan',1],['analytics',2],['doorprize',2],['feedback',2],['inv',2],['organizers',3],['legal',2],['users',3]].filter(n=>rk()>=n[1]);
+ if(!nav.find(n=>n[0]===S.view))S.view=nav[0][0];
  const sv=ls.g('sbcol'),col=sv==null?innerWidth<1100:sv==='1';
  const it=(on,ic,l,act,dv,x)=>'<button class="ni '+(on?'on ':'')+(x||'')+'" title="'+esc(l)+'" data-act="'+act+'"'+(dv?' data-v="'+dv+'"':'')+'>'+ico(ic)+'<span>'+l+'</span></button>';
+
+ const evContextBar=(rk()>=2&&S.aev&&S.aev.length)?`
+ <div class="ev-context-bar" style="background:var(--card-sub,rgba(255,255,255,.03));border:1px solid var(--bd);border-radius:12px;padding:8px 14px;margin-bottom:14px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
+   <div style="display:flex;align-items:center;gap:8px;flex:1;min-width:250px">
+     <span style="font-size:16px">🎯</span>
+     <div style="flex:1;max-width:360px">
+       <select id="global_ev_selector" style="width:100%;font-size:12px;padding:5px 8px;border-radius:8px;border:1.5px solid var(--ac);background:var(--in);color:var(--fg);font-weight:700;cursor:pointer">
+         <option value="">🌐 Semua Acara (Global)</option>
+         ${S.aev.map(e=>`<option value="${e.id}" ${e.id===curEvId?'selected':''}>${hasMod(e,'rsvp')?'💌 ':'🎟️ '}${esc(e.name)}</option>`).join('')}
+       </select>
+     </div>
+   </div>
+   ${curEv?`
+     <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+       <span class="pill ${isRsvp?'wn':'ok'}" style="font-size:11px;font-weight:800">
+         ${isRsvp?'💌 Mode RSVP / Tamu':'🎟️ Mode Penjualan Tiket'}
+       </span>
+       <button class="btn sm" data-act="clearCurEv" title="Kembali melihat semua acara" style="font-size:11px;padding:2px 8px">Semua Acara</button>
+     </div>
+   `:''}
+ </div>`: '';
+
  $('#app').innerHTML='<div class="app'+(col?' col':'')+'" id="shell"><aside class="sb"><div class="sb-top"><div class="logo"><i>'+ico(ICN.ticket)+'</i><span class="sb-txt">ambiltiketnya<b>.online</b></span></div><button class="ib sb-tg" data-act="sbtoggle" title="Menu">'+ico(ICN.left)+'</button><button class="ib sb-x" data-act="sbclose">'+ico(ICN.close)+'</button></div>'
- +'<nav class="sb-nav">'+nav.map(n=>it(S.view===n[0],ICN[n[0]],t('n_'+n[0]),'view',n[0])).join('')+'<div class="sb-sep"></div>'+it(0,ICN.user,t('asuser'),'mode','user')+'</nav>'
+ +'<nav class="sb-nav">'+nav.map(n=>it(S.view===n[0],ICN[n[0]],n[0]==='orders'?ordersNavLabel:t('n_'+n[0]),'view',n[0])).join('')+'<div class="sb-sep"></div>'+it(0,ICN.user,t('asuser'),'mode','user')+'</nav>'
  +'<div class="sb-bot"><div class="uc">'+avt(S.user)+'<div class="sb-txt"><b>'+esc(S.user.name)+'</b><small>'+t('r_'+S.user.role)+'</small></div></div><div class="sb-full">'+ctl()+'</div><div class="sb-mini"><button class="ib" data-act="themecycle" title="'+t('theme')+'">'+IC[TH]+'</button><button class="ib" data-act="langtoggle">'+L.toUpperCase()+'</button></div>'+it(0,ICN.out,t('logout'),'logout','','dg')+'</div></aside><div class="sb-bg" data-act="sbclose"></div>'
- +'<div class="mw"><header class="mbar"><button class="ib" data-act="sbopen">'+ico(ICN.menu)+'</button><b>'+t('n_'+S.view)+'</b><span class="sp"></span>'+avt(S.user)+'</header><section class="card main"><h2 class="ptitle">'+t('n_'+S.view)+'</h2><div id="ac">'+skel(1)+'</div></section></div></div>';adminView()}
-async function adminView(){const c=$('#ac');try{({dash,events:evList,orders:ordView,scan:scanView,analytics:analyticsView,doorprize:doorprizeView,feedback:feedbackView,users:usrView,organizers:organizersView,legal:legalView,inv:invView})[S.view](c)}catch(e){fail(e)}}
+ +'<div class="mw"><header class="mbar"><button class="ib" data-act="sbopen">'+ico(ICN.menu)+'</button><b>'+pageTitle+'</b><span class="sp"></span>'+avt(S.user)+'</header><section class="card main"><h2 class="ptitle">'+pageTitle+'</h2>'+evContextBar+'<div id="ac">'+skel(1)+'</div></section></div></div>';adminView()}
+async function adminView(){
+  const c=$('#ac');
+  try{
+    if(!S.aev){
+      S.aev=await api('adminEvents');
+      const g=$('#global_ev_selector');
+      if(g&&g.options.length<=1){
+        const curId=getCurEvId();
+        g.innerHTML='<option value="">🌐 Semua Acara (Global)</option>'+S.aev.map(e=>`<option value="${e.id}" ${e.id===curId?'selected':''}>${hasMod(e,'rsvp')?'💌 ':'🎟️ '}${esc(e.name)}</option>`).join('');
+      }
+    }
+    ({dash,events:evList,orders:ordView,scan:scanView,analytics:analyticsView,doorprize:doorprizeView,feedback:feedbackView,users:usrView,organizers:organizersView,legal:legalView,inv:invView})[S.view](c);
+  }catch(e){fail(e)}
+}
 async function dash(c){try{S.st=await api('stats')}catch(e){return fail(e)}paintDash()}
 function paintDash(){const c=$('#ac'),sel=S.sel||'',r=S.st.filter(x=>!sel||x.id===sel),sm=k=>r.reduce((a,x)=>a+x[k],0),bk=sm('booked'),ck=sm('checked'),q=sm('quota'),ac=r.filter(x=>x.is_active).length,mx=Math.max(1,...r.map(x=>x.booked));
  const st=(ic,v,l,s,p,col)=>`<div class="card stat"><div><b>${v}</b><small>${l}</small><br><small>${s}</small></div><div class="ring" style="--p:${p};--c:${col}"><span>${p}%</span></div></div>`;
@@ -545,7 +593,7 @@ function paintDash(){const c=$('#ac'),sel=S.sel||'',r=S.st.filter(x=>!sel||x.id=
 <div class="card" style="padding:16px"><h3>${t('ratio')}</h3><div class="donut" style="--p:${pc(ck,bk)}"><span>${bk}<br><small class="muted" style="font:12px 'Plus Jakarta Sans'">${t('tix')}</small></span></div><div class="row"><span>&#128994; ${t('didin')}</span><b>${ck}</b></div><div class="row"><span>&#128995; ${t('notin')}</span><b>${bk-ck}</b></div></div></div>`}
 
 /* ===== ANALYTICS & EXPORT ===== */
-async function analyticsView(c){c.innerHTML='<div class="card" style="padding:20px;text-align:center"><div style="display:inline-block;animation:spin 1s linear infinite;font-size:24px">⏳</div><p class="muted" style="margin-top:10px">'+t('loading')+'</p></div>';try{const [evs,ords]=await Promise.all([S.aev||api('adminEvents'),api('ordersAll',{})]);S.aev=evs;S.anOrds=ords.rows;paintAnalytics()}catch(e){fail(e)}}
+async function analyticsView(c){c.innerHTML='<div class="card" style="padding:20px;text-align:center"><div style="display:inline-block;animation:spin 1s linear infinite;font-size:24px">⏳</div><p class="muted" style="margin-top:10px">'+t('loading')+'</p></div>';try{const [evs,ords]=await Promise.all([S.aev||api('adminEvents'),api('ordersAll',{})]);S.aev=evs;S.anOrds=ords.rows;if(!S.anSelEv&&getCurEvId())S.anSelEv=getCurEvId();paintAnalytics()}catch(e){fail(e)}}
 function paintAnalytics(){const c=$('#ac');if(!c)return;const selEv=S.anSelEv||'',ords=(S.anOrds||[]).filter(o=>!selEv||o.event_id===selEv),evOpts='<option value="">'+t('all_ev')+'</option>'+(S.aev||[]).map(e=>'<option value="'+e.id+'" '+(e.id===selEv?'selected':'')+'>'+esc(e.name)+'</option>').join('');
  const totalBooked=ords.filter(o=>o.status!=='cancelled').reduce((a,o)=>a+o.qty,0),totalChecked=ords.filter(o=>o.status!=='cancelled').reduce((a,o)=>a+(o.checked_in||0),0),noShow=Math.max(0,totalBooked-totalChecked),rate=totalBooked?Math.round((totalChecked/totalBooked)*100):0,vipCount=ords.filter(o=>o.kind==='invitation'&&o.status!=='cancelled').reduce((a,o)=>a+o.qty,0),regCount=Math.max(0,totalBooked-vipCount);
  const timeBuckets={};ords.filter(o=>o.checked_in_at).forEach(o=>{const d=new Date(o.checked_in_at),m=d.getMinutes()<30?'00':'30',slot=String(d.getHours()).padStart(2,'0')+':'+m;timeBuckets[slot]=(timeBuckets[slot]||0)+(o.checked_in||1)});
@@ -622,7 +670,7 @@ function paintAnalytics(){const c=$('#ac');if(!c)return;const selEv=S.anSelEv||'
 ${sortedSlots.length?`<div style="display:flex;align-items:flex-end;gap:12px;height:180px;padding:10px 0 24px;overflow-x:auto">${sortedSlots.map(s=>{const val=timeBuckets[s],pct=Math.round((val/maxSlotVal)*100);return `<div style="flex:1;min-width:44px;display:flex;flex-direction:column;align-items:center;height:100%;justify-content:flex-end;gap:6px"><span style="font-size:11px;font-weight:700;color:var(--ac)">${val}</span><div style="width:100%;background:linear-gradient(180deg,#8b5cf6,#5b4ef0);border-radius:6px 6px 0 0;height:${Math.max(8,pct)}%"></div><span class="mono" style="font-size:10px;opacity:.75;white-space:nowrap">${s}</span></div>`}).join('')}</div>`:'<p class="muted" style="text-align:center;padding:30px">Belum ada data check-in untuk rentang ini.</p>'}</div>
 <div class="two" style="gap:16px"><div class="card" style="padding:18px"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:8px"><div><div style="display:flex;align-items:center;gap:8px"><h3 style="margin:0;font-size:16px">${t('an_demo_church')}</h3><span class="pill ok" style="font-size:11px;font-weight:700">⛪ ${sortedChurches.length} Gereja</span></div><small class="muted" style="font-size:11px">Total <b>${sortedChurches.length} gereja / komunitas</b> (${totalChurchQty} jemaat terdata)</small></div><div style="display:inline-flex;background:rgba(255,255,255,.08);padding:3px;border-radius:9px;border:1px solid rgba(255,255,255,.12);gap:3px"><button class="btn sm" id="ch_toggle_bubble" style="padding:4px 10px;font-size:11px;border-radius:6px;${S.anChMode!=='list'?'background:var(--ac);color:#fff;font-weight:700':''}">🫧 Gelembung</button><button class="btn sm" id="ch_toggle_list" style="padding:4px 10px;font-size:11px;border-radius:6px;${S.anChMode==='list'?'background:var(--ac);color:#fff;font-weight:700':''}">📊 Daftar (${sortedChurches.length})</button></div></div>${S.anChMode==='list'?churchListHtml:churchBubbleHtml}</div>
 <div class="card" style="padding:18px"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:8px"><div><h3 style="margin:0;font-size:16px">${t('an_demo_age')}</h3><small class="muted" style="font-size:11px">Distribusi dari ${totalAgeCount} peserta terdata</small></div></div>${Object.entries(ageBuckets).some(x=>x[1]>0)?Object.entries(ageBuckets).map(([ag,cnt])=>{const pct=totalAgeCount?Math.round(cnt/totalAgeCount*100):0;return `<div style="margin-bottom:10px"><div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:3px"><span>Kelompok Usia <b>${ageLabels[ag]||ag}</b></span><span><b>${cnt}</b> orang <small class="muted">(${pct}%)</small></span></div><div style="height:6px;background:rgba(255,255,255,.1);border-radius:99px;overflow:hidden"><div style="height:100%;width:${cnt/maxAgeVal*100}%;background:linear-gradient(90deg,#f59e0b,#fbbf24);border-radius:99px"></div></div></div>`}).join(''):'<p class="muted">Belum ada data usia.</p>'}</div></div>`;
- $('#an_ev').onchange=e=>{S.anSelEv=e.target.value;paintAnalytics()};
+ $('#an_ev').onchange=e=>{S.anSelEv=e.target.value;setCurEvId(e.target.value);const g=$('#global_ev_selector');if(g)g.value=e.target.value;paintAnalytics()};
  const tbBubble=$('#ch_toggle_bubble'),tbList=$('#ch_toggle_list');
  if(tbBubble)tbBubble.onclick=()=>{S.anChMode='bubble';paintAnalytics()};
  if(tbList)tbList.onclick=()=>{S.anChMode='list';paintAnalytics()};
@@ -636,10 +684,10 @@ ${sortedSlots.length?`<div style="display:flex;align-items:flex-end;gap:12px;hei
   };
  });}
 
-function exportOrdersCsv(targetEventId){const evId=targetEventId||($('#of')&&$('#of').value)||($('#an_ev')&&$('#an_ev').value)||'';
- const orders=(S.anOrds||S.ord||[]).filter(o=>!evId||o.event_id===evId);if(!orders.length)return toast('Tidak ada data pesanan untuk diekspor.',1);
- const headers=['Kode Tiket','Kode Pesanan','Nama Lengkap / Tamu','Email','No. WhatsApp','Asal Gereja / Komunitas','Usia','Nama Acara','Jumlah Tiket','Jenis Tiket','Status Pesanan','Status Kehadiran','Waktu Check-In','Tanggal Pemesanan','Data Tambahan (Formulir Kustom)'];
- const rows=orders.map(o=>[o.ticket_code||'',o.order_code||'',o.kind==='walk_in'?(o.guest_name||o.name||''):o.kind==='invitation'?(o.guest_name||o.name||''):(o.name||''),o.kind==='walk_in'?(o.guest_email||o.email||''):(o.email||''),(o.kind==='walk_in'?(o.guest_phone||o.whatsapp):(o.whatsapp))?"'"+(o.kind==='walk_in'?(o.guest_phone||o.whatsapp):o.whatsapp):'',o.kind==='walk_in'?(o.guest_org||o.church||''):o.kind==='invitation'?(o.guest_org||o.church||''):(o.church||''),o.age!=null?o.age:'',o.event_name||'',o.qty||1,o.kind==='invitation'?'Undangan VIP':o.kind==='walk_in'?'Walk-In (Di Tempat)':'Reguler',t('st_'+o.status)||o.status,(o.checked_in>=o.qty)?'HADIR':'BELUM HADIR',o.checked_in_at?new Date(o.checked_in_at).toLocaleString('id-ID'):'-',o.created_at?new Date(o.created_at).toLocaleString('id-ID'):'-',o.custom_answers?(typeof o.custom_answers==='object'?Object.values(o.custom_answers).map(a=>((a&&a.label)||'')+': '+((a&&a.value)||'')).join(' | '):String(o.custom_answers)):'']);
+function exportOrdersCsv(targetEventId){const evId=targetEventId||($('#of')&&$('#of').value)||($('#an_ev')&&$('#an_ev').value)||getCurEvId()||'';
+ const orders=(S.anOrds||S.ord||[]).filter(o=>!evId||o.event_id===evId);if(!orders.length)return toast('Tidak ada data untuk diekspor.',1);
+ const headers=['Kode Tiket','Kode Pesanan','Nama Lengkap / Tamu','Email','No. WhatsApp','Asal Gereja / Komunitas','Usia','Nama Acara','Jumlah Tiket / Pax','Jenis Kehadiran','Status Pesanan','Status RSVP','Nomor Meja','Status Kehadiran','Waktu Check-In','Tanggal Pemesanan','Pesan Buku Tamu','Data Tambahan (Formulir Kustom)'];
+ const rows=orders.map(o=>[o.ticket_code||'',o.order_code||'',o.kind==='walk_in'?(o.guest_name||o.name||''):o.kind==='invitation'?(o.guest_name||o.name||''):(o.name||''),o.kind==='walk_in'?(o.guest_email||o.email||''):(o.email||''),(o.kind==='walk_in'?(o.guest_phone||o.whatsapp):(o.whatsapp))?"'"+(o.kind==='walk_in'?(o.guest_phone||o.whatsapp):o.whatsapp):'',o.kind==='walk_in'?(o.guest_org||o.church||''):o.kind==='invitation'?(o.guest_org||o.church||''):(o.church||''),o.age!=null?o.age:'',o.event_name||'',o.qty||1,o.kind==='invitation'?'Undangan VIP':o.kind==='walk_in'?'Walk-In (Di Tempat)':'Reguler',t('st_'+o.status)||o.status,o.rsvp_status?o.rsvp_status:'-',o.table_assignment||'',(o.checked_in>=o.qty)?'HADIR':'BELUM HADIR',o.checked_in_at?new Date(o.checked_in_at).toLocaleString('id-ID'):'-',o.created_at?new Date(o.created_at).toLocaleString('id-ID'):'-',o.guestbook_message||'',o.custom_answers?(typeof o.custom_answers==='object'?Object.values(o.custom_answers).map(a=>((a&&a.label)||'')+': '+((a&&a.value)||'')).join(' | '):String(o.custom_answers)):'']);
  const csvContent='\uFEFF'+[headers].concat(rows).map(r=>r.map(c=>'"'+String(c).replace(/"/g,'""')+'"').join(',')).join('\r\n');
  const blob=new Blob([csvContent],{type:'text/csv;charset=utf-8;'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);
  const evName=(S.aev&&S.aev.find(x=>x.id===evId))?S.aev.find(x=>x.id===evId).name.replace(/[^a-zA-Z0-9]/g,'_'):'Semua_Acara';
@@ -1034,7 +1082,8 @@ async function doorprizeView(c) {
   c.innerHTML = '<div class="card" style="padding:20px;text-align:center"><div style="display:inline-block;animation:spin 1s linear infinite;font-size:24px">⏳</div><p class="muted" style="margin-top:10px">' + t('loading') + '</p></div>';
   try {
     if (!S.aev) S.aev = await api('adminEvents');
-    if (!S_dp.evId && S.aev && S.aev.length) S_dp.evId = S.aev[0].id;
+    if (!S_dp.evId && getCurEvId()) S_dp.evId = getCurEvId();
+    else if (!S_dp.evId && S.aev && S.aev.length) S_dp.evId = S.aev[0].id;
     await dpLoadData();
     paintDoorprize(c);
   } catch (e) {
@@ -1171,6 +1220,7 @@ async function feedbackView(c) {
   c.innerHTML = '<div class="card" style="padding:20px;text-align:center"><div style="display:inline-block;animation:spin 1s linear infinite;font-size:24px">⏳</div><p class="muted" style="margin-top:10px">' + t('loading') + '</p></div>';
   try {
     if (!S.aev) S.aev = await api('adminEvents');
+    if (!S_fb.evId && getCurEvId()) S_fb.evId = getCurEvId();
     await fbLoadData();
     paintFeedback(c);
   } catch(e) {
@@ -1663,7 +1713,7 @@ function paintOfflineStatus(){const badge=$('#off_badge_area'),info=$('#off_info
   else{const totalTix=evIds.reduce((a,k)=>a+(store[k].count||0),0);info.innerHTML=`<span style="color:var(--ok)">✓ <b>${totalTix}</b> ${t('off_cached_cnt')} (${evIds.map(k=>esc(store[k].eventName)).join(', ')})</span>`}}}
 
 async function evList(c){try{S.aev=await api('adminEvents')}catch(e){return fail(e)}
- c.innerHTML=(canEdit()?`<div class="acts"><button class="btn pri" data-act="evForm" style="flex:none">+ ${t('new_ev')}</button></div>`:'')+S.aev.map(e=>`<div class="card er"><img src="${esc(e.banner_url)}" onerror="this.style.visibility='hidden'"><div style="flex:1;min-width:0"><b>${esc(e.name)}</b>${e.organizer_name?`<span class="badge" style="background:var(--card-sub);font-size:11px;margin-left:6px;padding:2px 8px;border-radius:10px">🏢 ${esc(e.organizer_name)}</span>`:''}<div class="muted">${fd(e.event_date)} &#183; Online: ${e.sold}/${e.quota} ${t('tix')}${e.walkin_quota?` &#183; Walk-in: ${e.walkin_sold||0}/${e.walkin_quota}`:''} &#183; ${rp(e.is_paid?e.price:0)}</div></div>${canEdit()?`<label class="sw"><input type="checkbox" data-ch="tgl" data-id="${e.id}" ${e.is_active?'checked':''}><i></i></label>${hasMod(e,'guestbook')?`<a class="btn sm" href="${location.pathname}?stage=greeting&ev=${e.id}" target="_blank" title="Buka Layar Panggung Ucapan (Live Wall)">📺 Layar Ucapan</a>`:""}<button class="btn sm" data-act="cpManageModal" data-id="${e.id}" title="Kelola Pos Check-In &amp; Fasilitas">📍 Pos Check-In</button><button class="btn sm" data-act="gatelink" data-id="${e.id}" title="${t('gate_pass')}">📋 ${t('gate_pass')}</button><button class="btn sm" data-act="evForm" data-id="${e.id}">${t('edit')}</button>`:stPill(e.is_active?'confirmed':'cancelled')}</div>`).join('')}
+ c.innerHTML=(canEdit()?`<div class="acts"><button class="btn pri" data-act="evForm" style="flex:none">+ ${t('new_ev')}</button></div>`:'')+S.aev.map(e=>`<div class="card er"><img src="${esc(e.banner_url)}" onerror="this.style.visibility='hidden'"><div style="flex:1;min-width:0"><b>${esc(e.name)}</b>${e.organizer_name?`<span class="badge" style="background:var(--card-sub);font-size:11px;margin-left:6px;padding:2px 8px;border-radius:10px">🏢 ${esc(e.organizer_name)}</span>`:''}<div class="muted">${fd(e.event_date)} &#183; Online: ${e.sold}/${e.quota} ${t('tix')}${e.walkin_quota?` &#183; Walk-in: ${e.walkin_sold||0}/${e.walkin_quota}`:''} &#183; ${rp(e.is_paid?e.price:0)}</div></div>${canEdit()?`<label class="sw"><input type="checkbox" data-ch="tgl" data-id="${e.id}" ${e.is_active?'checked':''}><i></i></label>${hasMod(e,'guestbook')?`<a class="btn sm" href="${location.pathname}?stage=greeting&ev=${e.id}" target="_blank" title="Buka Layar Panggung Ucapan (Live Wall)">📺 Layar Ucapan</a>`:""}<button class="btn sm" data-act="cpManageModal" data-id="${e.id}" title="Kelola Pos Check-In &amp; Fasilitas">📍 Pos Check-In</button><button class="btn sm" data-act="gatelink" data-id="${e.id}" title="${t('gate_pass')}">📋 ${t('gate_pass')}</button><button class="btn sm ${getCurEvId()===e.id?'ok':'pri'}" data-act="focusEv" data-id="${e.id}" title="Kelola dan fokuskan ke acara ini" style="font-weight:700">${getCurEvId()===e.id?'✓ Dikelola':'🎯 Kelola'}</button><button class="btn sm" data-act="evForm" data-id="${e.id}">${t('edit')}</button>`:stPill(e.is_active?'confirmed':'cancelled')}</div>`).join('')}
 function evForm(id){if(rk()>=3&&(!S.organizers||!S.organizers.length)){api('organizersList').then(r=>{S.organizers=r;if($('#ef'))paintDash();}).catch(()=>{});}const e=S.aev.find(x=>x.id===id)||{name:'',category:'',quota:100,walkin_quota:0,banner_url:'',event_date:'',start_time:'19:00',end_time:'',location:'',description:'',announcement:'',is_paid:false,price:0,max_per_order:1,one_order_per_account:false,is_active:true,payment_instructions:'',terms:defTerms()};S.paid=!!e.is_paid;
  const f=(k,l,v,ty)=>`<div><label>${t(l)}</label><input name="${k}" type="${ty||'text'}" value="${esc(v)}"></div>`;
  modal(`<button class="btn sm x" data-act="cm">&#10005;</button><h2>${id?t('edit'):t('new_ev')}</h2><form id="ef" onsubmit="return false"><input type="hidden" name="id" value="${id||''}">${f('name','f_name',e.name)}<div class="fg">${f('category','f_cat',e.category)}${f('quota','f_quota',e.quota,'number')}${f('walkin_quota','walkin_quota',e.walkin_quota||0,'number')}</div>${f('banner_url','f_banner',e.banner_url)}
@@ -1839,7 +1889,13 @@ function getCustomFieldsFromEditor(){
 }
 
 async function ordView(c){c.innerHTML=`<div class="bar2"><select id="of"><option value="">${t('all_ev')}</option></select><select id="os"><option value="">${t('all_st')}</option>${['confirmed','pending_payment','cancelled'].map(s=>`<option value="${s}">${t('st_'+s)}</option>`).join('')}</select><select id="okind"><option value="">${t('kind_filter')}</option><option value="order">${t('kind_reg')}</option><option value="invitation">${t('kind_inv')}</option><option value="walk_in">${t('kind_walkin')}</option></select><select id="oem"><option value="">${t('em_filter_all')}</option><option value="pending">${t('em_filter_pending')}</option><option value="sent">${t('em_filter_sent')}</option></select><input id="oq" placeholder="${t('search')}"><button class="btn pri" data-act="walkinModal" style="flex:none;font-weight:700">🚶‍♂️ ${t('walkin')}</button><button id="btn_batch_email" class="btn wn" data-act="batchEmail" style="display:none;flex:none;font-weight:700">✉️ ${t('em_batch_btn')} (<span id="batch_em_cnt">0</span>)</button><button class="btn" data-act="expcsv" style="flex:none;background:var(--card);border:1px solid var(--border)">📥 ${t('an_export')}</button></div><div id="ot">${skel(1)}</div>`;
- try{if(!S.aev)S.aev=await api('adminEvents');$('#of').innerHTML+=S.aev.map(e=>`<option value="${e.id}">${esc(e.name)}</option>`).join('');loadOrders()}catch(e){fail(e)}}
+ try{
+   if(!S.aev)S.aev=await api('adminEvents');
+   const curId=getCurEvId();
+   $('#of').innerHTML+=S.aev.map(e=>`<option value="${e.id}" ${e.id===curId?'selected':''}>${esc(e.name)}</option>`).join('');
+   if(curId)$('#of').value=curId;
+   loadOrders();
+ }catch(e){fail(e)}}
 async function loadOrders(){try{const r=await api('ordersAll',{eventId:$('#of').value,status:$('#os').value});S.ord=r.rows;S.ordTr=r.truncated;S.ordPage=1;paintOrders()}catch(e){fail(e)}}
 const PSZ=['20','50','100','all'],ordSize=()=>PSZ.indexOf(ls.g('ordsz'))>=0?ls.g('ordsz'):'20';
 function pageList(pg,pages){if(pages<=7)return Array.from({length:pages},(_,i)=>i+1);const set={1:1,[pages]:1};for(let i=pg-1;i<=pg+1;i++)if(i>1&&i<pages)set[i]=1;const a=Object.keys(set).map(Number).sort((x,y)=>x-y),o=[];a.forEach((v,i)=>{if(i&&v-a[i-1]>1)o.push(0);o.push(v)});return o}
@@ -1854,12 +1910,23 @@ function paintOrders(){const k=($('#oq').value||'').toLowerCase(),emF=$('#oem')?
  const bBtn=$('#btn_batch_email'),bCnt=$('#batch_em_cnt');if(bBtn){bBtn.style.display=pendingCnt>0?'inline-flex':'none';if(bCnt)bCnt.textContent=pendingCnt}
  const sz=ordSize(),n=l.length,per=sz==='all'?Math.max(n,1):parseInt(sz,10),pages=Math.max(1,Math.ceil(n/per));S.ordPage=Math.min(Math.max(S.ordPage||1,1),pages);
  const from=(S.ordPage-1)*per,rows=l.slice(from,from+per);
- const th=['c_code','c_name','c_event','c_qty','c_status','c_chk'].map(x=>'<th>'+t(x)+'</th>').join('')+'<th></th>';
+ const curEvId=($('#of')&&$('#of').value)||getCurEvId();
+ const activeEv=(S.aev||[]).find(e=>e.id===curEvId);
+ const isRsvpEv=activeEv?hasMod(activeEv,'rsvp'):(S.ord&&S.ord.some(o=>o.kind==='invitation'||o.rsvp_status));
+ const termPerson=isRsvpEv?'Peserta / Tamu':t('c_name');
+ const termQty=isRsvpEv?'Pax / Hadir':t('c_qty');
+ const termOrders=isRsvpEv?'peserta':t('orders');
+ const th=['c_code',termPerson,'c_event',termQty,'c_status','c_chk'].map(x=>'<th>'+(x.startsWith('c_')?t(x):x)+'</th>').join('')+'<th></th>';
  const acts=o=>{let b='';if(o.kind==='walk_in'||o.kind==='invitation')b+=`<button class="btn sm" data-act="pass" data-id="${o.id}">${t('view')}</button>`;
   if(rk()>=2&&o.status==='confirmed'&&o.checked_in<o.qty)b+=`<button class="btn sm pri" data-act="ci" data-id="${o.id}">${t('ci')}</button>`;
   if(canEdit()||rk()>=2){if(o.status==='pending_payment'&&canEdit())b+=`<button class="btn sm pri" data-act="cpay" data-id="${o.id}">${t('confirmpay')}</button>`;if(o.status==='confirmed'&&o.kind==='order')b+=`<button class="btn sm" data-act="resend" data-id="${o.id}" title="${t('resend')}">✉️ ${t('resend')}</button>`;if(o.status!=='cancelled'&&canEdit())b+=`<button class="btn sm dg" data-act="cxl" data-id="${o.id}">${t('cancel')}</button>`}
   return b?`<div class="acts" style="margin:0;justify-content:flex-end">${b}</div>`:''};
- $('#ot').innerHTML=`<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:8px"><div><b style="font-size:20px">${l.reduce((a,o)=>a+o.qty,0)}</b> ${t('tix')} / ${n} pemesan ${pendingCnt>0?`<span class="pill wn" style="font-weight:700;margin-left:6px">⚠️ ${pendingCnt} ${t('em_pending')}</span>`:''}</div></div>${S.ordTr?'<p class="muted">'+t('pg_trunc')+'</p>':''}<div class="tw"><table class="rt"><tr>${th}</tr>${rows.map(o=>`<tr><td data-l="${t('c_code')}" class="mono"><b>${esc(o.ticket_code)}</b><br><small class="muted">${new Date(o.created_at).toLocaleString(loc())}</small></td><td data-l="${t('c_name')}">${esc(o.name)}${o.kind==='invitation'?' <span class="pill gd">'+t('inv_badge')+'</span>':o.kind==='walk_in'?' <span class="pill wn" style="background:#10b981;color:#fff;font-weight:700">'+t('walkin_badge')+'</span>':''}<br><small class="muted">${o.kind==='invitation'?esc(o.church):o.kind==='walk_in'?(o.guest_org?esc(o.guest_org)+'<br>':'')+(o.guest_phone?'+'+esc(o.guest_phone)+' &#183; ':'')+(o.guest_email?esc(o.guest_email):'Di tempat'):esc(o.email)+'<br>+'+esc(o.whatsapp)+' &#183; '+esc(o.age)+' &#183; '+esc(o.church)}</small>${o.rsvp_status?`<div style="margin-top:2px">${o.rsvp_status==='declined'?'<span class="pill er" style="font-size:10px">🔴 Tidak Hadir</span>':o.rsvp_status==='tentative'?'<span class="pill wn" style="font-size:10px">🟡 Ragu-ragu</span>':(o.plus_one_count>0?`<span class="pill ok" style="font-size:10px">🟢 Hadir (+${o.plus_one_count})</span>`:'')}</div>`:''}${rk()>=2?`<div style="margin-top:3px"><button class="btn sm" data-act="openTableModal" data-id="${o.id}" data-tbl="${esc(o.table_assignment||'')}" style="font-size:10px;padding:1px 6px;border-radius:4px;border:1px dashed var(--bd);background:var(--in)">🪑 ${esc(o.table_assignment||'+ Set Meja')}</button></div>`:''}${o.guestbook_message?`<div style="font-size:11px;color:var(--mu);margin-top:3px;font-style:italic">💌 "${esc(o.guestbook_message)}"</div>`:''}${(o.custom_answers&&typeof o.custom_answers==='object'&&Object.keys(o.custom_answers).length>0)?`<div style="margin-top:4px;display:flex;flex-wrap:wrap;gap:3px">${Object.values(o.custom_answers).map(a=>`<span style="background:var(--in,rgba(0,0,0,.05));border:1px solid var(--bd,rgba(0,0,0,.1));padding:1px 6px;border-radius:4px;font-size:10px;font-weight:600">${esc(a.label)}: <b>${esc(a.value)}</b></span>`).join('')}</div>`:''}${o.kind==='order'&&o.status==='confirmed'?`<div style="margin-top:3px;display:flex;align-items:center;flex-wrap:wrap;gap:4px"><span class="pill ${o.emailed?'ok':'er'}" style="font-size:10px;padding:2px 7px;font-weight:700" title="${esc(o.email_error||(o.emailed?'Terkirim pada '+(o.emailed_at?new Date(o.emailed_at).toLocaleString(loc()):'-'):'Belum terkirim'))}">${o.emailed?'✓ '+t('em_sent'):'⚠️ '+t('em_pending')}</span>${o.emailed&&o.email_error?`<span class="muted" style="font-size:10px;font-weight:600">(${esc(o.email_error)})</span>`:''}${!o.emailed&&o.email_error?`<div style="font-size:10px;color:var(--er);margin-top:2px;width:100%;white-space:normal;line-height:1.2">${esc(o.email_error)}</div>`:''}</div>`:''}</td><td data-l="${t('c_event')}">${esc(o.event_name)}</td><td data-l="${t('c_qty')}">${o.qty}</td><td data-l="${t('c_status')}">${stPill(o.status)}</td><td data-l="${t('c_chk')}" class="mono">${o.checked_in}/${o.qty}</td><td>${acts(o)}</td></tr>`).join('')}</table></div>${pagerHtml(n,S.ordPage,pages,from,rows.length)}`}
+ $('#ot').innerHTML=`<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:8px"><div><b style="font-size:20px">${l.reduce((a,o)=>a+o.qty,0)}</b> ${isRsvpEv?'pax hadir':t('tix')} / ${n} ${termOrders} ${pendingCnt>0?`<span class="pill wn" style="font-weight:700;margin-left:6px">⚠️ ${pendingCnt} ${t('em_pending')}</span>`:''}</div></div>${S.ordTr?'<p class="muted">'+t('pg_trunc')+'</p>':''}<div class="tw"><table class="rt"><tr>${th}</tr>${rows.map(o=>`<tr><td data-l="${t('c_code')}" class="mono"><b>${esc(o.ticket_code)}</b><br><small class="muted">${new Date(o.created_at).toLocaleString(loc())}</small></td><td data-l="${t('c_name')}">${esc(o.name)}${o.kind==='invitation'?' <span class="pill gd">'+t('inv_badge')+'</span>':o.kind==='walk_in'?' <span class="pill wn" style="background:#10b981;color:#fff;font-weight:700">'+t('walkin_badge')+'</span>':''}<br><small class="muted">${o.kind==='invitation'?esc(o.church):o.kind==='walk_in'?(o.guest_org?esc(o.guest_org)+'<br>':'')+(o.guest_phone?'+'+esc(o.guest_phone)+' &#183; ':'')+(o.guest_email?esc(o.guest_email):'Di tempat'):esc(o.email)+'<br>+'+esc(o.whatsapp)+' &#183; '+esc(o.age)+' &#183; '+esc(o.church)}</small>${o.rsvp_status?`<div style="margin-top:2px">${o.rsvp_status==='declined'?'<span class="pill er" style="font-size:10px">🔴 Tidak Hadir</span>':o.rsvp_status==='tentative'?'<span class="pill wn" style="font-size:10px">🟡 Ragu-ragu</span>':(o.plus_one_count>0?`<span class="pill ok" style="font-size:10px">🟢 Hadir (+${o.plus_one_count})</span>`:'')}</div>`:''}${(()=>{
+  const evOfOrd=(S.aev||[]).find(e=>e.id===o.event_id)||activeEv;
+  const isRsvpOrd=(evOfOrd&&hasMod(evOfOrd,'rsvp'))||(o.kind==='invitation'&&evOfOrd&&hasMod(evOfOrd,'rsvp'));
+  const allowTbl=isRsvpOrd&&rk()>=2&&(!evOfOrd||!evOfOrd.module_config||evOfOrd.module_config.enable_table!==false);
+  return allowTbl?`<div style="margin-top:3px"><button class="btn sm" data-act="openTableModal" data-id="${o.id}" data-tbl="${esc(o.table_assignment||'')}" style="font-size:10px;padding:1px 6px;border-radius:4px;border:1px dashed var(--bd);background:var(--in)">🪑 ${esc(o.table_assignment||'+ Set Meja')}</button></div>`:'';
+})()}${o.guestbook_message?`<div style="font-size:11px;color:var(--mu);margin-top:3px;font-style:italic">💌 "${esc(o.guestbook_message)}"</div>`:''}${(o.custom_answers&&typeof o.custom_answers==='object'&&Object.keys(o.custom_answers).length>0)?`<div style="margin-top:4px;display:flex;flex-wrap:wrap;gap:3px">${Object.values(o.custom_answers).map(a=>`<span style="background:var(--in,rgba(0,0,0,.05));border:1px solid var(--bd,rgba(0,0,0,.1));padding:1px 6px;border-radius:4px;font-size:10px;font-weight:600">${esc(a.label)}: <b>${esc(a.value)}</b></span>`).join('')}</div>`:''}${o.kind==='order'&&o.status==='confirmed'?`<div style="margin-top:3px;display:flex;align-items:center;flex-wrap:wrap;gap:4px"><span class="pill ${o.emailed?'ok':'er'}" style="font-size:10px;padding:2px 7px;font-weight:700" title="${esc(o.email_error||(o.emailed?'Terkirim pada '+(o.emailed_at?new Date(o.emailed_at).toLocaleString(loc()):'-'):'Belum terkirim'))}">${o.emailed?'✓ '+t('em_sent'):'⚠️ '+t('em_pending')}</span>${o.emailed&&o.email_error?`<span class="muted" style="font-size:10px;font-weight:600">(${esc(o.email_error)})</span>`:''}${!o.emailed&&o.email_error?`<div style="font-size:10px;color:var(--er);margin-top:2px;width:100%;white-space:normal;line-height:1.2">${esc(o.email_error)}</div>`:''}</div>`:''}</td><td data-l="${t('c_event')}">${esc(o.event_name)}</td><td data-l="${t('c_qty')}">${o.qty}</td><td data-l="${t('c_status')}">${stPill(o.status)}</td><td data-l="${t('c_chk')}" class="mono">${o.checked_in}/${o.qty}</td><td>${acts(o)}</td></tr>`).join('')}</table></div>${pagerHtml(n,S.ordPage,pages,from,rows.length)}`}
 
 /* ===== Scanner Engine (Continuous, Audio, Torch, Haptic) ===== */
 let _muted=false,_stream=null,_track=null,_torch=false,_facing='environment',_scanning=false,_cooldown=false,_lastCode='',_lastTime=0,_sessionCount=0,_resTimer=null;
@@ -4865,6 +4932,8 @@ const NL=String.fromCharCode(10),find=(a,id)=>a.find(x=>x.id===id),A={
      paintInv();
    }catch(e){fail(e)}
   },
+ clearCurEv(){setCurEvId('');renderAdmin();toast('Menampilkan data semua acara',0)},
+ focusEv(el){const evId=el.dataset.id;setCurEvId(evId);const ev=S.aev&&S.aev.find(e=>e.id===evId);S.view='orders';renderAdmin();toast('Mengelola acara: '+(ev?ev.name:''),0)},
  invopen(el){const o=S.inv.find(x=>x.id===el.dataset.id);if(o)passModal(o)},
  invLink(el){
   const o=S.inv.find(x=>x.id===el.dataset.id)||(S.ord&&S.ord.find(x=>x.id===el.dataset.id));
@@ -5402,10 +5471,24 @@ document.addEventListener('change',async e=>{const el=e.target,k=el.dataset.ch;i
  if(k==='ordsz'){ls.s('ordsz',el.value);S.ordPage=1;paintOrders()}else if(k==='usrsz'){ls.s('usrsz',el.value);S.usrPage=1;paintUsers()}else if(k==='sel'){S.sel=el.value;paintDash()}else if(k==='tgl'){try{await api('toggleEvent',{id:el.dataset.id,active:el.checked})}catch(x){el.checked=!el.checked;fail(x)}}
  else if(k==='role'){try{await api('setRole',{id:el.dataset.id,role:el.value});toast(t('saved'));const u=S.usr&&S.usr.find(x=>x.id===el.dataset.id);if(u)u.role=el.value}catch(x){fail(x);usrView($('#ac'))}}
  else if(k==='userOrg'){try{await api('userAssignOrganizer',{userId:el.dataset.id,organizerId:el.value||null});toast('Penyelenggara EO pengguna diperbarui');const u=S.usr&&S.usr.find(x=>x.id===el.dataset.id);if(u)u.organizer_id=el.value}catch(x){fail(x);usrView($('#ac'))}}
- else if(k==='dpEvSel'){S_dp.evId=el.value;try{await dpLoadData();paintDoorprize()}catch(x){fail(x)}}
- else if(k==='fbEvSel'){S_fb.evId=el.value;try{await fbLoadData();paintFeedback()}catch(x){fail(x)}}
+ else if(k==='dpEvSel'){S_dp.evId=el.value;setCurEvId(el.value);const g=$('#global_ev_selector');if(g)g.value=el.value;try{await dpLoadData();paintDoorprize()}catch(x){fail(x)}}
+ else if(k==='fbEvSel'){S_fb.evId=el.value;setCurEvId(el.value);const g=$('#global_ev_selector');if(g)g.value=el.value;try{await fbLoadData();paintFeedback()}catch(x){fail(x)}}
 });
-document.addEventListener('change',e=>{if(e.target.id==='of'||e.target.id==='os'||e.target.id==='oem'||e.target.id==='okind')paintOrders();else if(e.target.id==='ur'){S.usrPage=1;paintUsers()}});
+document.addEventListener('change',e=>{
+ if(e.target.id==='global_ev_selector'){
+  setCurEvId(e.target.value);
+  renderAdmin();
+  toast(e.target.value?'Fokus acara aktif diubah':'Menampilkan semua acara',0);
+ }else if(e.target.id==='of'){
+  setCurEvId(e.target.value);
+  const g=$('#global_ev_selector');if(g)g.value=e.target.value;
+  loadOrders();
+ }else if(e.target.id==='os'||e.target.id==='oem'||e.target.id==='okind'){
+  paintOrders();
+ }else if(e.target.id==='ur'){
+  S.usrPage=1;paintUsers();
+ }
+});
 document.addEventListener('keydown',e=>{
  if(e.code==='Space'&&(S.view==='doorprize'||new URLSearchParams(location.search).get('stage')==='doorprize')){
   if(['INPUT','TEXTAREA','SELECT'].includes(e.target.tagName))return;
