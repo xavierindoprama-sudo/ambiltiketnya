@@ -317,7 +317,7 @@ function rpc(fn,args){
 const call=(fn,...a)=>rpc(fn,a);
 function pub(fn,p,m){return new Promise((ok,no)=>{bz(1,m);rpc(fn,[p]).then(r=>{bz(-1,m);r&&r.ok?ok(r.data):no(new Error(r?r.error:'E_GENERIC'))},()=>{bz(-1,m);no(new Error('E_GENERIC'))})})}
 const errMsg=e=>D['e_'+(e&&e.message)]?t('e_'+e.message):t('e_E_GENERIC');
-function ticketParam(){try{return(new URLSearchParams(location.search).get('tiket')||'').trim().toUpperCase()}catch(e){return ''}}
+function ticketParam(){try{const q=new URLSearchParams(location.search);return(q.get('tiket')||q.get('ticket')||'').trim().toUpperCase()}catch(e){return ''}}
 function ticketBase(){if(window.google&&google.script&&google.script.run)return(B.appUrl||'');if(B&&B.siteUrl){const s=String(B.siteUrl).trim().replace(/\/+$/,'');return(s.indexOf('http')===0?s:'https://'+s)+'/'}return'https://ambiltiketnya.online/'}
 function waitQr(n){return new Promise(r=>{const f=()=>{if(typeof qrcode!=='undefined'||n--<=0)r();else setTimeout(f,100)};f()})}
 async function ticketView(code){
@@ -495,7 +495,7 @@ ${ok?`<div id="pass_facilities_box" style="margin-top:14px;border-top:1px solid 
     </div>
   </div>
 </div>`:''}</div>
-${ok?`<div class="pacts noprint">${(o.guest_phone||inv||(S.user&&S.user.whatsapp))?`<button class="btn wa" data-act="wa" data-id="${o.id}">${t('wa')}</button>`:''}<a class="btn sm" href="${location.pathname}?ticket=${encodeURIComponent(o.ticket_code)}" target="_blank" style="text-decoration:none;display:inline-flex;align-items:center;gap:4px;background:var(--in);border:1px solid var(--bd);padding:8px 12px;border-radius:12px;font-weight:600">🎟️ E-Tiket &#8599;</a><button class="btn" data-act="print" data-id="${o.id}">${t('print')}</button><button class="btn" data-act="dlpng" data-id="${o.id}">${t('png')}</button><button class="btn pri" data-act="dl" data-id="${o.id}">${t('pdf')}</button><button class="btn" data-act="fbOpenModal" data-id="${o.id}" data-ev="${o.event_id}" data-code="${o.ticket_code}" data-name="${esc(o.name)}" style="background:var(--in)">⭐ ${t('fb_btn')}</button></div>`:''}`);
+${ok?`<div class="pacts noprint">${(o.guest_phone||inv||(S.user&&S.user.whatsapp))?`<button class="btn wa" data-act="wa" data-id="${o.id}">${t('wa')}</button>`:''}<a class="btn sm" href="${location.pathname}?tiket=${encodeURIComponent(o.ticket_code)}" target="_blank" style="text-decoration:none;display:inline-flex;align-items:center;gap:4px;background:var(--in);border:1px solid var(--bd);padding:8px 12px;border-radius:12px;font-weight:600">🎟️ E-Tiket &#8599;</a><button class="btn" data-act="print" data-id="${o.id}">${t('print')}</button><button class="btn" data-act="dlpng" data-id="${o.id}">${t('png')}</button><button class="btn pri" data-act="dl" data-id="${o.id}">${t('pdf')}</button><button class="btn" data-act="fbOpenModal" data-id="${o.id}" data-ev="${o.event_id}" data-code="${o.ticket_code}" data-name="${esc(o.name)}" style="background:var(--in)">⭐ ${t('fb_btn')}</button></div>`:''}`);
  if(ok){
   pub('ticketFacilities',{code:o.ticket_code}).then(fac=>{
    const box=$('#pass_facilities_items');
