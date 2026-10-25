@@ -323,7 +323,35 @@ async function ensureFeatureTables(env) {
       prize_name   text NOT NULL,
       drawn_at     timestamptz NOT NULL DEFAULT now()
     )`,
-    `CREATE INDEX IF NOT EXISTS doorprize_winners_ev_idx ON doorprize_winners (event_id, drawn_at DESC)`
+    `CREATE INDEX IF NOT EXISTS doorprize_winners_ev_idx ON doorprize_winners (event_id, drawn_at DESC)`,
+    `CREATE TABLE IF NOT EXISTS event_checkpoints (
+      id              uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+      event_id        uuid NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+      checkpoint_key  text NOT NULL,
+      name            text NOT NULL,
+      icon            text DEFAULT '📍',
+      checkpoint_type text NOT NULL DEFAULT 'facility',
+      is_active       boolean NOT NULL DEFAULT true,
+      sort_order      int NOT NULL DEFAULT 0,
+      created_at      timestamptz NOT NULL DEFAULT now()
+    )`,
+    `CREATE UNIQUE INDEX IF NOT EXISTS event_checkpoints_ev_key ON event_checkpoints (event_id, checkpoint_key)`,
+    `CREATE INDEX IF NOT EXISTS event_checkpoints_ev_idx ON event_checkpoints (event_id, sort_order)`,
+    `CREATE TABLE IF NOT EXISTS checkpoint_claims (
+      id              uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+      event_id        uuid NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+      checkpoint_key  text NOT NULL,
+      order_id        uuid NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
+      ticket_code     text NOT NULL,
+      qty             int NOT NULL DEFAULT 1,
+      claimed_at      timestamptz NOT NULL DEFAULT now(),
+      claimed_by      uuid REFERENCES users(id) ON DELETE SET NULL,
+      claimed_by_name text DEFAULT '',
+      notes           text DEFAULT '',
+      created_at      timestamptz NOT NULL DEFAULT now()
+    )`,
+    `CREATE UNIQUE INDEX IF NOT EXISTS checkpoint_claims_unique ON checkpoint_claims (order_id, checkpoint_key)`,
+    `CREATE INDEX IF NOT EXISTS checkpoint_claims_ev_idx ON checkpoint_claims (event_id, checkpoint_key, claimed_at DESC)`
   ];
   for (const sql of ddlStatements) {
     try {
@@ -333,6 +361,25 @@ async function ensureFeatureTables(env) {
     }
   }
   _tablesEnsured = true;
+}
+
+const DEFAULT_CHECKPOINTS = [
+  { key: 'main_gate', name: 'Pintu Masuk Utama', icon: '🎟️', type: 'gate', sort_order: 1 },
+  { key: 'meal', name: 'Konsumsi (Lunch/Dinner/Snack)', icon: '🍱', type: 'meal', sort_order: 2 },
+  { key: 'kit', name: 'Souvenir / Seminar Kit', icon: '🎁', type: 'kit', sort_order: 3 },
+  { key: 'breakout', name: 'Breakout Session / Ruang Kelas', icon: '🚪', type: 'session', sort_order: 4 },
+  { key: 'voucher', name: 'Voucher Diskon Bazaar', icon: '🏷️', type: 'voucher', sort_order: 5 }
+];
+
+async function ensureDefaultCheckpoints(env, eventId) {
+  const existing = await neonQuery(env, `SELECT count(*)::int AS cnt FROM event_checkpoints WHERE event_id=$1::uuid`, [eventId]);
+  if (!existing || !existing[0] || existing[0].cnt === 0) {
+    for (const cp of DEFAULT_CHECKPOINTS) {
+      await neonQuery(env, `INSERT INTO event_checkpoints(event_id, checkpoint_key, name, icon, checkpoint_type, sort_order)
+        VALUES($1::uuid, $2, $3, $4, $5, $6) ON CONFLICT (event_id, checkpoint_key) DO NOTHING`,
+        [eventId, cp.key, cp.name, cp.icon, cp.type, cp.sort_order]);
+    }
+  }
 }
 
 export default {
@@ -535,6 +582,48 @@ export default {
         return json({ ok: true, data: { title: def.title, updated: r ? r.d : '2026-10-18', html: `<p style="white-space:pre-wrap">${r ? r.value : def.text}</p>` } });
       }
 
+      if (fn === 'ticketFacilities') {
+        const [p] = args;
+        const code = String(p && p.code || '').trim().toUpperCase().replace(/\s/g, '');
+        if (!code) throw new Error('NOT_FOUND');
+        await ensureFeatureTables(env);
+        const ord = (await neonQuery(env, `SELECT id, event_id, status, checked_in, checked_in_at, qty FROM orders WHERE ticket_code=$1`, [code]))[0];
+        if (!ord) return json({ ok: true, data: { items: [] } });
+
+        await ensureDefaultCheckpoints(env, ord.event_id);
+
+        const checkpoints = await neonQuery(env, `
+          SELECT cp.checkpoint_key, cp.name, cp.icon, cp.checkpoint_type,
+            cl.claimed_at, cl.qty AS claimed_qty
+          FROM event_checkpoints cp
+          LEFT JOIN checkpoint_claims cl ON cl.event_id=cp.event_id AND cl.checkpoint_key=cp.checkpoint_key AND cl.order_id=$1::uuid
+          WHERE cp.event_id=$2::uuid AND cp.is_active=true
+          ORDER BY cp.sort_order, cp.created_at
+        `, [ord.id, ord.event_id]);
+
+        const items = checkpoints.map(cp => {
+          let status = 'ready';
+          if (cp.checkpoint_key === 'main_gate') {
+            status = ord.checked_in > 0 ? 'claimed' : 'ready';
+          } else if (cp.claimed_at) {
+            status = 'claimed';
+          } else if (ord.checked_in <= 0) {
+            status = 'gate_required';
+          }
+          return {
+            key: cp.checkpoint_key,
+            name: cp.name,
+            icon: cp.icon,
+            type: cp.checkpoint_type,
+            status: status,
+            claimed_at: cp.claimed_at || (cp.checkpoint_key === 'main_gate' ? ord.checked_in_at : null),
+            qty: cp.claimed_qty || ord.qty
+          };
+        });
+
+        return json({ ok: true, data: { items } });
+      }
+
       if (fn === 'surveyInfo') {
         const [p] = args;
         const evId = String(p && p.eventId || '').trim();
@@ -727,8 +816,10 @@ export default {
 
         if (action === 'validate') {
           needRole(1);
+          await ensureFeatureTables(env);
           const code = String(params.code || '').trim().toUpperCase().replace(/\s/g, '');
-          const rows = await neonQuery(env, `SELECT o.id,o.qty,o.status,o.checked_in,o.checked_in_at,o.kind,
+          const cpKey = String(params.checkpoint || 'main_gate').trim();
+          const rows = await neonQuery(env, `SELECT o.id,o.qty,o.status,o.checked_in,o.checked_in_at,o.kind,o.event_id,
             CASE WHEN o.kind IN ('invitation','walk_in') THEN o.guest_name ELSE u.name END AS name,
             CASE WHEN o.kind IN ('invitation','walk_in') THEN o.guest_org ELSE u.church END AS church,
             CASE WHEN o.kind IN ('invitation','walk_in') THEN o.guest_age ELSE u.age END AS age,
@@ -736,13 +827,71 @@ export default {
             FROM orders o JOIN users u ON u.id=o.user_id JOIN events e ON e.id=o.event_id WHERE o.ticket_code=$1`, [code]);
           if (!rows.length) return json({ ok: true, data: { result: 'NOT_FOUND', code } });
           const o = rows[0];
-          const base = { code, kind: o.kind, name: o.name, church: o.church, age: o.age, whatsapp: o.whatsapp, event: o.event_name, qty: o.qty, at: o.checked_in_at };
+          await ensureDefaultCheckpoints(env, o.event_id);
+
+          const cpInfo = (await neonQuery(env, `SELECT checkpoint_key, name, icon, checkpoint_type FROM event_checkpoints WHERE event_id=$1::uuid AND checkpoint_key=$2`, [o.event_id, cpKey]))[0] || { checkpoint_key: cpKey, name: cpKey === 'main_gate' ? 'Pintu Masuk Utama' : cpKey, icon: '📍', checkpoint_type: 'facility' };
+
+          const base = { code, kind: o.kind, name: o.name, church: o.church, age: o.age, whatsapp: o.whatsapp, event: o.event_name, qty: o.qty, at: o.checked_in_at, checkpoint: cpInfo };
           if (o.status === 'cancelled') return json({ ok: true, data: { ...base, result: 'CANCELLED' } });
           if (o.status === 'pending_payment') return json({ ok: true, data: { ...base, result: 'UNPAID' } });
-          if (o.checked_in >= o.qty) return json({ ok: true, data: { ...base, result: 'USED', checked: o.checked_in } });
 
-          await neonQuery(env, `UPDATE orders SET checked_in=qty,checked_in_at=now(),checked_in_by=$2::uuid WHERE id=$1::uuid AND checked_in<qty`, [o.id, u.id]);
-          return json({ ok: true, data: { ...base, result: 'VALID', entered: o.qty - o.checked_in, checked: o.qty, at: new Date().toISOString() } });
+          // MAIN GATE
+          if (cpKey === 'main_gate') {
+            if (o.checked_in >= o.qty) return json({ ok: true, data: { ...base, result: 'USED', checked: o.checked_in } });
+
+            await neonQuery(env, `UPDATE orders SET checked_in=qty,checked_in_at=now(),checked_in_by=$2::uuid WHERE id=$1::uuid AND checked_in<qty`, [o.id, u.id]);
+            await neonQuery(env, `INSERT INTO checkpoint_claims(event_id, checkpoint_key, order_id, ticket_code, qty, claimed_by, claimed_by_name)
+              VALUES($1::uuid, 'main_gate', $2::uuid, $3, $4::int, $5::uuid, $6) ON CONFLICT (order_id, checkpoint_key) DO NOTHING`,
+              [o.event_id, o.id, code, o.qty, u.id, u.name || 'Petugas Gerbang']);
+
+            return json({ ok: true, data: { ...base, result: 'VALID', entered: o.qty - o.checked_in, checked: o.qty, at: new Date().toISOString() } });
+          }
+
+          // FACILITY / BREAKOUT / MEAL / KIT / VOUCHER
+          // 1. Prerequisite check: Must be checked in at main gate
+          if (o.checked_in <= 0) {
+            return json({
+              ok: true,
+              data: {
+                ...base,
+                result: 'NOT_CHECKED_IN',
+                message: 'Peserta belum check-in di Pintu Masuk Utama! Arahkan ke meja registrasi / gerbang masuk terlebih dahulu.'
+              }
+            });
+          }
+
+          // 2. Check if already claimed
+          const existingClaim = (await neonQuery(env, `SELECT claimed_at, to_char(claimed_at AT TIME ZONE 'Asia/Jakarta','HH24:MI') AS claim_time, claimed_by_name, qty FROM checkpoint_claims WHERE order_id=$1::uuid AND checkpoint_key=$2`, [o.id, cpKey]))[0];
+          if (existingClaim) {
+            return json({
+              ok: true,
+              data: {
+                ...base,
+                result: 'ALREADY_CLAIMED',
+                message: `${cpInfo.name} sudah diambil pada ${existingClaim.claim_time} WIB${existingClaim.claimed_by_name ? ' oleh ' + existingClaim.claimed_by_name : ''}.`,
+                claimed_at: existingClaim.claimed_at,
+                claimed_by: existingClaim.claimed_by_name,
+                claimed_qty: existingClaim.qty
+              }
+            });
+          }
+
+          // 3. Record valid claim
+          await neonQuery(env, `INSERT INTO checkpoint_claims(event_id, checkpoint_key, order_id, ticket_code, qty, claimed_by, claimed_by_name)
+            VALUES($1::uuid, $2, $3::uuid, $4, $5::int, $6::uuid, $7)`,
+            [o.event_id, cpKey, o.id, code, o.qty, u.id, u.name || 'Petugas Pos']);
+
+          return json({
+            ok: true,
+            data: {
+              ...base,
+              result: 'VALID',
+              message: `${cpInfo.name} berhasil diverifikasi!`,
+              entered: o.qty,
+              claimed_qty: o.qty,
+              at: new Date().toISOString()
+            }
+          });
         }
 
         if (action === 'stats') {
@@ -951,6 +1100,92 @@ export default {
           await neonQuery(env, `UPDATE users SET password_hash=$1,failed_attempts=0,locked_until=NULL WHERE id=$2::uuid`, [pwHash, params.id]);
           await neonQuery(env, `DELETE FROM sessions WHERE user_id=$1::uuid`, [params.id]);
           return json({ ok: true, data: { temp } });
+        }
+
+        if (action === 'checkpointsGet') {
+          needRole(1);
+          const evId = String(params.eventId || '').trim();
+          if (!evId) throw new Error('EVENT_NOT_FOUND');
+          await ensureFeatureTables(env);
+          await ensureDefaultCheckpoints(env, evId);
+
+          const r = await neonQuery(env, `
+            SELECT cp.id, cp.event_id, cp.checkpoint_key, cp.name, cp.icon, cp.checkpoint_type, cp.is_active, cp.sort_order,
+              coalesce(sum(cl.qty), 0)::int AS claimed_count
+            FROM event_checkpoints cp
+            LEFT JOIN checkpoint_claims cl ON cl.event_id=cp.event_id AND cl.checkpoint_key=cp.checkpoint_key
+            WHERE cp.event_id=$1::uuid
+            GROUP BY cp.id, cp.event_id, cp.checkpoint_key, cp.name, cp.icon, cp.checkpoint_type, cp.is_active, cp.sort_order
+            ORDER BY cp.sort_order, cp.created_at
+          `, [evId]);
+
+          const gateStat = (await neonQuery(env, `
+            SELECT coalesce(sum(qty), 0)::int AS booked,
+                   coalesce(sum(checked_in), 0)::int AS checked_in
+            FROM orders WHERE event_id=$1::uuid AND status='confirmed'
+          `, [evId]))[0];
+
+          return json({ ok: true, data: { checkpoints: r, gateStat } });
+        }
+
+        if (action === 'checkpointSave') {
+          needRole(2);
+          const evId = String(params.eventId || '').trim();
+          if (!evId) throw new Error('EVENT_NOT_FOUND');
+          await ensureFeatureTables(env);
+          const name = String(params.name || '').trim();
+          if (!name) throw new Error('NAME_REQUIRED');
+          const icon = String(params.icon || '📍').trim();
+          const type = String(params.type || 'facility').trim();
+          const key = String(params.key || ('cp_' + Date.now().toString(36))).trim().toLowerCase().replace(/[^a-z0-9_]/g, '_');
+          const isActive = params.isActive !== false;
+          const sortOrder = parseInt(params.sortOrder, 10) || 10;
+
+          if (params.id) {
+            await neonQuery(env, `UPDATE event_checkpoints SET name=$1, icon=$2, checkpoint_type=$3, is_active=$4, sort_order=$5 WHERE id=$6::uuid AND event_id=$7::uuid`,
+              [name, icon, type, isActive, sortOrder, params.id, evId]);
+          } else {
+            await neonQuery(env, `INSERT INTO event_checkpoints(event_id, checkpoint_key, name, icon, checkpoint_type, is_active, sort_order)
+              VALUES($1::uuid, $2, $3, $4, $5, $6, $7) ON CONFLICT (event_id, checkpoint_key) DO UPDATE SET name=EXCLUDED.name, icon=EXCLUDED.icon, is_active=EXCLUDED.is_active`,
+              [evId, key, name, icon, type, isActive, sortOrder]);
+          }
+          return json({ ok: true, data: true });
+        }
+
+        if (action === 'checkpointDelete') {
+          needRole(2);
+          const id = params.id;
+          if (!id) throw new Error('ID_REQUIRED');
+          const cp = (await neonQuery(env, `SELECT checkpoint_key FROM event_checkpoints WHERE id=$1::uuid`, [id]))[0];
+          if (cp && cp.checkpoint_key === 'main_gate') throw new Error('CANNOT_DELETE_MAIN_GATE');
+          await neonQuery(env, `DELETE FROM event_checkpoints WHERE id=$1::uuid`, [id]);
+          return json({ ok: true, data: true });
+        }
+
+        if (action === 'checkpointExportCsv') {
+          needRole(1);
+          const evId = String(params.eventId || '').trim();
+          if (!evId) throw new Error('EVENT_NOT_FOUND');
+          await ensureFeatureTables(env);
+          const rows = await neonQuery(env, `
+            SELECT to_char(cl.claimed_at AT TIME ZONE 'Asia/Jakarta', 'YYYY-MM-DD HH24:MI:SS') AS claim_time,
+                   e.name AS event_name,
+                   coalesce(cp.name, cl.checkpoint_key) AS checkpoint_name,
+                   coalesce(cp.icon, '📍') AS checkpoint_icon,
+                   cl.ticket_code,
+                   CASE WHEN o.kind IN ('invitation','walk_in') THEN o.guest_name ELSE u.name END AS attendee_name,
+                   CASE WHEN o.kind IN ('invitation','walk_in') THEN o.guest_org ELSE u.church END AS attendee_org,
+                   cl.qty AS claimed_qty,
+                   coalesce(cl.claimed_by_name, '') AS staff_name
+            FROM checkpoint_claims cl
+            JOIN events e ON e.id=cl.event_id
+            JOIN orders o ON o.id=cl.order_id
+            LEFT JOIN users u ON u.id=o.user_id
+            LEFT JOIN event_checkpoints cp ON cp.event_id=cl.event_id AND cp.checkpoint_key=cl.checkpoint_key
+            WHERE cl.event_id=$1::uuid
+            ORDER BY cl.claimed_at DESC
+          `, [evId]);
+          return json({ ok: true, data: rows });
         }
 
         if (action === 'getInvConfig') {

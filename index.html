@@ -175,6 +175,13 @@ window.addEventListener('error',function(e){show((e.message||'error')+' @'+e.lin
     <div class="sc-hud">
       <div class="sc-topbar">
         <div class="sc-badge"><span>🎯</span> <span><b id="sc_cnt">0</b> <span style="font-size:11px;opacity:.85">tiket</span></span></div>
+        <select id="sc_cp_sel" style="background:rgba(15,23,42,.85);color:#fff;border:1px solid rgba(255,255,255,.25);border-radius:20px;padding:5px 10px;font-size:12px;font-weight:700;outline:none;cursor:pointer;backdrop-filter:blur(8px);box-shadow:0 4px 12px rgba(0,0,0,.3);max-width:145px;text-overflow:ellipsis">
+          <option value="main_gate">🎟️ Pintu Utama</option>
+          <option value="meal">🍱 Konsumsi</option>
+          <option value="kit">🎁 Souvenir/Kit</option>
+          <option value="session">🚪 Breakout Class</option>
+          <option value="voucher">🏷️ Voucher Bazaar</option>
+        </select>
         <div class="sc-ctrls">
           <button class="sc-btn" id="sc_walkin_btn" data-act="scWalkin" title="Registrasi Walk-In di Tempat" style="background:rgba(16,185,129,.85);border-color:#10b981">🚶‍♂️</button>
           <button class="sc-btn" id="sc_torch_btn" data-act="scTorch" title="Senter">🔦</button>
@@ -223,7 +230,7 @@ new_ev:['Acara Baru','New Event'],edit:['Edit','Edit'],f_name:['Nama acara *','E
 f_free:['Gratis','Free'],f_paid:['Berbayar','Paid'],f_price:['Harga tiket (Rp)','Ticket price (Rp)'],f_max:['Maks tiket per transaksi','Max tickets per order'],f_pay:['Instruksi pembayaran (acara berbayar)','Payment instructions (paid events)'],f_one:['Batasi 1 pesanan aktif per akun untuk acara ini','Limit 1 active order per account for this event'],f_act:['Acara aktif (tampil di dashboard user)','Event active (visible to users)'],
 search:['Cari nama, kode, email, WA...','Search name, code, email, WA...'],csv:['Ekspor CSV','Export CSV'],resend:['Kirim ulang email','Resend email'],cancel:['Batalkan','Cancel'],confirmpay:['Konfirmasi bayar','Confirm payment'],ask_cancel:['Batalkan pesanan ini? Pengguna dapat memesan lagi.','Cancel this order? The user will be able to book again.'],yes:['Ya','Yes'],no:['Tidak','No'],
 v_title:['Validasi Tiket QR','QR Ticket Validation'],v_sub:['Mode scan berkesinambungan (continuous) otomatis tanpa buka-tutup kamera. Dilengkapi senter, suara unik, dan getar.','Continuous scanning mode without opening/closing camera. With flashlight, sound, and haptics.'],v_open:['Buka Kamera Scanner (Scan Berkelanjutan)','Open Camera Scanner (Continuous Scan)'],v_ph:['Atau ketik / tempel kode tiket','Or enter / paste ticket code'],v_go:['Validasi','Validate'],v_hist:['Riwayat scan sesi ini','Scan history (this session)'],v_wait:['Arahkan kamera ke QR tiket...','Point camera to ticket QR...'],v_ready:['Siap scan tiket berikutnya...','Ready for next ticket...'],v_session:['Tiket Masuk Sesi Ini','Admitted This Session'],v_torch:['Senter','Torch'],v_sound:['Suara','Sound'],v_flip:['Putar Kamera','Flip Camera'],v_fullscreen:['Layar Penuh','Fullscreen'],v_close:['Tutup Scanner','Close Scanner'],
-v_VALID:['VALID &#8212; Silakan Masuk','VALID &#8212; Welcome'],v_USED:['SUDAH DIGUNAKAN','ALREADY USED'],v_CANCELLED:['PESANAN DIBATALKAN','ORDER CANCELLED'],v_UNPAID:['BELUM DIBAYAR','NOT PAID'],v_NOT_FOUND:['TIKET TIDAK DITEMUKAN','TICKET NOT FOUND'],entered:['tiket masuk','tickets admitted'],
+v_VALID:['VALID &#8212; Silakan Masuk','VALID &#8212; Welcome'],v_ALREADY_CLAIMED:['SUDAH DIAMBIL SEBELUMNYA','ALREADY CLAIMED'],v_NOT_CHECKED_IN:['BELUM CHECK-IN GERBANG','NOT CHECKED IN AT GATE'],v_USED:['SUDAH DIGUNAKAN','ALREADY USED'],v_CANCELLED:['PESANAN DIBATALKAN','ORDER CANCELLED'],v_UNPAID:['BELUM DIBAYAR','NOT PAID'],v_NOT_FOUND:['TIKET TIDAK DITEMUKAN','TICKET NOT FOUND'],entered:['tiket masuk','tickets admitted'],
 role:['Peran','Role'],r_attendee:['Peserta','Attendee'],r_gate_staff:['Petugas Gerbang','Gate Staff'],r_admin:['Admin (lihat saja)','Admin (view only)'],r_super_admin:['Super Admin','Super Admin'],saved:['Tersimpan','Saved'],sending:['Mengirim email...','Sending email...'],preparing:['Menyiapkan PDF...','Preparing PDF...'],booking:['Memproses pesanan...','Processing your order...'],loading:['Memuat...','Loading...'],
 f_email:['Email','Email'],f_pwd:['Password','Password'],f_pwd2:['Konfirmasi password','Confirm password'],f_fname:['Nama lengkap','Full name'],signup:['Daftar','Sign up'],forgot:['Lupa password','Forgot password'],forgot_q:['Lupa password?','Forgot password?'],send_otp:['Kirim kode OTP','Send OTP code'],otp_l:['Kode OTP (6 digit)','OTP code (6 digits)'],newpw:['Password baru','New password'],back:['Kembali ke halaman masuk','Back to sign in'],no_acc:['Belum punya akun?','No account yet?'],have_acc:['Sudah punya akun?','Already have an account?'],otp_sent:['Jika email terdaftar, kode OTP sudah dikirim (berlaku 10 menit).','If the email is registered, an OTP code was sent (valid 10 minutes).'],pw_ok:['Password berhasil diubah. Silakan masuk.','Password changed. Please sign in.'],c_code:['Kode','Code'],c_name:['Nama','Name'],c_event:['Acara','Event'],c_qty:['Jml','Qty'],c_status:['Status','Status'],c_chk:['Check-in','Check-in'],c_email:['Email','Email'],c_wa:['WA','WA'],already:['Anda sudah memesan tiket untuk acara ini.','You already booked a ticket for this event.'],bookagain:['Pesan Lagi','Book Again'],popup_blocked:['Pop-up diblokir browser. Izinkan pop-up untuk situs ini, atau gunakan Unduh E-Tiket (PDF).','Pop-up blocked. Allow pop-ups for this site, or use Download E-Ticket (PDF).'],order_no:['No. Pesanan','Order No.'],png:['Simpan Gambar','Save Image'],preparing_tix:['Menyiapkan e-tiket...','Preparing your e-ticket...'],open_wa:['Buka WhatsApp','Open WhatsApp'],wa_ready:['E-tiket siap. Tekan tombol untuk membuka WhatsApp.','Your e-ticket is ready. Tap the button to open WhatsApp.'],prep_t:['Menyiapkan e-tiket','Preparing your e-ticket'],please_wait:['Mohon tunggu sebentar, WhatsApp akan terbuka otomatis.','Please wait, WhatsApp will open automatically.'],wa_auto:['Sebentar lagi WhatsApp terbuka otomatis dengan tautan e-tiket Anda.','WhatsApp will open shortly with your e-ticket link.'],ev_terms:['Syarat & Ketentuan Acara','Event Terms & Conditions'],f_terms:['Syarat & ketentuan acara (tampil di detail acara; kosongkan jika tidak ada)','Event terms & conditions (shown on the event page; leave empty for none)'],tc_pre:['Dengan mendaftar, Anda menyetujui','By signing up, you agree to the'],tc_and:['dan','and'],lg_terms:['Syarat dan Ketentuan','Terms and Conditions'],lg_priv:['Kebijakan Privasi','Privacy Policy'],lg_cookie:['Kebijakan Cookie','Cookie Policy'],n_legal:['Halaman Hukum','Legal Pages'],lg_default:['Menggunakan teks bawaan.','Using the default text.'],lg_custom:['Diedit pada','Edited on'],lg_open:['Buka halaman','Open page'],lg_reset:['Kembalikan ke bawaan','Restore default'],lg_ask_reset:['Kembalikan teks ini ke versi bawaan? Teks hasil edit akan dihapus.','Restore this text to the default? Your edited text will be removed.'],lg_fmt:['Format: baris berawalan ## = judul bagian; baris berawalan - = butir daftar; paragraf dipisahkan baris kosong. Tulis {ORG} dan {KONTAK} agar terisi otomatis dari pengaturan (ORG_NAME, CONTACT_EMAIL).','Format: a line starting with ## = section heading; a line starting with - = list item; separate paragraphs with a blank line. Write {ORG} and {KONTAK} to be filled in automatically from settings (ORG_NAME, CONTACT_EMAIL).'],e_BAD_LEGAL:['Isi dokumen terlalu pendek atau terlalu panjang.','The document is too short or too long.'],lg_upd:['Terakhir diperbarui','Last updated'],lg_prev:['Pratinjau','Preview'],e_EMAIL_QUOTA:['Layanan email sedang penuh hari ini. Coba lagi besok atau hubungi panitia.','Email service is full for today. Try again tomorrow or contact the organizers.'],e_EMAIL_FAIL:['Email gagal dikirim. Coba lagi beberapa saat lagi.','The email could not be sent. Please try again shortly.'],e_RATE_LIMIT:['Terlalu banyak permintaan. Coba lagi beberapa saat lagi.','Too many requests. Please try again later.'],tk_NOT_FOUND:['Tiket tidak ditemukan.','Ticket not found.'],tk_CANCELLED:['Pesanan ini sudah dibatalkan.','This order has been cancelled.'],tk_UNPAID:['Menunggu konfirmasi pembayaran.','Awaiting payment confirmation.'],tk_USED:['Tiket ini sudah digunakan untuk check-in.','This ticket has already been used for check-in.'],
 n_analytics:['Laporan & Analisis','Reports & Analytics'],
@@ -343,7 +350,20 @@ async function ticketView(code){
   +(showQr?'<div class="tkq">'+recipientHtml+'<div class="qr">'+(typeof qrcode!=='undefined'?qr(r.code):'')+'</div><div class="mono">'+esc(r.code)+'</div><small>'+t('scanhint')+'</small></div>':'')
   +(r.status!=='OK'?'<div class="tkm">'+t('tk_'+r.status)+'</div>':'')
   +'<div class="tkb"><div class="info">'+f(t('date'),fd(r.edate,{weekday:'long',day:'numeric',month:'long',year:'numeric'}))+f(t('time'),r.stime+' WIB')+f(t('place'),r.location)+f(t('qty'),r.qty+' '+t('tix'))+'</div>'
-  +'<div style="text-align:center;margin-top:14px"><button class="btn sm" data-act="fbOpenPublic" data-ev="'+esc(r.event_id)+'" data-code="'+esc(r.code)+'" data-name="'+esc(r.name)+'" style="border-radius:20px;padding:8px 18px;background:var(--in);border:1px solid var(--bd);color:var(--tx);font-weight:700">⭐ '+t('fb_btn')+' &amp; Survey</button></div></div>'+back)}
+  +'<div id="tk_facilities_box" style="margin-top:14px"></div>'
+  +'<div style="text-align:center;margin-top:14px"><button class="btn sm" data-act="fbOpenPublic" data-ev="'+esc(r.event_id)+'" data-code="'+esc(r.code)+'" data-name="'+esc(r.name)+'" style="border-radius:20px;padding:8px 18px;background:var(--in);border:1px solid var(--bd);color:var(--tx);font-weight:700">⭐ '+t('fb_btn')+' &amp; Survey</button></div></div>'+back);
+ pub('ticketFacilities',{code:r.code}).then(fac=>{
+  const box=$('#tk_facilities_box');
+  if(!box||!fac||!fac.checkpoints||!fac.checkpoints.length)return;
+  const items=fac.checkpoints.map(cp=>{
+   const isMain=cp.key==='main_gate';
+   const isDone=!!cp.claimed;
+   const badgeStyle=isDone?'background:var(--ok,#10b981);color:#fff':'background:var(--in,rgba(0,0,0,.08));color:var(--mu,#666)';
+   const badgeText=isDone?(isMain?'✓ Hadir':'✓ Sudah Diklaim'+(cp.claimed_qty>1?' ('+cp.claimed_qty+')':'')):(isMain?'Belum Masuk':'Belum Diklaim');
+   return '<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;background:var(--in,rgba(0,0,0,.03));border-radius:10px;margin-bottom:6px;border:1px solid var(--bd,rgba(0,0,0,.06))"><div style="display:flex;align-items:center;gap:8px"><span style="font-size:18px">'+(cp.icon||'📍')+'</span><div><b style="font-size:13px">'+esc(cp.name)+'</b>'+(cp.description?'<br><small style="opacity:.7">'+esc(cp.description)+'</small>':'')+'</div></div><span style="font-size:11px;font-weight:700;padding:3px 8px;border-radius:12px;'+badgeStyle+'">'+badgeText+'</span></div>';
+  }).join('');
+  box.innerHTML='<div style="text-align:left;margin-bottom:8px"><small style="text-transform:uppercase;letter-spacing:1.5px;font-weight:700;color:var(--mu,#666);font-size:11px">Fasilitas &amp; Sesi Acara</small></div>'+items;
+ }).catch(()=>{});}
 async function boot(){applyTheme();const tkc=ticketParam();if(tkc)return ticketView(tkc);
  const qp=new URLSearchParams(location.search),gateEv=qp.get('gate'),gateKey=qp.get('k');
  const stage=qp.get('stage');
@@ -1626,9 +1646,9 @@ function paintOrders(){const k=($('#oq').value||'').toLowerCase(),emF=$('#oem')?
 let _muted=false,_stream=null,_track=null,_torch=false,_facing='environment',_scanning=false,_cooldown=false,_lastCode='',_lastTime=0,_sessionCount=0,_resTimer=null;
 function snd(type){if(_muted)return;try{const c=actx();if(!c)return;const t=c.currentTime;
  if(type==='VALID'){[523.25,659.25,783.99,1046.5].forEach((f,i)=>{const o=c.createOscillator(),g=c.createGain();o.type='triangle';o.frequency.setValueAtTime(f,t+i*.055);g.gain.setValueAtTime(0,t+i*.055);g.gain.linearRampToValueAtTime(.28,t+i*.055+.02);g.gain.exponentialRampToValueAtTime(.001,t+i*.055+.22);o.connect(g);g.connect(c.destination);o.start(t+i*.055);o.stop(t+i*.055+.24)})}
- else if(type==='USED'||type==='UNPAID'){[0,.14].forEach(d=>{const o=c.createOscillator(),g=c.createGain();o.type='sawtooth';o.frequency.setValueAtTime(180,t+d);o.frequency.linearRampToValueAtTime(120,t+d+.1);g.gain.setValueAtTime(.32,t+d);g.gain.exponentialRampToValueAtTime(.001,t+d+.11);o.connect(g);g.connect(c.destination);o.start(t+d);o.stop(t+d+.12)})}
+ else if(type==='USED'||type==='UNPAID'||type==='ALREADY_CLAIMED'||type==='NOT_CHECKED_IN'){[0,.14].forEach(d=>{const o=c.createOscillator(),g=c.createGain();o.type='sawtooth';o.frequency.setValueAtTime(180,t+d);o.frequency.linearRampToValueAtTime(120,t+d+.1);g.gain.setValueAtTime(.32,t+d);g.gain.exponentialRampToValueAtTime(.001,t+d+.11);o.connect(g);g.connect(c.destination);o.start(t+d);o.stop(t+d+.12)})}
  else{const o=c.createOscillator(),g=c.createGain();o.type='sawtooth';o.frequency.setValueAtTime(130,t);o.frequency.linearRampToValueAtTime(80,t+.25);g.gain.setValueAtTime(.35,t);g.gain.exponentialRampToValueAtTime(.001,t+.26);o.connect(g);g.connect(c.destination);o.start(t);o.stop(t+.28)}}catch(e){}}
-function vib(type){if(!navigator.vibrate)return;try{if(type==='VALID')navigator.vibrate([60,40,90]);else if(type==='USED'||type==='UNPAID')navigator.vibrate([180,80,250]);else navigator.vibrate([300])}catch(e){}}
+function vib(type){if(!navigator.vibrate)return;try{if(type==='VALID')navigator.vibrate([60,40,90]);else if(type==='USED'||type==='UNPAID'||type==='ALREADY_CLAIMED'||type==='NOT_CHECKED_IN')navigator.vibrate([180,80,250]);else navigator.vibrate([300])}catch(e){}}
 async function openScannerModal(){const m=$('#sc_modal');if(!m)return;m.classList.add('on');$('#sc_cnt').textContent=_sessionCount;$('#sc_wait_lbl').textContent=t('v_wait');startCamera()}
 function closeScannerModal(){if(_resTimer){clearTimeout(_resTimer);_resTimer=null}const m=$('#sc_modal');if(m)m.classList.remove('on','fullscreen');stopCamera()}
 async function toggleTorch(){if(!_track)return toast('Kamera belum aktif',1);try{const caps=_track.getCapabilities?_track.getCapabilities():{};if(!caps.torch)return toast('Lampu flash tidak didukung di perangkat/kamera ini',1);_torch=!_torch;await _track.applyConstraints({advanced:[{torch:_torch}]});const b=$('#sc_torch_btn');if(b)b.classList.toggle('active',_torch)}catch(e){toast('Gagal mengatur senter',1)}}
@@ -1703,25 +1723,37 @@ async function startCamera(){const v=$('#sc_video');if(!v)return;try{
  requestAnimationFrame(loop)
 }catch(err){toast('Tidak dapat mengakses kamera: '+(err.message||'Izin ditolak'),1);closeScannerModal()}}
 function stopCamera(){_scanning=false;if(_stream){_stream.getTracks().forEach(t=>t.stop());_stream=null;_track=null;_torch=false;const b=$('#sc_torch_btn');if(b)b.classList.remove('active')}}
-function scCardHtml(r){const isOk=r.result==='VALID',isWn=r.result==='USED'||r.result==='UNPAID',cls=isOk?'ok':isWn?'wn':'no',ic=isOk?'✓':isWn?'⚠':'✕',title=t('v_'+r.result)||r.result,isInv=r.kind==='invitation',isWalkin=r.kind==='walk_in';
+function scCardHtml(r){const isOk=r.result==='VALID',isAlready=r.result==='ALREADY_CLAIMED',isNotCheckIn=r.result==='NOT_CHECKED_IN',isWn=r.result==='USED'||isAlready||isNotCheckIn||r.result==='UNPAID',cls=isOk?'ok':isWn?'wn':'no',ic=isOk?'✓':(r.result==='USED'||isAlready)?'⚠':isNotCheckIn?'⛔':'✕';
+ let title=t('v_'+r.result)||r.result;
+ if(isOk&&r.checkpoint&&r.checkpoint.checkpoint_key!=='main_gate'){title=(r.checkpoint.icon||'✓')+' '+(r.checkpoint.name||'KLAIM')+' BERHASIL'}
+ else if(isAlready){title='SUDAH DIAMBIL SEBELUMNYA'}
+ else if(isNotCheckIn){title='BELUM CHECK-IN GERBANG'}
+ const isInv=r.kind==='invitation',isWalkin=r.kind==='walk_in';
  return `<div class="sc-card ${cls}">
-  <div class="sc-status-h"><span class="icn">${ic}</span><div style="flex:1;min-width:0"><div style="font-size:17px;font-weight:800;color:var(--${isOk?'ok':isWn?'wn':'er'})">${title} ${r.isOffline?'<span class="pill wn" style="font-size:11px;vertical-align:middle;margin-left:4px">⚡ Offline</span>':''}</div><div class="mono" style="font-size:12px;opacity:.85">${esc(r.code)} ${isInv?'<span class="pill gd">'+t('inv_badge')+'</span>':isWalkin?'<span class="pill wn" style="background:#10b981;color:#fff;font-weight:700">'+t('walkin_badge')+'</span>':''}</div></div>${isOk?`<div class="sc-qty-pill">${r.entered||r.qty} ${t('tix')}</div>`:''}</div>
-  ${r.name?`<div style="margin-top:8px;font-size:13px;display:grid;grid-template-columns:1fr 1fr;gap:4px"><div><b>${esc(r.name)}</b><br><small style="opacity:.75">${isWalkin?'Walk-In: '+(esc(r.church)||'-'):esc(r.church||'-')}${(!isInv&&!isWalkin&&r.age)?' · '+esc(r.age):''}</small></div><div style="text-align:right"><span>Check-in: <b>${r.checked||r.qty}/${r.qty}</b></span><br><small style="opacity:.75">${esc(r.event||'')}</small></div></div>`:''}
+  <div class="sc-status-h"><span class="icn">${ic}</span><div style="flex:1;min-width:0"><div style="font-size:16px;font-weight:800;color:var(--${isOk?'ok':isWn?'wn':'er'})">${title} ${r.isOffline?'<span class="pill wn" style="font-size:11px;vertical-align:middle;margin-left:4px">⚡ Offline</span>':''}</div><div class="mono" style="font-size:12px;opacity:.85">${esc(r.code)} ${isInv?'<span class="pill gd">'+t('inv_badge')+'</span>':isWalkin?'<span class="pill wn" style="background:#10b981;color:#fff;font-weight:700">'+t('walkin_badge')+'</span>':''}</div></div>${isOk?`<div class="sc-qty-pill">${r.claimed_qty||r.entered||r.qty||1} ${r.checkpoint&&r.checkpoint.checkpoint_type==='meal'?'porsi':t('tix')}</div>`:''}</div>
+  ${r.name?`<div style="margin-top:8px;font-size:13px;display:grid;grid-template-columns:1fr 1fr;gap:4px"><div><b>${esc(r.name)}</b><br><small style="opacity:.75">${isWalkin?'Walk-In: '+(esc(r.church)||'-'):esc(r.church||'-')}${(!isInv&&!isWalkin&&r.age)?' · '+esc(r.age):''}</small></div><div style="text-align:right"><span>${r.checkpoint?esc(r.checkpoint.name):'Check-in'}: <b>${isOk?'Klaim Sukses':isAlready?'Sudah Diambil':isNotCheckIn?'Ditolak':(r.checked||r.qty)+'/'+r.qty}</b></span><br><small style="opacity:.75">${esc(r.event||'')}</small></div></div>`:''}
+  ${r.message?`<div style="margin-top:8px;font-size:12px;padding:6px 10px;border-radius:8px;background:rgba(0,0,0,.25);line-height:1.4">${esc(r.message)}</div>`:''}
   <div class="sc-cool-bar"><div class="sc-cool-fill"></div></div></div>`}
+
 async function handleScanCode(raw){const code=String(raw||'').trim().toUpperCase();if(!code)return;const now=Date.now();
  if(code===_lastCode&&(now-_lastTime<10000)){_lastTime=now;return}
  if(_cooldown)return;
  _cooldown=true;_lastCode=code;_lastTime=now;if(_resTimer){clearTimeout(_resTimer);_resTimer=null}
  const fr=$('#sc_frame'),resArea=$('#sc_res');
  try{let r;
+  const curCp=($('#sc_cp_sel')?$('#sc_cp_sel').value:($('#scan_view_cp_sel')?$('#scan_view_cp_sel').value:'main_gate'));
   if(!navigator.onLine){r=offlineValidate(code)}
   else{
-   try{r=await api('validate',{code:code})}
+   try{r=await api('validate',{code:code,checkpoint:curCp})}
    catch(apiErr){const off=offlineValidate(code);if(off.result!=='NOT_FOUND')r=off;else throw apiErr}
   }
-  if(r.result==='VALID'){_sessionCount+=(r.entered||r.qty||1);const cnt=$('#sc_cnt'),dc=$('#dash_sc_cnt');if(cnt)cnt.textContent=_sessionCount;if(dc)dc.textContent=_sessionCount}
+  if(r.result==='VALID'){
+   _sessionCount+=(r.claimed_qty||r.entered||r.qty||1);
+   const cnt=$('#sc_cnt'),dc=$('#dash_sc_cnt');if(cnt)cnt.textContent=_sessionCount;if(dc)dc.textContent=_sessionCount;
+   if(S.activeEventId)loadCheckpoints(S.activeEventId);
+  }
   snd(r.result);vib(r.result);
-  if(fr)fr.className='sc-frame '+(r.result==='VALID'?'valid':(r.result==='USED'||r.result==='UNPAID')?'used':'error');
+  if(fr)fr.className='sc-frame '+(r.result==='VALID'?'valid':(r.result==='USED'||r.result==='UNPAID'||r.result==='ALREADY_CLAIMED'||r.result==='NOT_CHECKED_IN')?'used':'error');
   if(resArea)resArea.innerHTML=scCardHtml(r);
   S.res=r;S.hist.unshift({code:r.code,name:r.name,result:r.result,qty:r.qty,entered:r.entered,time:new Date().toLocaleTimeString(loc())});S.hist=S.hist.slice(0,30);paintScan();
  }catch(err){snd('ERROR');vib('ERROR');if(fr)fr.className='sc-frame error';if(resArea)resArea.innerHTML=scCardHtml({result:'ERROR',code:code})}
@@ -1732,13 +1764,120 @@ async function handleScanCode(raw){const code=String(raw||'').trim().toUpperCase
   },7000);
  }}
 
-function scanView(c){c.innerHTML=`<div class="two"><div><div class="scan">
+let S_cp = { eventId: '', data: null };
+
+async function loadCheckpoints(eventId){
+ if(!eventId)return;
+ S_cp.eventId=eventId;
+ const grid=$('#cp_list_grid');
+ if(!grid)return;
+ try{
+  const res=await api('checkpointsGet',{eventId:eventId});
+  S_cp.data=res;
+  paintCheckpoints();
+ }catch(err){
+  grid.innerHTML=`<div style="color:var(--er);font-size:12px;padding:8px 0">Gagal memuat pos check-in: ${esc(err.message||err)}</div>`;
+ }
+}
+
+function paintCheckpoints(){
+ const grid=$('#cp_list_grid');
+ if(!grid||!S_cp.data)return;
+ const {checkpoints,gate_checked_in,total_registered}=S_cp.data;
+ if(!checkpoints||!checkpoints.length){
+  grid.innerHTML='<div class="muted" style="font-size:12px;padding:8px 0">Belum ada pos check-in aktif.</div>';
+  return;
+ }
+ const cpSel1=$('#scan_view_cp_sel'),cpSel2=$('#sc_cp_sel');
+ const curVal1=cpSel1?cpSel1.value:'main_gate';
+ const curVal2=cpSel2?cpSel2.value:'main_gate';
+ const optsHtml=checkpoints.map(c=>`<option value="${esc(c.checkpoint_key)}">${c.icon||'📍'} ${esc(c.name)}</option>`).join('');
+ if(cpSel1){cpSel1.innerHTML=optsHtml;cpSel1.value=curVal1||'main_gate';}
+ if(cpSel2){cpSel2.innerHTML=optsHtml;cpSel2.value=curVal2||'main_gate';}
+
+ grid.innerHTML=checkpoints.map(cp=>{
+  const isGate=cp.checkpoint_key==='main_gate';
+  const totalRef=isGate?total_registered:(gate_checked_in||total_registered||1);
+  const claimed=parseInt(cp.claims_count,10)||0;
+  const pct=totalRef>0?Math.min(100,Math.round((claimed/totalRef)*100)):0;
+  const isCustom=!['main_gate','meal','kit','session','voucher'].includes(cp.checkpoint_key);
+
+  return `<div style="background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.12);border-radius:10px;padding:10px 12px">
+   <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+    <div style="display:flex;align-items:center;gap:6px">
+     <span style="font-size:18px">${cp.icon||'📍'}</span>
+     <div>
+      <b style="font-size:13px">${esc(cp.name)}</b>
+      ${cp.description?`<br><small style="opacity:.7;font-size:11px">${esc(cp.description)}</small>`:''}
+     </div>
+    </div>
+    <div style="display:flex;align-items:center;gap:4px">
+     <span class="pill" style="font-size:11px;font-weight:700;background:rgba(255,255,255,.15)">${claimed} ${isGate?'masuk':cp.checkpoint_type==='meal'?'porsi':'klaim'}</span>
+     ${isCustom?`<button class="btn sm dg" data-act="cpDel" data-key="${esc(cp.checkpoint_key)}" title="Hapus Pos" style="padding:2px 6px;font-size:10px">✕</button>`:''}
+    </div>
+   </div>
+   <div style="background:rgba(0,0,0,.25);height:6px;border-radius:99px;overflow:hidden;margin-top:6px">
+    <div style="background:${isGate?'#38bdf8':'#10b981'};width:${pct}%;height:100%;border-radius:99px;transition:width .3s"></div>
+   </div>
+   <div style="display:flex;justify-content:space-between;margin-top:4px;font-size:11px;opacity:.75">
+    <span>${isGate?'Hadir: '+claimed+'/'+total_registered:'Klaim: '+claimed+'/'+(gate_checked_in||0)+' hadir'}</span>
+    <span>${pct}%</span>
+   </div>
+  </div>`;
+ }).join('');
+}
+
+function scanView(c){
+ const evOpts=(S.aev||[]).map(e=>`<option value="${e.id}" ${e.id===S.activeEventId?'selected':''}>${esc(e.name)}</option>`).join('');
+ c.innerHTML=`<div class="two"><div><div class="scan">
   <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px"><div><h2>${t('v_title')}</h2><p style="margin:4px 0 16px">${t('v_sub')}</p></div><div class="sc-badge" style="background:rgba(255,255,255,.15);flex:none"><span>🎯</span> <span><b id="dash_sc_cnt">${_sessionCount}</b> ${t('tix')}</span></div></div>
+
+  <div style="background:rgba(0,0,0,.15);border:1px solid rgba(255,255,255,.15);border-radius:12px;padding:12px 14px;margin-bottom:14px">
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+      <div style="flex:1;min-width:140px">
+        <label style="font-size:11px;font-weight:700;color:rgba(255,255,255,.8);text-transform:uppercase;letter-spacing:1px;display:block;margin-bottom:4px">Pilih Acara</label>
+        <select id="sc_ev_sel" style="width:100%;background:rgba(255,255,255,.12);color:#fff;border:1px solid rgba(255,255,255,.25);border-radius:8px;padding:8px 10px;font-size:13px;font-weight:600;outline:none">
+          <option value="">-- Pilih Acara --</option>
+          ${evOpts}
+        </select>
+      </div>
+      <div style="flex:1;min-width:140px">
+        <label style="font-size:11px;font-weight:700;color:rgba(255,255,255,.8);text-transform:uppercase;letter-spacing:1px;display:block;margin-bottom:4px">Pos / Checkpoint</label>
+        <select id="scan_view_cp_sel" style="width:100%;background:rgba(255,255,255,.12);color:#fff;border:1px solid rgba(255,255,255,.25);border-radius:8px;padding:8px 10px;font-size:13px;font-weight:600;outline:none">
+          <option value="main_gate">🎟️ Pintu Utama (Check-in)</option>
+          <option value="meal">🍱 Konsumsi (Makan/Snack)</option>
+          <option value="kit">🎁 Souvenir / Seminar Kit</option>
+          <option value="session">🚪 Breakout Class / Sesi</option>
+          <option value="voucher">🏷️ Voucher Diskon Bazaar</option>
+        </select>
+      </div>
+    </div>
+  </div>
+
   <div style="display:flex;gap:10px;flex-wrap:wrap">
     <button class="btn" data-act="scOpen" style="padding:14px 22px;background:#fff;color:#4a3df0;font-weight:700;box-shadow:0 6px 18px rgba(0,0,0,.25)">&#128247; ${t('v_open')}</button>
     <button class="btn" data-act="openScan" style="padding:14px 18px;background:rgba(255,255,255,.15);border-color:rgba(255,255,255,.3);color:#fff">Jendela Terpisah &#8599;</button>
   </div>
   <div class="row" style="margin-top:16px"><input id="mc" class="mono" placeholder="${t('v_ph')}"><button class="btn" data-act="manual" style="flex:none">${t('v_go')}</button></div>
+
+  <!-- Multi-Point Check-In Dashboard -->
+  <div class="card" id="cp_stats_box" style="padding:14px;margin-top:16px;background:rgba(0,0,0,.2);border:1px solid rgba(255,255,255,.15)">
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:10px">
+      <div>
+        <b style="font-size:14px">📍 Multi-Point Check-In &amp; Fasilitas</b>
+        <div style="font-size:11px;opacity:.8">Statistik klaim fasilitas &amp; sesi acara</div>
+      </div>
+      <div style="display:flex;gap:6px">
+        <button class="btn sm" data-act="cpRefresh" style="padding:4px 8px;font-size:11px" title="Segarkan">🔄 Refresh</button>
+        <button class="btn sm" data-act="cpAdd" style="padding:4px 8px;font-size:11px;background:#10b981;border-color:#10b981;color:#fff">➕ Pos Baru</button>
+        <button class="btn sm" data-act="cpExport" style="padding:4px 8px;font-size:11px">📥 CSV</button>
+      </div>
+    </div>
+    <div id="cp_list_grid" style="display:grid;grid-template-columns:1fr;gap:8px">
+      <div class="muted" style="font-size:12px;padding:8px 0">Pilih acara untuk melihat data pos...</div>
+    </div>
+  </div>
+
   <div class="card" style="padding:14px;margin-top:16px;background:rgba(0,0,0,.2);border:1px solid rgba(255,255,255,.15)">
     <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
       <div style="display:flex;align-items:center;gap:8px"><b>${t('off_title')}</b><span id="off_badge_area"></span></div>
@@ -1751,25 +1890,190 @@ function scanView(c){c.innerHTML=`<div class="two"><div><div class="scan">
     </div>
   </div>
 </div><div id="vr"></div></div><div class="card" style="padding:16px"><h3>${t('v_hist')}</h3><div id="vh"></div></div></div>`;
+
  $('#mc').onkeydown=e=>{if(e.key==='Enter')manual()};
+ const scEvSel=$('#sc_ev_sel');
+ if(scEvSel){
+  scEvSel.onchange=()=>{
+   S.activeEventId=scEvSel.value;
+   loadCheckpoints(scEvSel.value);
+  };
+ }
+ const cpSel1=$('#scan_view_cp_sel'),cpSel2=$('#sc_cp_sel');
+ if(cpSel1){
+  cpSel1.onchange=()=>{
+   if(cpSel2)cpSel2.value=cpSel1.value;
+  };
+ }
+ if(cpSel2){
+  cpSel2.onchange=()=>{
+   if(cpSel1)cpSel1.value=cpSel2.value;
+  };
+ }
  paintScan();paintOfflineStatus();
- if(!S.aev)api('adminEvents').then(evs=>{S.aev=evs;paintOfflineStatus()}).catch(()=>{})}
-function resHtml(r){const cls={VALID:'ok',USED:'wn',UNPAID:'wn'}[r&&r.result]||'no';
- return `<div class="res ${cls}"><h2>${t('v_'+r.result)} ${r.isOffline?'<span class="pill wn" style="font-size:12px;margin-left:6px">⚡ Offline</span>':''}</h2><div class="mono">${esc(r.code)} ${r.kind==='invitation'?'<span class="pill gd">'+t('inv_badge')+'</span>':''}</div>${r.result==='VALID'?`<h3>${r.entered} ${t('entered')}</h3>`:''}${r.name?`<div class="info"><div><small>Nama</small><b>${esc(r.name)}</b></div><div><small>Acara</small><b>${esc(r.event)}</b></div><div><small>${r.kind==='invitation'?'Instansi':'Gereja &#183; Usia'}</small><b>${esc(r.church)}${r.age?' &#183; '+esc(r.age):''}</b></div><div><small>Check-in</small><b>${r.checked||0}/${r.qty}</b></div></div>`:''}</div>`}
+ if(!S.aev){
+  api('adminEvents').then(evs=>{
+   S.aev=evs;
+   if(evs&&evs.length&&!S.activeEventId)S.activeEventId=evs[0].id;
+   if(scEvSel){
+    scEvSel.innerHTML='<option value="">-- Pilih Acara --</option>'+evs.map(e=>`<option value="${e.id}" ${e.id===S.activeEventId?'selected':''}>${esc(e.name)}</option>`).join('');
+   }
+   paintOfflineStatus();
+   if(S.activeEventId)loadCheckpoints(S.activeEventId);
+  }).catch(()=>{});
+ }else{
+  if(S.aev.length&&!S.activeEventId)S.activeEventId=S.aev[0].id;
+  if(scEvSel&&S.activeEventId)scEvSel.value=S.activeEventId;
+  if(S.activeEventId)loadCheckpoints(S.activeEventId);
+ }
+}
+
+function resHtml(r){
+ const isOk=r&&r.result==='VALID',
+       isAlready=r&&r.result==='ALREADY_CLAIMED',
+       isNotCheckIn=r&&r.result==='NOT_CHECKED_IN',
+       isWn=r&&(r.result==='USED'||isAlready||isNotCheckIn||r.result==='UNPAID'),
+       cls=isOk?'ok':isWn?'wn':'no';
+ let title=t('v_'+(r&&r.result))||(r&&r.result)||'';
+ if(isOk&&r.checkpoint&&r.checkpoint.checkpoint_key!=='main_gate'){
+  title=(r.checkpoint.icon||'✓')+' '+(r.checkpoint.name||'KLAIM')+' BERHASIL';
+ }else if(isAlready){
+  title='SUDAH DIAMBIL SEBELUMNYA';
+ }else if(isNotCheckIn){
+  title='BELUM CHECK-IN GERBANG';
+ }
+ return `<div class="res ${cls}"><h2>${title} ${r&&r.isOffline?'<span class="pill wn" style="font-size:12px;margin-left:6px">⚡ Offline</span>':''}</h2><div class="mono">${esc(r&&r.code)} ${r&&r.kind==='invitation'?'<span class="pill gd">'+t('inv_badge')+'</span>':''}</div>${isOk?`<h3>${r.claimed_qty||r.entered||r.qty||1} ${r.checkpoint&&r.checkpoint.checkpoint_type==='meal'?'porsi':t('entered')}</h3>`:''}${r&&r.name?`<div class="info"><div><small>Nama</small><b>${esc(r.name)}</b></div><div><small>Acara</small><b>${esc(r.event)}</b></div><div><small>${r.kind==='invitation'?'Instansi':'Gereja &#183; Usia'}</small><b>${esc(r.church)}${r.age?' &#183; '+esc(r.age):''}</b></div><div><small>${r.checkpoint?esc(r.checkpoint.name):'Check-in'}</small><b>${isOk?'Klaim Berhasil':isAlready?'Sudah Diklaim':isNotCheckIn?'Wajib Masuk Gerbang Dulu':(r.checked||0)+'/'+r.qty}</b></div></div>`:''}${r&&r.message?`<div style="margin-top:10px;font-size:13px;padding:8px 12px;border-radius:8px;background:rgba(0,0,0,.08);line-height:1.4">${esc(r.message)}</div>`:''}</div>`;
+}
+
 function paintScan(){const r=S.res,vr=$('#vr');if(!vr)return;
  vr.innerHTML=r?resHtml(r):`<div class="muted" style="text-align:center;padding:40px">${t('v_wait')}</div>`;
  $('#vh').innerHTML=S.hist.map(h=>`<div class="card" style="padding:8px 12px;margin-top:8px;border-left:4px solid var(--${h.result==='VALID'?'ok':'er'})"><span class="mono"><b>${esc(h.code)}</b></span> <small class="muted">${esc(h.name||'')} &#183; ${h.time}</small></div>`).join('')||'&#8212;'}
+
 async function doValidate(code){try{let r;
-  if(!navigator.onLine){r=offlineValidate(code)}
-  else{
-    try{r=await api('validate',{code:code},t('loading'))}
-    catch(apiErr){const off=offlineValidate(code);if(off.result!=='NOT_FOUND')r=off;else throw apiErr}
-  }
-  if(r.result==='VALID'){_sessionCount+=(r.entered||r.qty||1);const cnt=$('#sc_cnt'),dc=$('#dash_sc_cnt');if(cnt)cnt.textContent=_sessionCount;if(dc)dc.textContent=_sessionCount}
-  snd(r.result);vib(r.result);
-  S.res=r;S.hist.unshift({code:r.code,name:r.name,result:r.result,qty:r.qty,entered:r.entered,time:new Date().toLocaleTimeString(loc())});S.hist=S.hist.slice(0,30);paintScan();return r
+ const curCp=($('#scan_view_cp_sel')?$('#scan_view_cp_sel').value:($('#sc_cp_sel')?$('#sc_cp_sel').value:'main_gate'));
+ if(!navigator.onLine){r=offlineValidate(code)}
+ else{
+  try{r=await api('validate',{code:code,checkpoint:curCp},t('loading'))}
+  catch(apiErr){const off=offlineValidate(code);if(off.result!=='NOT_FOUND')r=off;else throw apiErr}
+ }
+ if(r.result==='VALID'){
+  _sessionCount+=(r.claimed_qty||r.entered||r.qty||1);
+  const cnt=$('#sc_cnt'),dc=$('#dash_sc_cnt');if(cnt)cnt.textContent=_sessionCount;if(dc)dc.textContent=_sessionCount;
+  if(S.activeEventId)loadCheckpoints(S.activeEventId);
+ }
+ snd(r.result);vib(r.result);
+ S.res=r;S.hist.unshift({code:r.code,name:r.name,result:r.result,qty:r.qty,entered:r.entered,time:new Date().toLocaleTimeString(loc())});S.hist=S.hist.slice(0,30);paintScan();return r
 }catch(e){snd('ERROR');vib('ERROR');fail(e);return {result:'ERROR',message:errMsg(e)}}}
+
 function manual(){const v=$('#mc').value.trim();if(v){doValidate(v);$('#mc').value=''}}
+
+function A_cpRefresh(){
+ const evId=S.activeEventId||($('#sc_ev_sel')?$('#sc_ev_sel').value:'');
+ if(!evId)return toast('Pilih acara terlebih dahulu',1);
+ loadCheckpoints(evId);
+ toast('Data pos check-in diperbarui',0);
+}
+
+function A_cpAdd(){
+ const evId=S.activeEventId||($('#sc_ev_sel')?$('#sc_ev_sel').value:'');
+ if(!evId)return toast('Pilih acara terlebih dahulu',1);
+ modal(`<button class="btn sm x" data-act="cm">&#10005;</button>
+  <h2>➕ Tambah Pos Check-In / Fasilitas</h2>
+  <p class="muted" style="margin:4px 0 14px;font-size:13px">Buat pos scan baru untuk konsumsi tambahan, merchandise, atau sesi kelas khusus.</p>
+  <label>Nama Pos / Fasilitas</label>
+  <input id="cp_new_name" placeholder="Contoh: Snack Pagi, Doorprize Utama, Kelas A" autocomplete="off">
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px">
+    <div>
+      <label>Ikon (Emoji)</label>
+      <input id="cp_new_icon" value="📍" placeholder="🎁, ☕, 🏷️, 🚪" autocomplete="off">
+    </div>
+    <div>
+      <label>Kategori Pos</label>
+      <select id="cp_new_type">
+        <option value="facility">Fasilitas / Umum</option>
+        <option value="meal">Konsumsi (Makanan/Minuman)</option>
+        <option value="session">Sesi / Breakout Class</option>
+        <option value="custom">Kustom / Voucher</option>
+      </select>
+    </div>
+  </div>
+  <label style="margin-top:8px">Keterangan / Lokasi Pos</label>
+  <input id="cp_new_desc" placeholder="Contoh: Meja Registrasi Sayap Barat" autocomplete="off">
+  <div class="acts" style="margin-top:16px">
+    <button class="btn pri" data-act="cpSaveSubmit">Simpan Pos Baru</button>
+    <button class="btn" data-act="cm">Batal</button>
+  </div>`);
+}
+
+async function A_cpSaveSubmit(){
+ const evId=S.activeEventId||($('#sc_ev_sel')?$('#sc_ev_sel').value:'');
+ if(!evId)return toast('Acara tidak ditemukan',1);
+ const name=($('#cp_new_name')?$('#cp_new_name').value:'').trim();
+ const icon=($('#cp_new_icon')?$('#cp_new_icon').value:'').trim()||'📍';
+ const type=($('#cp_new_type')?$('#cp_new_type').value:'facility');
+ const desc=($('#cp_new_desc')?$('#cp_new_desc').value:'').trim();
+ if(!name||name.length<2)return toast('Nama pos wajib diisi minimal 2 karakter',1);
+ const key='cp_'+name.toLowerCase().replace(/[^a-z0-9]/g,'_').slice(0,24)+'_'+Math.floor(Math.random()*1000);
+ try{
+  await api('checkpointSave',{
+   eventId:evId,
+   checkpointKey:key,
+   name:name,
+   description:desc,
+   icon:icon,
+   checkpointType:type
+  },t('loading'));
+  cm();
+  toast('Pos baru berhasil dibuat!',0);
+  loadCheckpoints(evId);
+ }catch(err){
+  fail(err);
+ }
+}
+
+async function A_cpDel(el){
+ const evId=S.activeEventId||($('#sc_ev_sel')?$('#sc_ev_sel').value:'');
+ const key=el.dataset.key;
+ if(!evId||!key)return;
+ if(!await ask('Hapus pos check-in ini? Data klaim pada pos ini mungkin tidak dapat dipulihkan.'))return;
+ try{
+  await api('checkpointDelete',{eventId:evId,checkpointKey:key},t('loading'));
+  toast('Pos check-in dihapus',0);
+  loadCheckpoints(evId);
+ }catch(err){
+  fail(err);
+ }
+}
+
+async function A_cpExport(){
+ const evId=S.activeEventId||($('#sc_ev_sel')?$('#sc_ev_sel').value:'');
+ if(!evId)return toast('Pilih acara terlebih dahulu',1);
+ try{
+  const rows=await api('checkpointExportCsv',{eventId:evId},t('loading'));
+  if(!rows||!rows.length)return toast('Belum ada data klaim fasilitas untuk diekspor.',1);
+  const headers=['Waktu Klaim','Nama Acara','Pos Check-In','Ikon','Kode Tiket','Nama Peserta','Asal Gereja / Instansi','Jumlah Klaim','Petugas Scan'];
+  const data=rows.map(r=>[
+   r.claim_time||'',
+   r.event_name||'',
+   r.checkpoint_name||'',
+   r.checkpoint_icon||'',
+   r.ticket_code||'',
+   r.attendee_name||'',
+   r.attendee_org||'',
+   r.claimed_qty||1,
+   r.staff_name||'-'
+  ]);
+  const csv='﻿'+[headers].concat(data).map(arr=>arr.map(c=>'"'+String(c).replace(/"/g,'""')+'"').join(',')).join('\r\n');
+  const blob=new Blob([csv],{type:'text/csv;charset=utf-8;'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download='Laporan_MultiPoint_Checkin_'+evId.slice(0,8)+'_'+new Date().toISOString().slice(0,10)+'.csv';
+  document.body.appendChild(a);a.click();a.remove();
+ }catch(err){
+  fail(err);
+ }
+}
+
 let sw=null,nonce=null;
 function openScan(){const a=new Uint8Array(16);crypto.getRandomValues(a);nonce=[...a].map(b=>b.toString(16).padStart(2,'0')).join('');
  try{if(typeof localStorage!=='undefined')localStorage.setItem('atk_tok',S.token||'')}catch(x){}
@@ -2337,7 +2641,7 @@ const NL=String.fromCharCode(10),find=(a,id)=>a.find(x=>x.id===id),A={
  evTerms(el){const e=S.ev&&find(S.ev,el.dataset.id);if(!e||!e.terms)return;modal2('<button class="btn sm x" data-act="cm2">&#10005;</button><h2>'+t('ev_terms')+'</h2><p class="muted" style="margin:0">'+esc(e.name)+'</p><div class="tcb">'+esc(e.terms)+'</div><div class="acts"><button class="btn pri" data-act="cm2">'+t('close')+'</button></div>')},
  async dlpng(el){const o=find(S.tix,el.dataset.id);if(!o)return;const f=await ticketImg(o);if(!f)return toast(t('e_E_GENERIC'),1);const a=document.createElement('a');a.href=URL.createObjectURL(f);a.download=f.name;document.body.append(a);a.click();a.remove()},
  async dl(el){bz(1,t('preparing'));try{let o=S.tix&&find(S.tix,el.dataset.id);if(!o){S.tix=await api('myTickets');o=find(S.tix,el.dataset.id)}if(!o)throw new Error('NOT_FOUND');await generateTicketPdf(o)}catch(e){fail(e)}finally{bz(-1,t('preparing'))}},
- scOpen(){openScannerModal()},scClose(){closeScannerModal()},scTorch(){toggleTorch()},scAudio(){toggleAudio()},scFlip(){toggleCamera()},scFs(){toggleFullscreen()},evForm(el){evForm(el.dataset.id)},paid(el){S.paid=el.dataset.v==='1';document.querySelectorAll('[data-act=paid]').forEach(b=>b.classList.toggle('on',b===el));const p=$('#pr');p.disabled=!S.paid;if(!S.paid)p.value=0},
+ scOpen(){openScannerModal()},scClose(){closeScannerModal()},scTorch(){toggleTorch()},scAudio(){toggleAudio()},scFlip(){toggleCamera()},scFs(){toggleFullscreen()},cpRefresh(){A_cpRefresh()},cpAdd(){A_cpAdd()},cpSaveSubmit(){A_cpSaveSubmit()},cpDel(el){A_cpDel(el)},cpExport(){A_cpExport()},evForm(el){evForm(el.dataset.id)},paid(el){S.paid=el.dataset.v==='1';document.querySelectorAll('[data-act=paid]').forEach(b=>b.classList.toggle('on',b===el));const p=$('#pr');p.disabled=!S.paid;if(!S.paid)p.value=0},
  async saveEv(){const f=$('#ef'),d=Object.fromEntries(new FormData(f));d.one_order_per_account=f.one_order_per_account.checked;d.is_active=f.is_active.checked;d.is_paid=S.paid;d.price=S.paid?d.price:0;d.quota=parseInt(d.quota,10)||0;d.walkin_quota=parseInt(d.walkin_quota,10)||0;if(!d.id)delete d.id;try{await api('saveEvent',d,t('loading'));cm();toast(t('saved'));S.aev=null;adminView()}catch(e){fail(e)}},
  async cxl(el){if(await ask(t('ask_cancel')))try{await api('cancelOrder',{id:el.dataset.id},t('loading'));S.view==='inv'?invView($('#ac')):loadOrders()}catch(e){fail(e)}},
  ordpg(el){S.ordPage=parseInt(el.dataset.v,10)||1;paintOrders();const tb=$('#ot');if(tb&&tb.scrollIntoView)tb.scrollIntoView({block:'start'})},

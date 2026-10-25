@@ -79,7 +79,7 @@ button.btn{width:100%;margin-top:10px;padding:12px;border:0;border-radius:12px;b
 
   <div class="hud">
     <div class="topbar">
-      <div class="badge"><span>🎯</span> <span><b id="sc_cnt">0</b> <span style="font-size:11px;opacity:.85">tiket masuk</span></span></div>
+      <div class="badge"><span>🎯</span> <span><b id="sc_cnt">0</b> <span style="font-size:11px;opacity:.85" id="sc_cnt_lbl">terverifikasi</span></span></div>
       <div class="ctrls">
         <button class="btn-ic" id="btn_torch" title="Senter" style="display:none">🔦</button>
         <button class="btn-ic" id="btn_audio" title="Suara">🔊</button>
@@ -87,6 +87,18 @@ button.btn{width:100%;margin-top:10px;padding:12px;border:0;border-radius:12px;b
         <button class="btn-ic" id="btn_fs" title="Layar Penuh">⛶</button>
         <button class="btn-ic" id="btn_close" title="Tutup" style="background:#ef4444;border-color:#ef4444">&#10005;</button>
       </div>
+    </div>
+
+    <!-- POS / CHECKPOINT SELECTOR -->
+    <div style="display:flex;align-items:center;justify-content:center;gap:6px;margin:6px 0 2px;width:100%;z-index:10">
+      <span style="font-size:11px;font-weight:800;color:#cbd5e1;letter-spacing:1px;text-transform:uppercase">POS:</span>
+      <select id="sc_cp_sel" style="background:rgba(15,23,42,.85);border:1.5px solid rgba(255,255,255,.3);color:#fff;border-radius:99px;padding:4px 12px;font-size:12px;font-weight:700;backdrop-filter:blur(6px);max-width:270px;cursor:pointer">
+        <option value="main_gate">🎟️ Pintu Masuk Utama</option>
+        <option value="meal">🍱 Konsumsi (Makan/Snack)</option>
+        <option value="kit">🎁 Souvenir / Seminar Kit</option>
+        <option value="breakout">🚪 Breakout / Ruang Sesi</option>
+        <option value="voucher">🏷️ Voucher Diskon Bazaar</option>
+      </select>
     </div>
 
     <div class="frame-wrap">
@@ -191,12 +203,17 @@ function esc(s) {
 }
 
 function cardHtml(r) {
-  const isOk = r.result === 'VALID', isWn = r.result === 'USED' || r.result === 'UNPAID' || r.result === 'TIMEOUT';
+  const isOk = r.result === 'VALID';
+  const isAlready = r.result === 'ALREADY_CLAIMED';
+  const isNotCheckIn = r.result === 'NOT_CHECKED_IN';
+  const isWn = r.result === 'USED' || isAlready || r.result === 'UNPAID' || r.result === 'TIMEOUT';
   const cls = isOk ? 'ok' : isWn ? 'wn' : 'no';
-  const ic = isOk ? '✓' : isWn ? '⚠' : '✕';
+  const ic = isOk ? '✓' : (r.result === 'USED' || isAlready) ? '⚠' : isNotCheckIn ? '⛔' : '✕';
   let title = 'TIKET TIDAK VALID';
-  if (isOk) title = 'VALID — Silakan Masuk';
-  else if (r.result === 'USED') title = 'SUDAH DIGUNAKAN';
+  if (isOk) title = (r.checkpoint && r.checkpoint.checkpoint_key !== 'main_gate') ? ((r.checkpoint.icon || '✓') + ' ' + (r.checkpoint.name || 'KLAIM') + ' BERHASIL') : 'VALID — Silakan Masuk';
+  else if (r.result === 'USED') title = 'SUDAH DIGUNAKAN (CHECK-IN)';
+  else if (isAlready) title = 'SUDAH DIAMBIL SEBELUMNYA';
+  else if (isNotCheckIn) title = 'BELUM CHECK-IN GERBANG';
   else if (r.result === 'UNPAID') title = 'BELUM DIBAYAR';
   else if (r.result === 'CANCELLED') title = 'PESANAN DIBATALKAN';
   else if (r.result === 'NOT_FOUND') title = 'TIKET TIDAK DITEMUKAN';
@@ -206,15 +223,16 @@ function cardHtml(r) {
     <div class="status-h">
       <span class="icn">${ic}</span>
       <div style="flex:1;min-width:0">
-        <div style="font-size:16px;font-weight:800;color:var(--${cls})">${title}</div>
+        <div style="font-size:15px;font-weight:800;color:var(--${cls})">${title}</div>
         <div class="mono" style="font-size:12px;opacity:.85">${esc(r.code)} ${r.kind === 'invitation' ? '<span style="background:linear-gradient(135deg,#f59e0b,#d97706);color:#000;font-size:10px;font-weight:800;padding:2px 8px;border-radius:99px;margin-left:4px">UNDANGAN</span>' : ''}</div>
       </div>
-      ${isOk ? `<div class="qty-pill">${r.entered || r.qty || 1} tiket</div>` : ''}
+      ${isOk ? `<div class="qty-pill">${r.claimed_qty || r.entered || r.qty || 1} ${r.checkpoint && r.checkpoint.checkpoint_type === 'meal' ? 'porsi' : 'tiket'}</div>` : ''}
     </div>
     ${r.name ? `<div style="margin-top:8px;font-size:13px;display:grid;grid-template-columns:1fr 1fr;gap:4px">
       <div><b>${esc(r.name)}</b><br><small style="opacity:.75">${esc(r.church || '-')}${r.age ? ' · ' + esc(r.age) : ''}</small></div>
-      <div style="text-align:right"><span>Check-in: <b>${r.checked || r.qty}/${r.qty}</b></span><br><small style="opacity:.75">${esc(r.event || '')}</small></div>
-    </div>` : (r.message ? `<div style="margin-top:8px;font-size:12px;opacity:.9">${esc(r.message)}</div>` : '')}
+      <div style="text-align:right"><span>${r.checkpoint ? esc(r.checkpoint.name) : 'Status'}: <b>${isOk ? 'Terverifikasi' : isAlready ? 'Sudah Diambil' : 'Check-in'}</b></span><br><small style="opacity:.75">${esc(r.event || '')}</small></div>
+    </div>` : ''}
+    ${r.message ? `<div style="margin-top:8px;font-size:12px;padding:6px 10px;border-radius:8px;background:rgba(0,0,0,.25);line-height:1.4">${esc(r.message)}</div>` : ''}
     <div class="cool-bar"><div class="cool-fill"></div></div>
   </div>`;
 }
@@ -282,7 +300,7 @@ async function handleCode(raw) {
         const res = await fetch(apiUrl, {
           method: 'POST',
           headers: { 'Content-Type': 'text/plain' },
-          body: JSON.stringify({ action: 'validate', token: tok, code: code })
+          body: JSON.stringify({ action: 'validate', token: tok, code: code, checkpoint: ($('sc_cp_sel') ? $('sc_cp_sel').value : 'main_gate') })
         });
         const r = await res.json();
         if (!answered) {

@@ -548,6 +548,10 @@ const ACTIONS = {
   feedbackSubmit: { min: 0, fn: feedbackSubmit },
   feedbacksGet:    { min: 2, fn: feedbacksGet },
   feedbackDelete:  { min: 2, fn: feedbackDelete },
+  checkpointsGet:     { min: 1, fn: checkpointsGet },
+  checkpointSave:     { min: 2, fn: checkpointSave },
+  checkpointDelete:   { min: 2, fn: checkpointDelete },
+  checkpointExportCsv:{ min: 1, fn: checkpointExportCsv },
   doorprizePool:   { min: 2, fn: doorprizePool },
   doorprizeSaveWinner: { min: 2, fn: doorprizeSaveWinner },
   doorprizeDeleteWinner: { min: 2, fn: doorprizeDeleteWinner },
@@ -799,22 +803,82 @@ function batchResendEmails(u, p) {
   }
   return { total: list.length, sent: sent, failed: failed, remaining: Math.max(0, totalLeft - sent), stopped: stopped, reason: stopReason };
 }
+function ensureDefaultCheckpointsGS(eventId) {
+  const DEFAULT_CPS = [
+    { key: 'main_gate', name: 'Pintu Masuk Utama', icon: '🎟️', type: 'gate', sort: 1 },
+    { key: 'meal', name: 'Konsumsi (Lunch/Dinner/Snack)', icon: '🍱', type: 'meal', sort: 2 },
+    { key: 'kit', name: 'Souvenir / Seminar Kit', icon: '🎁', type: 'kit', sort: 3 },
+    { key: 'breakout', name: 'Breakout Session / Ruang Kelas', icon: '🚪', type: 'session', sort: 4 },
+    { key: 'voucher', name: 'Voucher Diskon Bazaar', icon: '🏷️', type: 'voucher', sort: 5 }
+  ];
+  const cnt = q(`SELECT count(*)::int AS cnt FROM event_checkpoints WHERE event_id=$1::uuid`, [eventId])[0];
+  if (!cnt || cnt.cnt === 0) {
+    for (const cp of DEFAULT_CPS) {
+      q(`INSERT INTO event_checkpoints(event_id, checkpoint_key, name, icon, checkpoint_type, sort_order)
+        VALUES($1::uuid, $2, $3, $4, $5, $6) ON CONFLICT (event_id, checkpoint_key) DO NOTHING`,
+        [eventId, cp.key, cp.name, cp.icon, cp.type, cp.sort]);
+    }
+  }
+}
+
 function validate(u, p) {
   const code = String(p.code || '').trim().toUpperCase().replace(/\s/g, '');
-  const o = q(`SELECT o.id,o.qty,o.status,o.checked_in,o.checked_in_at,o.kind,
+  const cpKey = String(p.checkpoint || 'main_gate').trim();
+  const o = q(`SELECT o.id,o.qty,o.status,o.checked_in,o.checked_in_at,o.kind,o.event_id,
     CASE WHEN o.kind IN ('invitation','walk_in') THEN o.guest_name ELSE u.name END AS name,
     CASE WHEN o.kind IN ('invitation','walk_in') THEN o.guest_org ELSE u.church END AS church,
     CASE WHEN o.kind IN ('invitation','walk_in') THEN o.guest_age ELSE u.age END AS age,
     CASE WHEN o.kind IN ('invitation','walk_in') THEN coalesce(o.guest_phone, '') ELSE u.whatsapp END AS whatsapp,e.name AS event_name
     FROM orders o JOIN users u ON u.id=o.user_id JOIN events e ON e.id=o.event_id WHERE o.ticket_code=$1`, [code])[0];
   if (!o) return { result: 'NOT_FOUND', code: code };
-  const base = { code: code, kind: o.kind, name: o.name, church: o.church, age: o.age, whatsapp: o.whatsapp, event: o.event_name, qty: o.qty, at: o.checked_in_at };
+  ensureDefaultCheckpointsGS(o.event_id);
+
+  const cpInfo = q(`SELECT checkpoint_key, name, icon, checkpoint_type FROM event_checkpoints WHERE event_id=$1::uuid AND checkpoint_key=$2`, [o.event_id, cpKey])[0] || { checkpoint_key: cpKey, name: cpKey === 'main_gate' ? 'Pintu Masuk Utama' : cpKey, icon: '📍', checkpoint_type: 'facility' };
+
+  const base = { code: code, kind: o.kind, name: o.name, church: o.church, age: o.age, whatsapp: o.whatsapp, event: o.event_name, qty: o.qty, at: o.checked_in_at, checkpoint: cpInfo };
   if (o.status === 'cancelled') return Object.assign(base, { result: 'CANCELLED' });
   if (o.status === 'pending_payment') return Object.assign(base, { result: 'UNPAID' });
-  if (o.checked_in >= o.qty) return Object.assign(base, { result: 'USED', checked: o.checked_in });
-  const r = q(`UPDATE orders SET checked_in=qty,checked_in_at=now(),checked_in_by=$2::uuid WHERE id=$1::uuid AND checked_in<qty RETURNING qty`, [o.id, u.id]);
-  if (!r.length) return Object.assign(base, { result: 'USED', checked: o.qty });
-  return Object.assign(base, { result: 'VALID', entered: o.qty - o.checked_in, checked: o.qty, at: new Date().toISOString() });
+
+  if (cpKey === 'main_gate') {
+    if (o.checked_in >= o.qty) return Object.assign(base, { result: 'USED', checked: o.checked_in });
+    const r = q(`UPDATE orders SET checked_in=qty,checked_in_at=now(),checked_in_by=$2::uuid WHERE id=$1::uuid AND checked_in<qty RETURNING qty`, [o.id, u.id]);
+    if (!r.length) return Object.assign(base, { result: 'USED', checked: o.qty });
+    q(`INSERT INTO checkpoint_claims(event_id, checkpoint_key, order_id, ticket_code, qty, claimed_by, claimed_by_name)
+      VALUES($1::uuid, 'main_gate', $2::uuid, $3, $4::int, $5::uuid, $6) ON CONFLICT (order_id, checkpoint_key) DO NOTHING`,
+      [o.event_id, o.id, code, o.qty, u.id, u.name || 'Petugas Gerbang']);
+    return Object.assign(base, { result: 'VALID', entered: o.qty - o.checked_in, checked: o.qty, at: new Date().toISOString() });
+  }
+
+  // Facility / Session Checkpoint
+  if (o.checked_in <= 0) {
+    return Object.assign(base, {
+      result: 'NOT_CHECKED_IN',
+      message: 'Peserta belum check-in di Pintu Masuk Utama! Arahkan ke meja registrasi / gerbang masuk terlebih dahulu.'
+    });
+  }
+
+  const existingClaim = q(`SELECT claimed_at, to_char(claimed_at AT TIME ZONE 'Asia/Jakarta','HH24:MI') AS claim_time, claimed_by_name, qty FROM checkpoint_claims WHERE order_id=$1::uuid AND checkpoint_key=$2`, [o.id, cpKey])[0];
+  if (existingClaim) {
+    return Object.assign(base, {
+      result: 'ALREADY_CLAIMED',
+      message: cpInfo.name + ' sudah diambil pada ' + existingClaim.claim_time + ' WIB' + (existingClaim.claimed_by_name ? ' oleh ' + existingClaim.claimed_by_name : '') + '.',
+      claimed_at: existingClaim.claimed_at,
+      claimed_by: existingClaim.claimed_by_name,
+      claimed_qty: existingClaim.qty
+    });
+  }
+
+  q(`INSERT INTO checkpoint_claims(event_id, checkpoint_key, order_id, ticket_code, qty, claimed_by, claimed_by_name)
+    VALUES($1::uuid, $2, $3::uuid, $4, $5::int, $6::uuid, $7)`,
+    [o.event_id, cpKey, o.id, code, o.qty, u.id, u.name || 'Petugas Pos']);
+
+  return Object.assign(base, {
+    result: 'VALID',
+    message: cpInfo.name + ' berhasil diverifikasi!',
+    entered: o.qty,
+    claimed_qty: o.qty,
+    at: new Date().toISOString()
+  });
 }
 
 function offlineManifest(u, p) {
@@ -1727,4 +1791,81 @@ function doorprizeResetAll(u, p) {
   q(`DELETE FROM doorprize_winners WHERE event_id=$1::uuid`, [evId]);
   return true;
 }
+
+function checkpointsGet(u, p) {
+  const evId = String(p.eventId || '').trim();
+  if (!evId) throw new Error('EVENT_NOT_FOUND');
+  ensureDefaultCheckpointsGS(evId);
+
+  const r = q(`
+    SELECT cp.id, cp.event_id, cp.checkpoint_key, cp.name, cp.icon, cp.checkpoint_type, cp.is_active, cp.sort_order,
+      coalesce(sum(cl.qty), 0)::int AS claimed_count
+    FROM event_checkpoints cp
+    LEFT JOIN checkpoint_claims cl ON cl.event_id=cp.event_id AND cl.checkpoint_key=cp.checkpoint_key
+    WHERE cp.event_id=$1::uuid
+    GROUP BY cp.id, cp.event_id, cp.checkpoint_key, cp.name, cp.icon, cp.checkpoint_type, cp.is_active, cp.sort_order
+    ORDER BY cp.sort_order, cp.created_at
+  `, [evId]);
+
+  const gateStat = q(`
+    SELECT coalesce(sum(qty), 0)::int AS booked,
+           coalesce(sum(checked_in), 0)::int AS checked_in
+    FROM orders WHERE event_id=$1::uuid AND status='confirmed'
+  `, [evId])[0];
+
+  return { checkpoints: r, gateStat: gateStat };
+}
+
+function checkpointSave(u, p) {
+  const evId = String(p.eventId || '').trim();
+  if (!evId) throw new Error('EVENT_NOT_FOUND');
+  const name = String(p.name || '').trim();
+  if (!name) throw new Error('NAME_REQUIRED');
+  const icon = String(p.icon || '📍').trim();
+  const type = String(p.type || 'facility').trim();
+  const key = String(p.key || ('cp_' + Date.now().toString(36))).trim().toLowerCase().replace(/[^a-z0-9_]/g, '_');
+  const isActive = p.isActive !== false;
+  const sortOrder = parseInt(p.sortOrder, 10) || 10;
+
+  if (p.id) {
+    q(`UPDATE event_checkpoints SET name=$1, icon=$2, checkpoint_type=$3, is_active=$4, sort_order=$5 WHERE id=$6::uuid AND event_id=$7::uuid`,
+      [name, icon, type, isActive, sortOrder, p.id, evId]);
+  } else {
+    q(`INSERT INTO event_checkpoints(event_id, checkpoint_key, name, icon, checkpoint_type, is_active, sort_order)
+      VALUES($1::uuid, $2, $3, $4, $5, $6, $7) ON CONFLICT (event_id, checkpoint_key) DO UPDATE SET name=EXCLUDED.name, icon=EXCLUDED.icon, is_active=EXCLUDED.is_active`,
+      [evId, key, name, icon, type, isActive, sortOrder]);
+  }
+  return true;
+}
+
+function checkpointDelete(u, p) {
+  const id = p.id;
+  if (!id) throw new Error('ID_REQUIRED');
+  const cp = q(`SELECT checkpoint_key FROM event_checkpoints WHERE id=$1::uuid`, [id])[0];
+  if (cp && cp.checkpoint_key === 'main_gate') throw new Error('CANNOT_DELETE_MAIN_GATE');
+  q(`DELETE FROM event_checkpoints WHERE id=$1::uuid`, [id]);
+  return true;
+}
+
+function checkpointExportCsv(u, p) {
+  const evId = String(p.eventId || '').trim();
+  if (!evId) throw new Error('EVENT_NOT_FOUND');
+  return q(`
+    SELECT to_char(cl.claimed_at AT TIME ZONE 'Asia/Jakarta', 'YYYY-MM-DD HH24:MI:SS') AS claim_time,
+           e.name AS event_name,
+           coalesce(cp.name, cl.checkpoint_key) AS checkpoint_name,
+           coalesce(cp.icon, '📍') AS checkpoint_icon,
+           cl.ticket_code,
+           CASE WHEN o.kind IN ('invitation','walk_in') THEN o.guest_name ELSE u.name END AS attendee_name,
+           CASE WHEN o.kind IN ('invitation','walk_in') THEN o.guest_org ELSE u.church END AS attendee_org,
+           cl.qty AS claimed_qty,
+           coalesce(cl.claimed_by_name, '') AS staff_name
+    FROM checkpoint_claims cl
+    JOIN events e ON e.id=cl.event_id
+    JOIN orders o ON o.id=cl.order_id
+    LEFT JOIN users u ON u.id=o.user_id
+    LEFT JOIN event_checkpoints cp ON cp.event_id=cl.event_id AND cp.checkpoint_key=cl.checkpoint_key
+    WHERE cl.event_id=$1::uuid
+    ORDER BY cl.claimed_at DESC
+  `, [evId]);
 }
