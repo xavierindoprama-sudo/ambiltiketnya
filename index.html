@@ -510,6 +510,7 @@ ${ok?`<div class="pacts noprint">${(o.guest_phone||inv||(S.user&&S.user.whatsapp
    }).join('');
   }).catch(()=>{});
  }
+}
 /* ===== ADMIN ===== */
 function renderAdmin(){const nav=[['dash',1],['events',2],['orders',2],['scan',1],['analytics',2],['doorprize',2],['feedback',2],['inv',2],['legal',2],['users',3]].filter(n=>rk()>=n[1]);if(!nav.find(n=>n[0]===S.view))S.view=nav[0][0];
  const sv=ls.g('sbcol'),col=sv==null?innerWidth<1100:sv==='1';
