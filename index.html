@@ -350,7 +350,7 @@ async function boot(){applyTheme();const tkc=ticketParam();if(tkc)return ticketV
  if(stage==='survey'){return surveyStageView(qp.get('ev')||'');}
  const surveyEv=qp.get('survey')||qp.get('fb');
  if(surveyEv){return publicSurveyView(surveyEv);}
- if(stage==='doorprize'){applyTheme();const evId=qp.get('ev')||'';if(evId)S_dp.evId=evId;S.token=ls.g('tk')||'';if(!S.token)return gate();try{S.user=await api('me',{});S.mode='admin';S.view='doorprize';$('#app').innerHTML='<div style="min-height:100vh;background:#080b18;padding:20px" id="ac"></div>';doorprizeView($('#ac'));return}catch(x){return gate()}}
+ if(stage==='doorprize'){applyTheme();const evId=qp.get('ev')||'';if(evId)S_dp.evId=evId;S.token=ls.g('tk')||'';if(!S.token)return gate();try{S.user=await api('me',{});S.mode='admin';S.view='doorprize';if(qp.get('mode')==='screen'){return doorprizeStageScreen(evId);}$('#app').innerHTML='<div style="min-height:100vh;background:#080b18;padding:20px" id="ac"></div>';doorprizeView($('#ac'));return}catch(x){return gate()}}
  if(gateEv&&gateKey){bz(1);try{const r=await pub('gateLogin',{eventId:gateEv,key:gateKey},t('loading'));bz(-1);S.token=r.session;ls.s('tk',r.session);ls.s('mode','admin');S.user=r.user||{id:'gate_volunteer',name:'Petugas Gerbang',role:'gate_staff',email:'gate_volunteer@ambiltiketnya.online'};S.mode='admin';S.view='scan';try{history.replaceState({},'',location.pathname)}catch(x){}cacheOfflineEvent(gateEv,true);call('init',S.token).then(res=>{if(res&&res.cfg)B=res.cfg}).catch(()=>{});renderAdmin();setTimeout(()=>{openScannerModal()},450);return}catch(e){bz(-1);const msg=(e&&e.message&&D['e_'+e.message])?t('e_'+e.message):errMsg(e);toast('Tautan Gate Pass tidak valid atau kedaluwarsa: '+msg,1)}}
  S.token=ls.g('tk')||'';bz(1);let r;const t0=performance.now();
  try{r=await call('init',S.token)}catch(e){bz(-1);return gate(e&&e.message==='NO_API'?'APP_API_URL belum diisi di config.js':t('e_E_GENERIC')+' (init)')}
@@ -650,6 +650,261 @@ function triggerConfetti(canvasId) {
   requestAnimationFrame(anim);
 }
 
+async function openStageWindow(url, name) {
+  let left = window.screen ? window.screen.availWidth : 0;
+  let top = 0, width = 1280, height = 720;
+  try {
+    if ('getScreenDetails' in window) {
+      const screenDetails = await window.getScreenDetails();
+      const ext = screenDetails.screens.find(s => s !== screenDetails.currentScreen);
+      if (ext) {
+        left = ext.availLeft;
+        top = ext.availTop;
+        width = ext.availWidth;
+        height = ext.availHeight;
+      }
+    }
+  } catch(e) {}
+  const w = window.open(url, name || 'atk_stage_win', `left=${left},top=${top},width=${width},height=${height},menubar=no,toolbar=no,location=no,status=no,resizable=yes`);
+  if (w) {
+    try { w.focus(); } catch(e) {}
+  }
+  return w;
+}
+
+let _dpBc = null;
+function getDpBc() {
+  if (!_dpBc && typeof BroadcastChannel !== 'undefined') {
+    try { _dpBc = new BroadcastChannel('atk_dp_channel'); } catch(e) {}
+  }
+  return _dpBc;
+}
+function dpBroadcast(data) {
+  const bc = getDpBc();
+  if (bc) {
+    try { bc.postMessage(data); } catch(e) {}
+  }
+  try {
+    localStorage.setItem('atk_dp_sync', JSON.stringify({ t: Date.now(), data }));
+  } catch(e) {}
+}
+
+function updateDpOperatorStatus(isConnected) {
+  const badge = $('#dp_ext_status_badge');
+  if (!badge) return;
+  if (isConnected) {
+    badge.className = 'pill ok';
+    badge.style.background = 'rgba(16,185,129,.2)';
+    badge.style.color = '#34d399';
+    badge.style.border = '1px solid #10b981';
+    badge.innerHTML = '🟢 Layar Panggung Terhubung (Extended Screen)';
+  } else {
+    badge.className = 'pill';
+    badge.style.background = 'rgba(255,255,255,.1)';
+    badge.style.color = 'var(--mu)';
+    badge.style.border = 'none';
+    badge.innerHTML = '⚪ Mode 1 Layar (Layar Utama)';
+  }
+}
+
+let _dpOpListening = false;
+function setupDpOperatorListener() {
+  if (_dpOpListening) return;
+  _dpOpListening = true;
+  const bc = getDpBc();
+  const handleOpMsg = (data) => {
+    if (!data) return;
+    if (data.action === 'stage_ready' || data.action === 'pong') {
+      updateDpOperatorStatus(true);
+      dpBroadcast({
+        action: 'sync',
+        prize: S_dp.prize,
+        candCount: S_dp.candidates ? S_dp.candidates.length : 0,
+        winCount: S_dp.winners ? S_dp.winners.length : 0
+      });
+    }
+  };
+  if (bc) {
+    bc.onmessage = (e) => handleOpMsg(e.data);
+  }
+  window.addEventListener('storage', (e) => {
+    if (e.key === 'atk_dp_sync' && e.newValue) {
+      try { const obj = JSON.parse(e.newValue); if (obj && obj.data) handleOpMsg(obj.data); } catch(err) {}
+    }
+  });
+}
+
+function runStageSpinAnimation(data) {
+  const winner = data.winner;
+  const cands = data.candidates || [];
+  if (!winner || !cands.length) return;
+
+  const tag = $('#st_cand_tag'), nameEl = $('#st_cand_name'), orgEl = $('#st_cand_org'), codeEl = $('#st_cand_code');
+  if (tag) tag.textContent = 'SEDANG DIACAK...';
+
+  let count = 0;
+  const totalSteps = 38;
+  let delay = 50;
+
+  function rollStep() {
+    const rand = cands[Math.floor(Math.random() * cands.length)];
+    if (nameEl) {
+      nameEl.textContent = rand.name || 'Peserta';
+      nameEl.style.color = '#ffffff';
+    }
+    if (orgEl) orgEl.textContent = rand.org || rand.church || 'Hadir';
+    if (codeEl) codeEl.textContent = rand.code || rand.ticket_code || 'TKT-????';
+    playSfx('tick');
+
+    count++;
+    if (count < totalSteps) {
+      if (count > totalSteps - 12) delay += 28;
+      setTimeout(rollStep, delay);
+    } else {
+      if (tag) tag.textContent = '🎉 SELAMAT KEPADA PEMENANG! 🎉';
+      if (nameEl) {
+        nameEl.textContent = winner.name || 'Peserta';
+        nameEl.style.color = '#f3dc8a';
+      }
+      if (orgEl) orgEl.textContent = winner.church || winner.guest_org || winner.org || '-';
+      if (codeEl) codeEl.textContent = winner.ticket_code || winner.code;
+
+      playSfx('win');
+      triggerConfetti('st_ext_confetti');
+    }
+  }
+  rollStep();
+}
+
+async function doorprizeStageScreen(evId) {
+  applyTheme();
+  let evName = 'Acara';
+  try {
+    if (!S.aev) S.aev = await api('adminEvents');
+    const ev = (S.aev || []).find(x => x.id === evId);
+    if (ev) evName = ev.name;
+  } catch(e) {}
+
+  let curPrize = S_dp.prize || 'Doorprize Utama';
+  let candidates = S_dp.candidates || [];
+  let winCount = S_dp.winners ? S_dp.winners.length : 0;
+
+  $('#app').innerHTML = `
+    <div id="dp_ext_stage" style="min-height:100vh;background:radial-gradient(ellipse at top,#161d38 0%,#080b18 70%);color:#fff;display:flex;flex-direction:column;justify-content:space-between;padding:32px 28px;box-sizing:border-box;position:relative;overflow:hidden;user-select:none">
+      <canvas id="st_ext_confetti" style="position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:20"></canvas>
+      
+      <!-- TOP STAGE HEADER -->
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;z-index:10;border-bottom:1px solid rgba(255,255,255,.1);padding-bottom:16px">
+        <div style="display:flex;align-items:center;gap:14px">
+          <span style="font-size:38px">🎁</span>
+          <div>
+            <div style="font-size:12px;letter-spacing:4px;font-weight:800;color:#d4af37;text-transform:uppercase">LIVE STAGE DRAW · <span id="st_ev_name_lbl">${esc(evName)}</span></div>
+            <div id="st_dp_prize_title" style="font-size:clamp(22px, 3.5vw, 36px);font-weight:900;color:#f3dc8a;text-shadow:0 0 20px rgba(212,175,55,.4);margin-top:2px">
+              ${esc(curPrize)}
+            </div>
+          </div>
+        </div>
+        <div style="display:flex;align-items:center;gap:10px">
+          <span id="st_cand_pill" style="background:rgba(16,185,129,.18);border:1px solid #10b981;color:#34d399;font-weight:700;font-size:14px;padding:6px 16px;border-radius:99px">
+            👥 Pool: <b id="st_cand_cnt">${candidates.length}</b> Peserta
+          </span>
+          <span id="st_win_pill" style="background:rgba(212,175,55,.18);border:1px solid #d4af37;color:#f3dc8a;font-weight:700;font-size:14px;padding:6px 16px;border-radius:99px">
+            🏆 Pemenang: <b id="st_win_cnt">${winCount}</b>
+          </span>
+          <button class="btn sm" data-act="stToggleFs" style="background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.2);color:#fff">⛶ Layar Penuh</button>
+          <button class="btn sm" data-act="stClose" style="background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);color:#cbd5e1">✕</button>
+        </div>
+      </div>
+
+      <!-- CENTER GRAND ROLLER CARD -->
+      <div style="flex:1;display:flex;align-items:center;justify-content:center;margin:30px 0;z-index:10">
+        <div id="st_roller_card" style="width:100%;max-width:1000px;background:radial-gradient(circle at center,rgba(22,29,56,.9) 0%,rgba(8,11,24,.95) 100%);border:3px solid rgba(212,175,55,.6);border-radius:32px;padding:48px 24px;text-align:center;box-shadow:0 0 70px rgba(212,175,55,.25),inset 0 0 40px rgba(0,0,0,.6);position:relative">
+          <div id="st_cand_tag" style="font-size:15px;color:#d4af37;letter-spacing:6px;font-weight:900;text-transform:uppercase;margin-bottom:12px">
+            LUCKY DRAW
+          </div>
+          <div id="st_cand_name" style="font-size:clamp(36px, 6.5vw, 76px);font-weight:900;letter-spacing:1px;color:#ffffff;line-height:1.2;margin-bottom:10px;text-shadow:0 0 30px rgba(255,255,255,.3)">
+            ${candidates.length ? 'Siap Mengundi' : 'Menunggu Peserta'}
+          </div>
+          <div id="st_cand_org" style="font-size:clamp(18px, 2.5vw, 30px);color:#cbd5e1;font-weight:600;min-height:36px;margin-bottom:14px">
+            ${candidates.length ? 'Operator akan memulai undian dari layar utama...' : 'Belum ada peserta yang check-in'}
+          </div>
+          <div id="st_cand_code" style="display:inline-block;padding:8px 24px;background:rgba(212,175,55,.2);border:2px solid #d4af37;border-radius:12px;font-family:monospace;font-size:clamp(20px, 3vw, 32px);font-weight:900;color:#f3dc8a;letter-spacing:2px">
+            ${candidates.length ? 'TKT-????-??????' : '-'}
+          </div>
+        </div>
+      </div>
+
+      <!-- BOTTOM BAR (CLEAN, NO ADMIN BUTTONS) -->
+      <div style="display:flex;justify-content:space-between;align-items:center;z-index:10;color:rgba(255,255,255,.5);font-size:12px">
+        <div style="display:flex;align-items:center;gap:8px">
+          <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#10b981;box-shadow:0 0 8px #10b981"></span>
+          <span style="color:#34d399;font-weight:700">Layar Presentasi Panggung Terhubung</span>
+        </div>
+        <div>
+          <span>Tekan <b>F11</b> untuk Layar Penuh</span>
+        </div>
+      </div>
+    </div>
+  `;
+
+  if (evId) {
+    try {
+      const res = await api('doorprizePool', { eventId: evId });
+      if (res) {
+        const wonOrders = new Set((res.winners || []).map(w => w.order_id).filter(Boolean));
+        const wonCodes = new Set((res.winners || []).map(w => w.ticket_code));
+        candidates = ((res.candidates) || []).filter(c => !wonOrders.has(c.order_id) && !wonCodes.has(c.ticket_code));
+        const cntEl = $('#st_cand_cnt'); if (cntEl) cntEl.textContent = candidates.length;
+        const winEl = $('#st_win_cnt'); if (winEl) winEl.textContent = (res.winners || []).length;
+        if (candidates.length) {
+          const nmEl = $('#st_cand_name'); if (nmEl && nmEl.textContent === 'Menunggu Peserta') nmEl.textContent = 'Siap Mengundi';
+          const orgEl = $('#st_cand_org'); if (orgEl && orgEl.textContent === 'Belum ada peserta yang check-in') orgEl.textContent = 'Operator akan memulai undian dari layar utama...';
+        }
+      }
+    } catch(e) {}
+  }
+
+  const bc = getDpBc();
+  const onMsg = (data) => {
+    if (!data) return;
+    if (data.action === 'prize' && data.prize !== undefined) {
+      const el = $('#st_dp_prize_title');
+      if (el) el.textContent = data.prize || 'Doorprize Utama';
+    } else if (data.action === 'spin') {
+      runStageSpinAnimation(data);
+    } else if (data.action === 'redraw') {
+      const tag = $('#st_cand_tag'), nm = $('#st_cand_name'), org = $('#st_cand_org'), cd = $('#st_cand_code');
+      if (tag) tag.textContent = 'LUCKY DRAW';
+      if (nm) { nm.textContent = 'Siap Mengundi'; nm.style.color = '#ffffff'; }
+      if (org) org.textContent = 'Operator akan memulai undian dari layar utama...';
+      if (cd) cd.textContent = 'TKT-????-??????';
+    } else if (data.action === 'confirm') {
+      const tag = $('#st_cand_tag');
+      if (tag) tag.textContent = '🏆 PEMENANG TERKONFIRMASI! 🏆';
+      if (data.candCount !== undefined) { const el = $('#st_cand_cnt'); if (el) el.textContent = data.candCount; }
+      if (data.winCount !== undefined) { const el = $('#st_win_cnt'); if (el) el.textContent = data.winCount; }
+    } else if (data.action === 'sync') {
+      if (data.prize) { const el = $('#st_dp_prize_title'); if (el) el.textContent = data.prize; }
+      if (data.candCount !== undefined) { const el = $('#st_cand_cnt'); if (el) el.textContent = data.candCount; }
+      if (data.winCount !== undefined) { const el = $('#st_win_cnt'); if (el) el.textContent = data.winCount; }
+    } else if (data.action === 'ping') {
+      dpBroadcast({ action: 'pong' });
+    }
+  };
+
+  if (bc) {
+    bc.onmessage = (e) => onMsg(e.data);
+  }
+  window.addEventListener('storage', (e) => {
+    if (e.key === 'atk_dp_sync' && e.newValue) {
+      try { const obj = JSON.parse(e.newValue); if (obj && obj.data) onMsg(obj.data); } catch(err) {}
+    }
+  });
+
+  dpBroadcast({ action: 'stage_ready' });
+  dpBroadcast({ action: 'pong' });
+}
+
 /* ===== LIVE DOORPRIZE INTERACTIVE STAGE ===== */
 let S_dp = {
   evId: '',
@@ -691,6 +946,8 @@ async function doorprizeView(c) {
 function paintDoorprize(c) {
   if (!c) c = $('#ac');
   if (!c) return;
+  setupDpOperatorListener();
+  dpBroadcast({ action: 'ping' });
   const evOpts = (S.aev || []).map(e => `<option value="${e.id}" ${e.id === S_dp.evId ? 'selected' : ''}>${esc(e.name)}</option>`).join('');
   const candCount = S_dp.candidates.length;
   const winCount = S_dp.winners.length;
@@ -699,23 +956,29 @@ function paintDoorprize(c) {
     <div class="bar2" style="display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px;margin-bottom:14px">
       <div style="display:flex;align-items:center;gap:8px;flex:1;min-width:260px">
         <label style="margin:0;font-weight:700">Acara:</label>
-        <select data-ch="dpEvSel" style="flex:1;max-width:320px">${evOpts}</select>
+        <select data-ch="dpEvSel" style="flex:1;max-width:300px">${evOpts}</select>
+        <button class="btn sm" data-act="dpRefresh" title="Muat ulang pool peserta">🔄 Refresh</button>
       </div>
-      <div style="display:flex;align-items:center;gap:8px">
-        <button class="btn sm" data-act="dpToggleFs">⛶ ${t('dp_fs_btn')}</button>
-        <button class="btn sm" data-act="dpRefresh">🔄 Refresh Pool</button>
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+        <button class="btn sm pri" data-act="dpStageModal" style="display:inline-flex;align-items:center;gap:6px;font-weight:700;box-shadow:0 4px 14px rgba(212,175,55,.3);background:linear-gradient(135deg,#d4af37,#b8921f);color:#080b18">
+          <span>📽️</span> Tampilkan di Layar Panggung / Videotron
+        </button>
+        <button class="btn sm" data-act="dpToggleFs" title="Layar Penuh di monitor ini">⛶ Layar Penuh</button>
       </div>
     </div>
 
-    <!-- STAGE CONTAINER -->
+    <!-- STAGE CONTAINER (OPERATOR CONTROL CENTER) -->
     <div id="dp_stage_box" style="position:relative;background:radial-gradient(ellipse at top,#161d38 0%,#080b18 70%);border:1.5px solid rgba(212,175,55,.3);border-radius:22px;padding:32px 20px;text-align:center;color:#fff;overflow:hidden;box-shadow:0 14px 40px rgba(0,0,0,.6)">
       <canvas id="dp_confetti" style="position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:10"></canvas>
       
-      <div style="display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px;margin-bottom:24px;border-bottom:1px solid rgba(255,255,255,.1);padding-bottom:14px">
+      <div style="display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px;margin-bottom:20px;border-bottom:1px solid rgba(255,255,255,.1);padding-bottom:14px">
         <div style="display:flex;align-items:center;gap:12px;text-align:left">
           <div style="font-size:32px">🎁</div>
           <div>
-            <div style="font-size:11px;color:#d4af37;letter-spacing:3px;font-weight:800;text-transform:uppercase">LIVE STAGE DRAW</div>
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:2px">
+              <span style="font-size:11px;color:#d4af37;letter-spacing:3px;font-weight:800;text-transform:uppercase">OPERATOR CONTROL</span>
+              <span id="dp_ext_status_badge" class="pill" style="font-size:10px;font-weight:700;padding:2px 8px;background:rgba(255,255,255,.1);color:var(--mu)">⚪ Mode 1 Layar</span>
+            </div>
             <input id="dp_prize_inp" value="${esc(S_dp.prize)}" placeholder="Nama Hadiah..." style="background:rgba(255,255,255,.08);border:1px solid rgba(212,175,55,.4);color:#fff;font-size:18px;font-weight:800;padding:6px 12px;border-radius:10px;max-width:280px">
           </div>
         </div>
@@ -2237,12 +2500,59 @@ const NL=String.fromCharCode(10),find=(a,id)=>a.find(x=>x.id===id),A={
  },
   fbOpenStage(){
    if(!S_fb.evId)return toast('Pilih acara terlebih dahulu',1);
-   window.open('?stage=survey&ev='+encodeURIComponent(S_fb.evId),'_blank');
+   const ev = (S.aev && S.aev.find(x => x.id === S_fb.evId));
+   const evName = ev ? ev.name : 'Acara';
+   $('#modal').innerHTML = `
+    <div class="mbg" data-act="cm">
+     <div class="modal" onclick="event.stopPropagation()" style="max-width:440px">
+      <button class="btn x" data-act="cm">&#10005;</button>
+      <div style="text-align:center;margin-bottom:18px">
+       <div style="font-size:38px;margin-bottom:6px">📽️</div>
+       <h2 style="margin:0;font-size:20px">Tampilan Layar Videotron QR</h2>
+       <p class="muted" style="margin:6px 0 0;font-size:13px">${esc(evName)}</p>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:10px">
+       <button class="btn lg pri" data-act="fbStageExt" style="display:flex;align-items:flex-start;gap:12px;padding:14px;text-align:left;border-radius:14px">
+        <span style="font-size:26px;flex:none">📽️</span>
+        <div style="flex:1">
+         <b style="font-size:14px;display:block">Extended Screen (Multi-Monitor)</b>
+         <small style="opacity:.9;font-weight:normal;font-size:12px;line-height:1.4;display:block">Buka jendela bersih untuk ditarik ke videotron / proyektor panggung. Anda tetap bisa memantau ulasan masuk di layar laptop ini.</small>
+        </div>
+       </button>
+       <button class="btn lg" data-act="fbStageMain" style="display:flex;align-items:flex-start;gap:12px;padding:14px;text-align:left;border-radius:14px">
+        <span style="font-size:26px;flex:none">🖥️</span>
+        <div style="flex:1">
+         <b style="font-size:14px;display:block">Layar Utama (1 Monitor)</b>
+         <small class="muted" style="font-size:12px;line-height:1.4;display:block">Tampilkan langsung layar penuh di tab / monitor saat ini. Cocok jika Anda hanya menggunakan 1 monitor laptop.</small>
+        </div>
+       </button>
+      </div>
+     </div>
+    </div>
+   `;
+  },
+  async fbStageExt(){
+   cm();
+   if(!S_fb.evId)return;
+   await openStageWindow('?stage=survey&ev='+encodeURIComponent(S_fb.evId), 'atk_survey_stage');
+   toast('Layar Videotron QR dibuka! Tarik ke layar proyektor lalu tekan F11', 0);
+  },
+  fbStageMain(){
+   cm();
+   if(!S_fb.evId)return;
+   surveyStageView(S_fb.evId);
   },
   stToggleFs(){
-   const el=$('#survey_stage_wrap')||document.documentElement;
+   const el=$('#survey_stage_wrap')||$('#dp_ext_stage')||$('#dp_stage_box')||document.documentElement;
    if(!document.fullscreenElement){if(el.requestFullscreen)el.requestFullscreen().catch(()=>{});}
    else{if(document.exitFullscreen)document.exitFullscreen().catch(()=>{});}
+  },
+  stClose(){
+   if (window.opener) {
+    window.close();
+   } else {
+    location.href = '/?view=feedback';
+   }
   },
   async pubSurveySubmit(el){
    const evId=el.dataset.ev;
@@ -2349,102 +2659,174 @@ const NL=String.fromCharCode(10),find=(a,id)=>a.find(x=>x.id===id),A={
    toast('Pool peserta diperbarui!', 0);
   } catch(e) { fail(e); }
  },
- dpSpin(){
-  if (S_dp.isSpinning) return;
-  if (!S_dp.candidates || !S_dp.candidates.length) return toast(t('dp_empty_pool'), 1);
-  const prizeInp = $('#dp_prize_inp');
-  if (prizeInp && prizeInp.value.trim()) S_dp.prize = prizeInp.value.trim();
-  
-  S_dp.isSpinning = true;
-  const btn = $('#dp_btn_spin');
-  if (btn) { btn.disabled = true; btn.textContent = '🎲 ' + t('dp_spinning'); }
-  const tag = $('#dp_cand_tag'), nameEl = $('#dp_cand_name'), orgEl = $('#dp_cand_org'), codeEl = $('#dp_cand_code');
-  if (tag) tag.textContent = 'SEDANG DIACAK...';
-
-  let count = 0;
-  const totalSteps = 38;
-  let delay = 50;
-
-  function rollStep() {
-   const randCand = S_dp.candidates[Math.floor(Math.random() * S_dp.candidates.length)];
-   if (nameEl) {
-    nameEl.textContent = randCand.name || 'Peserta';
-    nameEl.style.color = '#ffffff';
-   }
-   if (orgEl) orgEl.textContent = randCand.church || randCand.guest_org || 'Hadir';
-   if (codeEl) codeEl.textContent = randCand.ticket_code || 'TKT-????';
-   playSfx('tick');
-
-   count++;
-   if (count < totalSteps) {
-    if (count > totalSteps - 12) delay += 28;
-    setTimeout(rollStep, delay);
-   } else {
-    const winner = S_dp.candidates[Math.floor(Math.random() * S_dp.candidates.length)];
-    S_dp.currentWinner = winner;
-    S_dp.isSpinning = false;
-
-    if (tag) tag.textContent = '🎉 ' + t('dp_congrats') + ' 🎉';
-    if (nameEl) {
-     nameEl.textContent = winner.name || 'Peserta';
-     nameEl.style.color = '#f3dc8a';
-    }
-    if (orgEl) orgEl.textContent = winner.church || winner.guest_org || '-';
-    if (codeEl) codeEl.textContent = winner.ticket_code;
-
-    playSfx('win');
-    triggerConfetti('dp_confetti');
-
-    const actBox = $('#dp_actions');
-    if (actBox) {
-     actBox.innerHTML = `
-      <button class="btn lg" data-act="dpConfirmWin" style="font-size:16px;font-weight:800;padding:12px 28px;background:linear-gradient(135deg,#10b981,#059669);color:#fff;box-shadow:0 6px 20px rgba(16,185,129,.4)">${t('dp_confirm_btn')}</button>
-      <button class="btn lg" data-act="dpRedraw" style="font-size:16px;font-weight:700;padding:12px 24px;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.25);color:#fff">🔄 ${t('dp_redraw_btn')}</button>
-     `;
-    }
-   }
-  }
-  rollStep();
- },
- dpRedraw(){
-  if (!S_dp.currentWinner) return;
-  toast('Undian diputar ulang...', 0);
-  S_dp.currentWinner = null;
-  const actBox = $('#dp_actions');
-  if (actBox) {
-   actBox.innerHTML = `
-    <button class="btn pri lg" id="dp_btn_spin" data-act="dpSpin" ${!S_dp.candidates.length ? 'disabled' : ''} style="font-size:18px;font-weight:800;padding:14px 38px;border-radius:14px;background:linear-gradient(135deg,#d4af37,#b8921f);color:#080b18;box-shadow:0 6px 25px rgba(212,175,55,.4)">
-     ${t('dp_spin_btn')}
-    </button>
+ dpStageModal(){
+   if(!S_dp.evId)return toast('Pilih acara terlebih dahulu',1);
+   const ev = (S.aev && S.aev.find(x => x.id === S_dp.evId));
+   const evName = ev ? ev.name : 'Acara';
+   $('#modal').innerHTML = `
+    <div class="mbg" data-act="cm">
+     <div class="modal" onclick="event.stopPropagation()" style="max-width:440px">
+      <button class="btn x" data-act="cm">&#10005;</button>
+      <div style="text-align:center;margin-bottom:18px">
+       <div style="font-size:38px;margin-bottom:6px">🎁</div>
+       <h2 style="margin:0;font-size:20px">Tampilan Undian Doorprize</h2>
+       <p class="muted" style="margin:6px 0 0;font-size:13px">${esc(evName)}</p>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:10px">
+       <button class="btn lg pri" data-act="dpOpenExtStage" style="display:flex;align-items:flex-start;gap:12px;padding:14px;text-align:left;border-radius:14px">
+        <span style="font-size:26px;flex:none">📽️</span>
+        <div style="flex:1">
+         <b style="font-size:14px;display:block">Extended Screen (Multi-Monitor)</b>
+         <small style="opacity:.9;font-weight:normal;font-size:12px;line-height:1.4;display:block">Tampilan panggung bersih muncul di videotron / proyektor panggung, sementara tombol undi, nama hadiah, dan pemenang tetap dikontrol dari laptop Anda.</small>
+        </div>
+       </button>
+       <button class="btn lg" data-act="dpStageMain" style="display:flex;align-items:flex-start;gap:12px;padding:14px;text-align:left;border-radius:14px">
+        <span style="font-size:26px;flex:none">🖥️</span>
+        <div style="flex:1">
+         <b style="font-size:14px;display:block">Layar Utama (1 Monitor)</b>
+         <small class="muted" style="font-size:12px;line-height:1.4;display:block">Tampilkan langsung presentasi dan kontrol undian di layar saat ini (Layar Penuh).</small>
+        </div>
+       </button>
+      </div>
+     </div>
+    </div>
    `;
-  }
-  const nameEl = $('#dp_cand_name'), tag = $('#dp_cand_tag');
-  if (tag) tag.textContent = 'LUCKY DRAW';
-  if (nameEl) nameEl.style.color = '#ffffff';
- },
- async dpConfirmWin(){
-  if (!S_dp.currentWinner) return;
-  const cand = S_dp.currentWinner;
-  const prizeInp = $('#dp_prize_inp');
-  const prize = (prizeInp && prizeInp.value.trim()) || S_dp.prize || 'Doorprize Utama';
-  try {
-   await api('doorprizeSaveWinner', {
-    eventId: S_dp.evId,
-    prizeName: prize,
-    orderId: cand.order_id,
-    ticketCode: cand.ticket_code,
-    winnerName: cand.name,
-    winnerOrg: cand.church || cand.guest_org || ''
-   }, t('loading'));
+  },
+ async dpOpenExtStage(){
+   cm();
+   if (!S_dp.evId) return toast('Pilih acara terlebih dahulu', 1);
+   await openStageWindow('?stage=doorprize&mode=screen&ev=' + encodeURIComponent(S_dp.evId), 'atk_dp_stage');
+   toast('Layar Panggung dibuka! Tarik ke layar videotron lalu tekan F11', 0);
+   setTimeout(() => {
+     dpBroadcast({ action: 'ping' });
+     dpBroadcast({
+       action: 'sync',
+       prize: S_dp.prize,
+       candCount: S_dp.candidates ? S_dp.candidates.length : 0,
+       winCount: S_dp.winners ? S_dp.winners.length : 0
+     });
+   }, 500);
+  },
+ dpStageMain(){
+   cm();
+   const stageEl = $('#dp_stage_box') || document.documentElement;
+   if (!document.fullscreenElement && stageEl.requestFullscreen) {
+     stageEl.requestFullscreen().catch(() => {});
+   }
+  },
+ dpSpin(){
+   if (S_dp.isSpinning) return;
+   if (!S_dp.candidates || !S_dp.candidates.length) return toast(t('dp_empty_pool'), 1);
+   const prizeInp = $('#dp_prize_inp');
+   if (prizeInp && prizeInp.value.trim()) S_dp.prize = prizeInp.value.trim();
+   
+   S_dp.isSpinning = true;
+   const btn = $('#dp_btn_spin');
+   if (btn) { btn.disabled = true; btn.textContent = '🎲 ' + t('dp_spinning'); }
+   const tag = $('#dp_cand_tag'), nameEl = $('#dp_cand_name'), orgEl = $('#dp_cand_org'), codeEl = $('#dp_cand_code');
+   if (tag) tag.textContent = 'SEDANG DIACAK...';
 
-   toast('🎉 Pemenang berhasil disimpan: ' + cand.name, 0);
+   const winner = S_dp.candidates[Math.floor(Math.random() * S_dp.candidates.length)];
+   S_dp.currentWinner = winner;
+
+   // Broadcast to extended screen
+   dpBroadcast({
+     action: 'spin',
+     winner: winner,
+     prize: S_dp.prize,
+     candidates: S_dp.candidates.map(c => ({ name: c.name, org: c.church || c.guest_org || '', code: c.ticket_code }))
+   });
+
+   let count = 0;
+   const totalSteps = 38;
+   let delay = 50;
+
+   function rollStep() {
+    const randCand = S_dp.candidates[Math.floor(Math.random() * S_dp.candidates.length)];
+    if (nameEl) {
+     nameEl.textContent = randCand.name || 'Peserta';
+     nameEl.style.color = '#ffffff';
+    }
+    if (orgEl) orgEl.textContent = randCand.church || randCand.guest_org || 'Hadir';
+    if (codeEl) codeEl.textContent = randCand.ticket_code || 'TKT-????';
+    playSfx('tick');
+
+    count++;
+    if (count < totalSteps) {
+     if (count > totalSteps - 12) delay += 28;
+     setTimeout(rollStep, delay);
+    } else {
+     S_dp.isSpinning = false;
+
+     if (tag) tag.textContent = '🎉 ' + t('dp_congrats') + ' 🎉';
+     if (nameEl) {
+      nameEl.textContent = winner.name || 'Peserta';
+      nameEl.style.color = '#f3dc8a';
+     }
+     if (orgEl) orgEl.textContent = winner.church || winner.guest_org || '-';
+     if (codeEl) codeEl.textContent = winner.ticket_code;
+
+     playSfx('win');
+     triggerConfetti('dp_confetti');
+
+     const actBox = $('#dp_actions');
+     if (actBox) {
+      actBox.innerHTML = `
+       <button class="btn lg" data-act="dpConfirmWin" style="font-size:16px;font-weight:800;padding:12px 28px;background:linear-gradient(135deg,#10b981,#059669);color:#fff;box-shadow:0 6px 20px rgba(16,185,129,.4)">${t('dp_confirm_btn')}</button>
+       <button class="btn lg" data-act="dpRedraw" style="font-size:16px;font-weight:700;padding:12px 24px;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.25);color:#fff">🔄 ${t('dp_redraw_btn')}</button>
+      `;
+     }
+    }
+   }
+   rollStep();
+  },
+ dpRedraw(){
+   if (!S_dp.currentWinner) return;
+   toast('Undian diputar ulang...', 0);
    S_dp.currentWinner = null;
-   await dpLoadData();
-   paintDoorprize();
-  } catch(e) {
-   fail(e);
-  }
- },
+   dpBroadcast({ action: 'redraw' });
+   const actBox = $('#dp_actions');
+   if (actBox) {
+    actBox.innerHTML = `
+     <button class="btn pri lg" id="dp_btn_spin" data-act="dpSpin" ${!S_dp.candidates.length ? 'disabled' : ''} style="font-size:18px;font-weight:800;padding:14px 38px;border-radius:14px;background:linear-gradient(135deg,#d4af37,#b8921f);color:#080b18;box-shadow:0 6px 25px rgba(212,175,55,.4)">
+      ${t('dp_spin_btn')}
+     </button>
+    `;
+   }
+   const nameEl = $('#dp_cand_name'), tag = $('#dp_cand_tag');
+   if (tag) tag.textContent = 'LUCKY DRAW';
+   if (nameEl) nameEl.style.color = '#ffffff';
+  },
+ async dpConfirmWin(){
+   if (!S_dp.currentWinner) return;
+   const cand = S_dp.currentWinner;
+   const prizeInp = $('#dp_prize_inp');
+   const prize = (prizeInp && prizeInp.value.trim()) || S_dp.prize || 'Doorprize Utama';
+   try {
+    await api('doorprizeSaveWinner', {
+     eventId: S_dp.evId,
+     prizeName: prize,
+     orderId: cand.order_id,
+     ticketCode: cand.ticket_code,
+     winnerName: cand.name,
+     winnerOrg: cand.church || cand.guest_org || ''
+    }, t('loading'));
+
+    toast('🎉 Pemenang berhasil disimpan: ' + cand.name, 0);
+    S_dp.currentWinner = null;
+    await dpLoadData();
+    paintDoorprize();
+    dpBroadcast({
+      action: 'confirm',
+      winner: cand,
+      prize: prize,
+      candCount: S_dp.candidates.length,
+      winCount: S_dp.winners.length
+    });
+   } catch(e) {
+    fail(e);
+   }
+  },
  async dpDelWin(el){
   if (!await ask('Hapus data pemenang ini? Peserta akan dikembalikan ke dalam pool undian.')) return;
   try {
@@ -2489,7 +2871,14 @@ const NL=String.fromCharCode(10),find=(a,id)=>a.find(x=>x.id===id),A={
 window.addEventListener('online',()=>paintOfflineStatus());
 window.addEventListener('offline',()=>paintOfflineStatus());
 document.addEventListener('click',e=>{const el=e.target.closest('[data-act]');if(el&&A[el.dataset.act])A[el.dataset.act](el,e)});
-document.addEventListener('input',e=>{if(e.target.id==='oq'){S.ordPage=1;paintOrders()}else if(e.target.id==='uq'){S.usrPage=1;paintUsers()}});
+document.addEventListener('input',e=>{
+  if(e.target.id==='oq'){S.ordPage=1;paintOrders()}
+  else if(e.target.id==='uq'){S.usrPage=1;paintUsers()}
+  else if(e.target.id==='dp_prize_inp'){
+    S_dp.prize=e.target.value.trim();
+    dpBroadcast({action:'prize',prize:e.target.value});
+  }
+});
 document.addEventListener('keydown',e=>{if(e.key==='Enter'&&e.target&&e.target.id==='cipw'){const b=document.querySelector('[data-act=cisubmit]');b&&b.click()}});
 document.addEventListener('change',async e=>{const el=e.target,k=el.dataset.ch;if(!k)return;
  if(k==='ordsz'){ls.s('ordsz',el.value);S.ordPage=1;paintOrders()}else if(k==='usrsz'){ls.s('usrsz',el.value);S.usrPage=1;paintUsers()}else if(k==='sel'){S.sel=el.value;paintDash()}else if(k==='tgl'){try{await api('toggleEvent',{id:el.dataset.id,active:el.checked})}catch(x){el.checked=!el.checked;fail(x)}}
