@@ -337,6 +337,7 @@ async function ensureFeatureTables(env) {
     )`,
     `CREATE UNIQUE INDEX IF NOT EXISTS event_checkpoints_ev_key ON event_checkpoints (event_id, checkpoint_key)`,
     `CREATE INDEX IF NOT EXISTS event_checkpoints_ev_idx ON event_checkpoints (event_id, sort_order)`,
+    `ALTER TABLE event_checkpoints ADD COLUMN IF NOT EXISTS description text DEFAULT ''`,
     `CREATE TABLE IF NOT EXISTS checkpoint_claims (
       id              uuid PRIMARY KEY DEFAULT gen_random_uuid(),
       event_id        uuid NOT NULL REFERENCES events(id) ON DELETE CASCADE,
@@ -1109,13 +1110,15 @@ export default {
           await ensureFeatureTables(env);
           await ensureDefaultCheckpoints(env, evId);
 
+          const includeAll = params.all === true || params.all === 'true' || params.all === 1;
           const r = await neonQuery(env, `
             SELECT cp.id, cp.event_id, cp.checkpoint_key, cp.name, cp.icon, cp.checkpoint_type, cp.is_active, cp.sort_order,
+              coalesce(cp.description, '') AS description,
               coalesce(sum(cl.qty), 0)::int AS claimed_count
             FROM event_checkpoints cp
             LEFT JOIN checkpoint_claims cl ON cl.event_id=cp.event_id AND cl.checkpoint_key=cp.checkpoint_key
-            WHERE cp.event_id=$1::uuid
-            GROUP BY cp.id, cp.event_id, cp.checkpoint_key, cp.name, cp.icon, cp.checkpoint_type, cp.is_active, cp.sort_order
+            WHERE cp.event_id=$1::uuid ${includeAll ? '' : 'AND cp.is_active=true'}
+            GROUP BY cp.id, cp.event_id, cp.checkpoint_key, cp.name, cp.icon, cp.checkpoint_type, cp.is_active, cp.sort_order, cp.description
             ORDER BY cp.sort_order, cp.created_at
           `, [evId]);
 
@@ -1123,9 +1126,17 @@ export default {
             SELECT coalesce(sum(qty), 0)::int AS booked,
                    coalesce(sum(checked_in), 0)::int AS checked_in
             FROM orders WHERE event_id=$1::uuid AND status='confirmed'
-          `, [evId]))[0];
+          `, [evId]))[0] || { booked: 0, checked_in: 0 };
 
-          return json({ ok: true, data: { checkpoints: r, gateStat } });
+          return json({
+            ok: true,
+            data: {
+              checkpoints: r,
+              gate_checked_in: parseInt(gateStat.checked_in, 10) || 0,
+              total_registered: parseInt(gateStat.booked, 10) || 0,
+              gateStat: gateStat
+            }
+          });
         }
 
         if (action === 'checkpointSave') {
@@ -1136,18 +1147,20 @@ export default {
           const name = String(params.name || '').trim();
           if (!name) throw new Error('NAME_REQUIRED');
           const icon = String(params.icon || '📍').trim();
-          const type = String(params.type || 'facility').trim();
-          const key = String(params.key || ('cp_' + Date.now().toString(36))).trim().toLowerCase().replace(/[^a-z0-9_]/g, '_');
-          const isActive = params.isActive !== false;
-          const sortOrder = parseInt(params.sortOrder, 10) || 10;
+          const type = String(params.checkpointType || params.type || 'facility').trim();
+          const desc = String(params.description || '').trim();
+          const isActive = params.isActive !== false && params.is_active !== false;
+          const sortOrder = parseInt(params.sortOrder != null ? params.sortOrder : (params.sort_order != null ? params.sort_order : 10), 10) || 10;
+          const key = String(params.checkpointKey || params.key || ('cp_' + Date.now().toString(36))).trim().toLowerCase().replace(/[^a-z0-9_]/g, '_');
 
           if (params.id) {
-            await neonQuery(env, `UPDATE event_checkpoints SET name=$1, icon=$2, checkpoint_type=$3, is_active=$4, sort_order=$5 WHERE id=$6::uuid AND event_id=$7::uuid`,
-              [name, icon, type, isActive, sortOrder, params.id, evId]);
+            await neonQuery(env, `UPDATE event_checkpoints SET name=$1, icon=$2, checkpoint_type=$3, is_active=$4, sort_order=$5, description=$6 WHERE id=$7::uuid AND event_id=$8::uuid`,
+              [name, icon, type, isActive, sortOrder, desc, params.id, evId]);
           } else {
-            await neonQuery(env, `INSERT INTO event_checkpoints(event_id, checkpoint_key, name, icon, checkpoint_type, is_active, sort_order)
-              VALUES($1::uuid, $2, $3, $4, $5, $6, $7) ON CONFLICT (event_id, checkpoint_key) DO UPDATE SET name=EXCLUDED.name, icon=EXCLUDED.icon, is_active=EXCLUDED.is_active`,
-              [evId, key, name, icon, type, isActive, sortOrder]);
+            await neonQuery(env, `INSERT INTO event_checkpoints(event_id, checkpoint_key, name, icon, checkpoint_type, is_active, sort_order, description)
+              VALUES($1::uuid, $2, $3, $4, $5, $6, $7, $8)
+              ON CONFLICT (event_id, checkpoint_key) DO UPDATE SET name=EXCLUDED.name, icon=EXCLUDED.icon, checkpoint_type=EXCLUDED.checkpoint_type, is_active=EXCLUDED.is_active, sort_order=EXCLUDED.sort_order, description=EXCLUDED.description`,
+              [evId, key, name, icon, type, isActive, sortOrder, desc]);
           }
           return json({ ok: true, data: true });
         }
@@ -1155,10 +1168,31 @@ export default {
         if (action === 'checkpointDelete') {
           needRole(2);
           const id = params.id;
-          if (!id) throw new Error('ID_REQUIRED');
-          const cp = (await neonQuery(env, `SELECT checkpoint_key FROM event_checkpoints WHERE id=$1::uuid`, [id]))[0];
-          if (cp && cp.checkpoint_key === 'main_gate') throw new Error('CANNOT_DELETE_MAIN_GATE');
-          await neonQuery(env, `DELETE FROM event_checkpoints WHERE id=$1::uuid`, [id]);
+          const key = params.checkpointKey || params.key;
+          const evId = params.eventId;
+          if (!id && !key) throw new Error('ID_REQUIRED');
+          if (id) {
+            const cp = (await neonQuery(env, `SELECT checkpoint_key FROM event_checkpoints WHERE id=$1::uuid`, [id]))[0];
+            if (cp && cp.checkpoint_key === 'main_gate') throw new Error('CANNOT_DELETE_MAIN_GATE');
+            await neonQuery(env, `DELETE FROM event_checkpoints WHERE id=$1::uuid`, [id]);
+          } else if (key && evId) {
+            if (key === 'main_gate') throw new Error('CANNOT_DELETE_MAIN_GATE');
+            await neonQuery(env, `DELETE FROM event_checkpoints WHERE event_id=$1::uuid AND checkpoint_key=$2`, [evId, key]);
+          }
+          return json({ ok: true, data: true });
+        }
+
+        if (action === 'checkpointsResetDefaults') {
+          needRole(2);
+          const evId = String(params.eventId || '').trim();
+          if (!evId) throw new Error('EVENT_NOT_FOUND');
+          await ensureFeatureTables(env);
+          await neonQuery(env, `DELETE FROM event_checkpoints WHERE event_id=$1::uuid AND checkpoint_key NOT IN (SELECT DISTINCT checkpoint_key FROM checkpoint_claims WHERE event_id=$1::uuid)`, [evId]);
+          for (const cp of DEFAULT_CHECKPOINTS) {
+            await neonQuery(env, `INSERT INTO event_checkpoints(event_id, checkpoint_key, name, icon, checkpoint_type, sort_order)
+              VALUES($1::uuid, $2, $3, $4, $5, $6) ON CONFLICT (event_id, checkpoint_key) DO UPDATE SET is_active=true, name=EXCLUDED.name, icon=EXCLUDED.icon`,
+              [evId, cp.key, cp.name, cp.icon, cp.type, cp.sort_order]);
+          }
           return json({ ok: true, data: true });
         }
 

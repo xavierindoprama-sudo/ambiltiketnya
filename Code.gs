@@ -551,6 +551,7 @@ const ACTIONS = {
   checkpointsGet:     { min: 1, fn: checkpointsGet },
   checkpointSave:     { min: 2, fn: checkpointSave },
   checkpointDelete:   { min: 2, fn: checkpointDelete },
+  checkpointsResetDefaults: { min: 2, fn: checkpointsResetDefaults },
   checkpointExportCsv:{ min: 1, fn: checkpointExportCsv },
   doorprizePool:   { min: 2, fn: doorprizePool },
   doorprizeSaveWinner: { min: 2, fn: doorprizeSaveWinner },
@@ -1797,13 +1798,15 @@ function checkpointsGet(u, p) {
   if (!evId) throw new Error('EVENT_NOT_FOUND');
   ensureDefaultCheckpointsGS(evId);
 
+  const includeAll = p.all === true || p.all === 'true' || p.all === 1;
   const r = q(`
     SELECT cp.id, cp.event_id, cp.checkpoint_key, cp.name, cp.icon, cp.checkpoint_type, cp.is_active, cp.sort_order,
+      coalesce(cp.description, '') AS description,
       coalesce(sum(cl.qty), 0)::int AS claimed_count
     FROM event_checkpoints cp
     LEFT JOIN checkpoint_claims cl ON cl.event_id=cp.event_id AND cl.checkpoint_key=cp.checkpoint_key
-    WHERE cp.event_id=$1::uuid
-    GROUP BY cp.id, cp.event_id, cp.checkpoint_key, cp.name, cp.icon, cp.checkpoint_type, cp.is_active, cp.sort_order
+    WHERE cp.event_id=$1::uuid ${includeAll ? '' : 'AND cp.is_active=true'}
+    GROUP BY cp.id, cp.event_id, cp.checkpoint_key, cp.name, cp.icon, cp.checkpoint_type, cp.is_active, cp.sort_order, cp.description
     ORDER BY cp.sort_order, cp.created_at
   `, [evId]);
 
@@ -1811,9 +1814,14 @@ function checkpointsGet(u, p) {
     SELECT coalesce(sum(qty), 0)::int AS booked,
            coalesce(sum(checked_in), 0)::int AS checked_in
     FROM orders WHERE event_id=$1::uuid AND status='confirmed'
-  `, [evId])[0];
+  `, [evId])[0] || { booked: 0, checked_in: 0 };
 
-  return { checkpoints: r, gateStat: gateStat };
+  return {
+    checkpoints: r,
+    gate_checked_in: gateStat.checked_in || 0,
+    total_registered: gateStat.booked || 0,
+    gateStat: gateStat
+  };
 }
 
 function checkpointSave(u, p) {
@@ -1822,28 +1830,56 @@ function checkpointSave(u, p) {
   const name = String(p.name || '').trim();
   if (!name) throw new Error('NAME_REQUIRED');
   const icon = String(p.icon || '📍').trim();
-  const type = String(p.type || 'facility').trim();
-  const key = String(p.key || ('cp_' + Date.now().toString(36))).trim().toLowerCase().replace(/[^a-z0-9_]/g, '_');
-  const isActive = p.isActive !== false;
-  const sortOrder = parseInt(p.sortOrder, 10) || 10;
+  const type = String(p.checkpointType || p.type || 'facility').trim();
+  const desc = String(p.description || '').trim();
+  const isActive = p.isActive !== false && p.is_active !== false;
+  const sortOrder = parseInt(p.sortOrder != null ? p.sortOrder : (p.sort_order != null ? p.sort_order : 10), 10) || 10;
+  const key = String(p.checkpointKey || p.key || ('cp_' + Date.now().toString(36))).trim().toLowerCase().replace(/[^a-z0-9_]/g, '_');
 
   if (p.id) {
-    q(`UPDATE event_checkpoints SET name=$1, icon=$2, checkpoint_type=$3, is_active=$4, sort_order=$5 WHERE id=$6::uuid AND event_id=$7::uuid`,
-      [name, icon, type, isActive, sortOrder, p.id, evId]);
+    q(`UPDATE event_checkpoints SET name=$1, icon=$2, checkpoint_type=$3, is_active=$4, sort_order=$5, description=$6 WHERE id=$7::uuid AND event_id=$8::uuid`,
+      [name, icon, type, isActive, sortOrder, desc, p.id, evId]);
   } else {
-    q(`INSERT INTO event_checkpoints(event_id, checkpoint_key, name, icon, checkpoint_type, is_active, sort_order)
-      VALUES($1::uuid, $2, $3, $4, $5, $6, $7) ON CONFLICT (event_id, checkpoint_key) DO UPDATE SET name=EXCLUDED.name, icon=EXCLUDED.icon, is_active=EXCLUDED.is_active`,
-      [evId, key, name, icon, type, isActive, sortOrder]);
+    q(`INSERT INTO event_checkpoints(event_id, checkpoint_key, name, icon, checkpoint_type, is_active, sort_order, description)
+      VALUES($1::uuid, $2, $3, $4, $5, $6, $7, $8)
+      ON CONFLICT (event_id, checkpoint_key) DO UPDATE SET name=EXCLUDED.name, icon=EXCLUDED.icon, checkpoint_type=EXCLUDED.checkpoint_type, is_active=EXCLUDED.is_active, sort_order=EXCLUDED.sort_order, description=EXCLUDED.description`,
+      [evId, key, name, icon, type, isActive, sortOrder, desc]);
   }
   return true;
 }
 
 function checkpointDelete(u, p) {
   const id = p.id;
-  if (!id) throw new Error('ID_REQUIRED');
-  const cp = q(`SELECT checkpoint_key FROM event_checkpoints WHERE id=$1::uuid`, [id])[0];
-  if (cp && cp.checkpoint_key === 'main_gate') throw new Error('CANNOT_DELETE_MAIN_GATE');
-  q(`DELETE FROM event_checkpoints WHERE id=$1::uuid`, [id]);
+  const key = p.checkpointKey || p.key;
+  const evId = p.eventId;
+  if (!id && !key) throw new Error('ID_REQUIRED');
+  if (id) {
+    const cp = q(`SELECT checkpoint_key FROM event_checkpoints WHERE id=$1::uuid`, [id])[0];
+    if (cp && cp.checkpoint_key === 'main_gate') throw new Error('CANNOT_DELETE_MAIN_GATE');
+    q(`DELETE FROM event_checkpoints WHERE id=$1::uuid`, [id]);
+  } else if (key && evId) {
+    if (key === 'main_gate') throw new Error('CANNOT_DELETE_MAIN_GATE');
+    q(`DELETE FROM event_checkpoints WHERE event_id=$1::uuid AND checkpoint_key=$2`, [evId, key]);
+  }
+  return true;
+}
+
+function checkpointsResetDefaults(u, p) {
+  const evId = String(p.eventId || '').trim();
+  if (!evId) throw new Error('EVENT_NOT_FOUND');
+  q(`DELETE FROM event_checkpoints WHERE event_id=$1::uuid AND checkpoint_key NOT IN (SELECT DISTINCT checkpoint_key FROM checkpoint_claims WHERE event_id=$1::uuid)`, [evId]);
+  const DEFAULT_CPS = [
+    { key: 'main_gate', name: 'Pintu Masuk Utama', icon: '🎟️', type: 'gate', sort_order: 1 },
+    { key: 'meal', name: 'Konsumsi (Lunch/Dinner/Snack)', icon: '🍱', type: 'meal', sort_order: 2 },
+    { key: 'kit', name: 'Souvenir / Seminar Kit', icon: '🎁', type: 'kit', sort_order: 3 },
+    { key: 'breakout', name: 'Breakout Session / Ruang Kelas', icon: '🚪', type: 'session', sort_order: 4 },
+    { key: 'voucher', name: 'Voucher Diskon Bazaar', icon: '🏷️', type: 'voucher', sort_order: 5 }
+  ];
+  for (const cp of DEFAULT_CPS) {
+    q(`INSERT INTO event_checkpoints(event_id, checkpoint_key, name, icon, checkpoint_type, sort_order)
+      VALUES($1::uuid, $2, $3, $4, $5, $6) ON CONFLICT (event_id, checkpoint_key) DO UPDATE SET is_active=true, name=EXCLUDED.name, icon=EXCLUDED.icon`,
+      [evId, cp.key, cp.name, cp.icon, cp.type, cp.sort_order]);
+  }
   return true;
 }
 
