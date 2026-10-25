@@ -658,22 +658,31 @@ let S_dp = {
 };
 
 async function dpLoadData() {
-  if (!S_dp.evId) return;
+  if (!S_dp.evId) {
+    S_dp.candidates = [];
+    S_dp.winners = [];
+    return;
+  }
   const res = await api('doorprizePool', { eventId: S_dp.evId });
-  S_dp.winners = res.winners || [];
+  S_dp.winners = (res && res.winners) || [];
   const wonOrders = new Set(S_dp.winners.map(w => w.order_id).filter(Boolean));
   const wonCodes = new Set(S_dp.winners.map(w => w.ticket_code));
-  S_dp.candidates = (res.candidates || []).filter(c => !wonOrders.has(c.order_id) && !wonCodes.has(c.ticket_code));
+  S_dp.candidates = ((res && res.candidates) || []).filter(c => !wonOrders.has(c.order_id) && !wonCodes.has(c.ticket_code));
 }
 
 async function doorprizeView(c) {
+  if (!c) c = $('#ac');
+  if (!c) return;
   c.innerHTML = '<div class="card" style="padding:20px;text-align:center"><div style="display:inline-block;animation:spin 1s linear infinite;font-size:24px">⏳</div><p class="muted" style="margin-top:10px">' + t('loading') + '</p></div>';
   try {
     if (!S.aev) S.aev = await api('adminEvents');
     if (!S_dp.evId && S.aev && S.aev.length) S_dp.evId = S.aev[0].id;
     await dpLoadData();
     paintDoorprize(c);
-  } catch (e) { fail(e); }
+  } catch (e) {
+    c.innerHTML = `<div class="card" style="padding:24px;text-align:center"><p style="color:var(--er);font-weight:700">Gagal memuat data undian: ${esc(e.message || 'Terjadi kesalahan')}</p><p class="muted" style="font-size:12px;margin:8px 0 16px">Pastikan Cloudflare Worker terbaru telah di-deploy di dashboard Cloudflare.</p><button class="btn sm pri" data-act="view" data-v="doorprize">🔄 Coba Lagi</button></div>`;
+    fail(e);
+  }
 }
 
 function paintDoorprize(c) {
@@ -791,12 +800,17 @@ async function fbLoadData() {
 }
 
 async function feedbackView(c) {
+  if (!c) c = $('#ac');
+  if (!c) return;
   c.innerHTML = '<div class="card" style="padding:20px;text-align:center"><div style="display:inline-block;animation:spin 1s linear infinite;font-size:24px">⏳</div><p class="muted" style="margin-top:10px">' + t('loading') + '</p></div>';
   try {
     if (!S.aev) S.aev = await api('adminEvents');
     await fbLoadData();
     paintFeedback(c);
-  } catch(e) { fail(e); }
+  } catch(e) {
+    c.innerHTML = `<div class="card" style="padding:24px;text-align:center"><p style="color:var(--er);font-weight:700">Gagal memuat survey & feedback: ${esc(e.message || 'Terjadi kesalahan')}</p><p class="muted" style="font-size:12px;margin:8px 0 16px">Pastikan Cloudflare Worker terbaru telah di-deploy di dashboard Cloudflare.</p><button class="btn sm pri" data-act="view" data-v="feedback">🔄 Coba Lagi</button></div>`;
+    fail(e);
+  }
 }
 
 function paintFeedback(c) {

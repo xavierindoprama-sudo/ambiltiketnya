@@ -88,6 +88,32 @@ async function neonQuery(env, sql, params = []) {
   return typeof rawJ === 'string' ? JSON.parse(rawJ) : rawJ;
 }
 
+// Neon Direct SQL Exec (for DDL / statements that cannot be wrapped in CTE)
+async function neonExec(env, sql) {
+  const dbUrl = env.DATABASE_URL;
+  if (!dbUrl) throw new Error('DATABASE_URL is not set');
+  const match = dbUrl.match(/@([^\/?]+)/);
+  if (!match) throw new Error('Invalid DATABASE_URL format');
+  const host = match[1];
+
+  const resp = await fetch(`https://${host}/sql`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Neon-Connection-String': dbUrl
+    },
+    body: JSON.stringify({ query: sql, params: [] })
+  });
+
+  const txt = await resp.text();
+  let j;
+  try { j = JSON.parse(txt); } catch (e) { throw new Error('DB exec parse error: ' + txt.slice(0, 150)); }
+  if (resp.status !== 200) {
+    throw new Error('DB Exec: ' + (j.message || resp.status));
+  }
+  return j;
+}
+
 // Neon Batch / Transaction
 async function neonBatch(env, queries) {
   const dbUrl = env.DATABASE_URL;
@@ -256,39 +282,45 @@ const LEGAL = {
   cookie: { title: 'Kebijakan Cookie', text: '## 1. Cookie Teknis\n- Kami hanya menyimpan token sesi di peramban Anda untuk keperluan autentikasi masuk.' }
 };
 
+let _tablesEnsured = false;
 async function ensureFeatureTables(env) {
-  try {
-    await neonQuery(env, `
-      CREATE TABLE IF NOT EXISTS event_feedbacks (
-        id           uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-        event_id     uuid NOT NULL REFERENCES events(id) ON DELETE CASCADE,
-        order_id     uuid REFERENCES orders(id) ON DELETE SET NULL,
-        user_id      uuid REFERENCES users(id) ON DELETE SET NULL,
-        ticket_code  text DEFAULT '',
-        guest_name   text DEFAULT '',
-        guest_org    text DEFAULT '',
-        is_anonymous boolean NOT NULL DEFAULT false,
-        rating       int NOT NULL CHECK (rating BETWEEN 1 AND 5),
-        category     text NOT NULL DEFAULT 'Umum',
-        comment      text NOT NULL DEFAULT '',
-        created_at   timestamptz NOT NULL DEFAULT now()
-      );
-      CREATE INDEX IF NOT EXISTS event_feedbacks_ev_idx ON event_feedbacks (event_id, created_at DESC);
-      CREATE TABLE IF NOT EXISTS doorprize_winners (
-        id           uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-        event_id     uuid NOT NULL REFERENCES events(id) ON DELETE CASCADE,
-        order_id     uuid REFERENCES orders(id) ON DELETE CASCADE,
-        ticket_code  text NOT NULL,
-        winner_name  text NOT NULL,
-        winner_org   text DEFAULT '',
-        prize_name   text NOT NULL,
-        drawn_at     timestamptz NOT NULL DEFAULT now()
-      );
-      CREATE INDEX IF NOT EXISTS doorprize_winners_ev_idx ON doorprize_winners (event_id, drawn_at DESC);
-    `);
-  } catch (e) {
-    console.error('ensureFeatureTables error:', e);
+  if (_tablesEnsured) return;
+  const ddlStatements = [
+    `CREATE TABLE IF NOT EXISTS event_feedbacks (
+      id           uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+      event_id     uuid NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+      order_id     uuid REFERENCES orders(id) ON DELETE SET NULL,
+      user_id      uuid REFERENCES users(id) ON DELETE SET NULL,
+      ticket_code  text DEFAULT '',
+      guest_name   text DEFAULT '',
+      guest_org    text DEFAULT '',
+      is_anonymous boolean NOT NULL DEFAULT false,
+      rating       int NOT NULL CHECK (rating BETWEEN 1 AND 5),
+      category     text NOT NULL DEFAULT 'Umum',
+      comment      text NOT NULL DEFAULT '',
+      created_at   timestamptz NOT NULL DEFAULT now()
+    )`,
+    `CREATE INDEX IF NOT EXISTS event_feedbacks_ev_idx ON event_feedbacks (event_id, created_at DESC)`,
+    `CREATE TABLE IF NOT EXISTS doorprize_winners (
+      id           uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+      event_id     uuid NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+      order_id     uuid REFERENCES orders(id) ON DELETE CASCADE,
+      ticket_code  text NOT NULL,
+      winner_name  text NOT NULL,
+      winner_org   text DEFAULT '',
+      prize_name   text NOT NULL,
+      drawn_at     timestamptz NOT NULL DEFAULT now()
+    )`,
+    `CREATE INDEX IF NOT EXISTS doorprize_winners_ev_idx ON doorprize_winners (event_id, drawn_at DESC)`
+  ];
+  for (const sql of ddlStatements) {
+    try {
+      await neonExec(env, sql);
+    } catch (e) {
+      console.error('ensureFeatureTables error:', e);
+    }
   }
+  _tablesEnsured = true;
 }
 
 export default {
@@ -1001,6 +1033,7 @@ export default {
             SELECT o.id AS order_id, o.ticket_code,
               CASE WHEN o.kind IN ('invitation','walk_in') THEN o.guest_name ELSE u.name END AS name,
               CASE WHEN o.kind IN ('invitation','walk_in') THEN o.guest_org ELSE u.church END AS org,
+              CASE WHEN o.kind IN ('invitation','walk_in') THEN o.guest_org ELSE u.church END AS church,
               to_char(o.checked_in_at AT TIME ZONE 'Asia/Jakarta','HH24:MI:SS') AS checkin_time
             FROM orders o
             LEFT JOIN users u ON u.id = o.user_id
