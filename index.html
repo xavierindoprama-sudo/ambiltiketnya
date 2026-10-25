@@ -17,14 +17,14 @@
 <!-- Open Graph / WhatsApp / Telegram preview -->
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="AmbilTiketnya">
-<meta property="og:title" content="AmbilTiketnya – Pesan Tiket Acara">
-<meta property="og:description" content="Platform pemesanan tiket acara gereja dan komunitas. Dapatkan e-tiket QR instan dan konfirmasi email otomatis.">
-<meta property="og:url" content="https://www.ambiltiketnya.online/">
-<meta property="og:image" content="https://www.ambiltiketnya.online/icons/icon-512.png">
+<meta property="og:title" content="AmbilTiketnya – Undangan & E-Tiket Resmi">
+<meta property="og:description" content="Konfirmasi kehadiran (RSVP) dan akses e-tiket masuk resmi acara.">
+<meta property="og:url" content="https://ambiltiketnya.online/">
+<meta property="og:image" content="https://ambiltiketnya.online/icons/icon-512.png">
 <!-- Twitter Card -->
 <meta name="twitter:card" content="summary">
-<meta name="twitter:title" content="AmbilTiketnya – Pesan Tiket Acara">
-<meta name="twitter:description" content="Pesan tiket acara gereja dan komunitas, dapatkan e-tiket QR instan.">
+<meta name="twitter:title" content="AmbilTiketnya – Undangan & E-Tiket Resmi">
+<meta name="twitter:description" content="Konfirmasi kehadiran (RSVP) dan akses e-tiket masuk resmi acara.">
 <meta name="twitter:image" content="https://www.ambiltiketnya.online/icons/icon-512.png">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Outfit:wght@600;700&family=Plus+Jakarta+Sans:wght@400;600;700&display=swap" onload="this.onload=null;this.rel='stylesheet'">
@@ -5284,8 +5284,7 @@ const NL=String.fromCharCode(10),find=(a,id)=>a.find(x=>x.id===id),A={
   const evDateStr=ev.event_date?fd(ev.event_date,{weekday:'long',day:'numeric',month:'long',year:'numeric'}):'';
   const fmtTime=t=>String(t||'').trim().replace(/^(\d{1,2}:\d{2})(?::\d{2})?$/, '$1');
   const timeStr=ev.start_time?(fmtTime(ev.start_time)+(ev.end_time?' - '+fmtTime(ev.end_time):'')+' WIB'):'';
-  const apiUrl=window.APP_API_URL?window.APP_API_URL.replace(/\/$/,''):'';
-  const invUrl=(apiUrl&&ev.banner_url)?(apiUrl+'/invite?code='+encodeURIComponent(o.ticket_code)+'&to='+encodeURIComponent(o.guest_name||'')):(location.origin+location.pathname+'?invite='+encodeURIComponent(o.ticket_code)+'&to='+encodeURIComponent(o.guest_name||''));
+  const invUrl=location.origin+location.pathname+'?invite='+encodeURIComponent(o.ticket_code)+'&to='+encodeURIComponent(o.guest_name||'');
   const isRsvp=hasMod(ev,'rsvp');
   let msg='Kepada Yth.\n*'+(o.guest_name||'Bapak/Ibu/Saudara/i')+'*\n\n'+
    'Dengan hormat,\n'+
