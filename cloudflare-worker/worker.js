@@ -193,6 +193,10 @@ async function newSession(env, uid) {
 function eventsSql(uidExpr) {
   const mine = `FROM orders o WHERE o.event_id=e.id AND o.user_id=${uidExpr} AND o.status<>'cancelled' AND o.kind='order'`;
   return `SELECT e.id,e.name,e.category,e.banner_url,e.description,e.event_date,e.start_time,e.end_time,e.location,e.quota,e.is_paid,e.price,e.max_per_order,e.one_order_per_account,e.terms,coalesce(e.walkin_quota,0)::int AS walkin_quota,
+    coalesce(e.custom_fields, '[]'::jsonb) AS custom_fields,
+    coalesce(e.enable_nametag, false)::boolean AS enable_nametag,
+    coalesce(e.enable_certificate, false)::boolean AS enable_certificate,
+    coalesce(e.certificate_config, '{}'::jsonb) AS certificate_config,
     (e.quota - coalesce((SELECT sum(qty) FROM orders o WHERE o.event_id=e.id AND o.status<>'cancelled' AND o.kind<>'walk_in'),0))::int AS remaining,
     (coalesce(e.walkin_quota,0) - coalesce((SELECT sum(qty) FROM orders o WHERE o.event_id=e.id AND o.status<>'cancelled' AND o.kind='walk_in'),0))::int AS walkin_remaining,
     EXISTS(SELECT 1 ${mine}) AS has_order,
@@ -203,6 +207,10 @@ function eventsSql(uidExpr) {
 
 async function publicEventsList(env) {
   return await neonQuery(env, `SELECT e.id,e.name,e.category,e.banner_url,e.description,e.event_date,e.start_time,e.end_time,e.location,e.quota,e.is_paid,e.price,e.max_per_order,e.one_order_per_account,e.terms,coalesce(e.walkin_quota,0)::int AS walkin_quota,
+    coalesce(e.custom_fields, '[]'::jsonb) AS custom_fields,
+    coalesce(e.enable_nametag, false)::boolean AS enable_nametag,
+    coalesce(e.enable_certificate, false)::boolean AS enable_certificate,
+    coalesce(e.certificate_config, '{}'::jsonb) AS certificate_config,
     (e.quota - coalesce((SELECT sum(qty) FROM orders o WHERE o.event_id=e.id AND o.status<>'cancelled' AND o.kind<>'walk_in'),0))::int AS remaining,
     (coalesce(e.walkin_quota,0) - coalesce((SELECT sum(qty) FROM orders o WHERE o.event_id=e.id AND o.status<>'cancelled' AND o.kind='walk_in'),0))::int AS walkin_remaining,
     false AS has_order, null AS my_order, null AS my_status
@@ -352,7 +360,12 @@ async function ensureFeatureTables(env) {
       created_at      timestamptz NOT NULL DEFAULT now()
     )`,
     `CREATE UNIQUE INDEX IF NOT EXISTS checkpoint_claims_unique ON checkpoint_claims (order_id, checkpoint_key)`,
-    `CREATE INDEX IF NOT EXISTS checkpoint_claims_ev_idx ON checkpoint_claims (event_id, checkpoint_key, claimed_at DESC)`
+    `CREATE INDEX IF NOT EXISTS checkpoint_claims_ev_idx ON checkpoint_claims (event_id, checkpoint_key, claimed_at DESC)`,
+    `ALTER TABLE events ADD COLUMN IF NOT EXISTS custom_fields jsonb NOT NULL DEFAULT '[]'::jsonb`,
+    `ALTER TABLE events ADD COLUMN IF NOT EXISTS enable_nametag boolean NOT NULL DEFAULT false`,
+    `ALTER TABLE events ADD COLUMN IF NOT EXISTS enable_certificate boolean NOT NULL DEFAULT false`,
+    `ALTER TABLE events ADD COLUMN IF NOT EXISTS certificate_config jsonb NOT NULL DEFAULT '{}'::jsonb`,
+    `ALTER TABLE orders ADD COLUMN IF NOT EXISTS custom_answers jsonb NOT NULL DEFAULT '{}'::jsonb`
   ];
   for (const sql of ddlStatements) {
     try {
@@ -401,6 +414,7 @@ export default {
     }
 
     try {
+      await ensureFeatureTables(env);
       let body;
       try {
         body = await request.json();
@@ -564,15 +578,54 @@ export default {
       if (fn === 'ticketPublic') {
         const [p] = args;
         const code = String(p.code || '').trim().toUpperCase();
-        const rows = await neonQuery(env, `SELECT o.ticket_code AS code,o.qty,o.status,o.checked_in,o.kind,
+        const rows = await neonQuery(env, `SELECT o.ticket_code AS code,o.qty,o.status,o.checked_in,o.checked_in_at,o.kind,
+          coalesce(o.custom_answers, '{}'::jsonb) AS custom_answers,
           CASE WHEN o.kind IN ('invitation','walk_in') THEN o.guest_name ELSE u.name END AS guest_name,
           CASE WHEN o.kind IN ('invitation','walk_in') THEN o.guest_org ELSE u.church END AS guest_org,
-          e.id AS event_id,e.name,e.event_date::text AS edate,to_char(e.start_time,'HH24:MI') AS stime,e.location,e.terms
+          e.id AS event_id,e.name,e.event_date::text AS edate,to_char(e.start_time,'HH24:MI') AS stime,e.location,e.terms,
+          coalesce(e.enable_nametag, false)::boolean AS enable_nametag,
+          coalesce(e.enable_certificate, false)::boolean AS enable_certificate,
+          coalesce(e.certificate_config, '{}'::jsonb) AS certificate_config
           FROM orders o JOIN events e ON e.id=o.event_id LEFT JOIN users u ON u.id=o.user_id WHERE o.ticket_code=$1`, [code]);
         if (!rows.length) return json({ ok: true, data: { found: false } });
         const o = rows[0];
         const st = o.status === 'cancelled' ? 'CANCELLED' : o.status === 'pending_payment' ? 'UNPAID' : o.checked_in >= o.qty ? 'USED' : 'OK';
         return json({ ok: true, data: { found: true, ...o, status: st } });
+      }
+
+      if (fn === 'certificateVerify') {
+        const [p] = args;
+        const code = String(p && p.code || '').trim().toUpperCase().replace(/\s/g, '');
+        if (!code) throw new Error('NOT_FOUND');
+        await ensureFeatureTables(env);
+        const rows = await neonQuery(env, `SELECT o.ticket_code, o.checked_in, o.checked_in_at,
+          coalesce(o.custom_answers, '{}'::jsonb) AS custom_answers,
+          CASE WHEN o.kind IN ('invitation','walk_in') THEN o.guest_name ELSE u.name END AS name,
+          CASE WHEN o.kind IN ('invitation','walk_in') THEN o.guest_org ELSE u.church END AS org,
+          e.name AS event_name, e.event_date::text AS event_date, to_char(e.start_time, 'HH24:MI') AS start_time, e.location,
+          coalesce(e.enable_certificate, false)::boolean AS enable_certificate,
+          coalesce(e.certificate_config, '{}'::jsonb) AS certificate_config
+          FROM orders o JOIN events e ON e.id=o.event_id LEFT JOIN users u ON u.id=o.user_id
+          WHERE o.ticket_code=$1`, [code]);
+        if (!rows.length) return json({ ok: true, data: { verified: false, code } });
+        const r = rows[0];
+        const valid = r.enable_certificate && r.checked_in > 0;
+        return json({
+          ok: true,
+          data: {
+            verified: valid,
+            code: r.ticket_code,
+            name: r.name,
+            org: r.org,
+            eventName: r.event_name,
+            eventDate: r.event_date,
+            startTime: r.start_time,
+            location: r.location,
+            checkedInAt: r.checked_in_at,
+            config: r.certificate_config,
+            customAnswers: r.custom_answers
+          }
+        });
       }
 
       if (fn === 'legalPublic') {
@@ -897,6 +950,10 @@ export default {
 
         if (action === 'myTickets') {
           const rows = await neonQuery(env, `SELECT o.id,o.order_code,o.ticket_code,o.qty,o.total,o.status,o.checked_in,o.created_at,
+            coalesce(o.custom_answers, '{}'::jsonb) AS custom_answers,
+            coalesce(e.enable_nametag, false)::boolean AS enable_nametag,
+            coalesce(e.enable_certificate, false)::boolean AS enable_certificate,
+            coalesce(e.certificate_config, '{}'::jsonb) AS certificate_config,
             e.id AS event_id,e.name,e.banner_url,e.event_date,e.start_time,e.end_time,e.location,e.announcement,e.is_paid,e.payment_instructions,e.terms
             FROM orders o JOIN events e ON e.id=o.event_id WHERE o.user_id=$1::uuid AND o.kind='order' ORDER BY o.created_at DESC`, [u.id]);
           return json({ ok: true, data: rows });
@@ -917,12 +974,13 @@ export default {
           const ticketCode = 'TKT-' + prefix + '-' + rnd(6);
           const orderCode = rnd(8);
 
-          const r = await neonQuery(env, `INSERT INTO orders(order_code,ticket_code,user_id,event_id,qty,total,status)
-            SELECT $1,$2,$3::uuid,e.id,$4::int,e.price*$4::int, CASE WHEN e.is_paid THEN 'pending_payment' ELSE 'confirmed' END
+          const customAnswers = typeof params.custom_answers === 'object' ? JSON.stringify(params.custom_answers || {}) : (params.custom_answers || '{}');
+          const r = await neonQuery(env, `INSERT INTO orders(order_code,ticket_code,user_id,event_id,qty,total,status,custom_answers)
+            SELECT $1,$2,$3::uuid,e.id,$4::int,e.price*$4::int, CASE WHEN e.is_paid THEN 'pending_payment' ELSE 'confirmed' END, $6::jsonb
             FROM events e WHERE e.id=$5::uuid AND e.is_active AND $4::int>=1 AND $4::int<=e.max_per_order
              AND (SELECT coalesce(sum(qty),0) FROM orders WHERE event_id=e.id AND status<>'cancelled' AND kind<>'walk_in') + $4::int <= e.quota
              AND (NOT e.one_order_per_account OR NOT EXISTS(SELECT 1 FROM orders WHERE event_id=e.id AND user_id=$3::uuid AND status<>'cancelled' AND kind='order'))
-            RETURNING id,status,ticket_code`, [orderCode, ticketCode, u.id, qty, params.eventId]);
+            RETURNING id,status,ticket_code`, [orderCode, ticketCode, u.id, qty, params.eventId, customAnswers]);
 
           if (!r.length) throw new Error('SOLDOUT');
 
@@ -949,10 +1007,14 @@ export default {
           const code = String(params.code || '').trim().toUpperCase().replace(/\s/g, '');
           const cpKey = String(params.checkpoint || 'main_gate').trim();
           const rows = await neonQuery(env, `SELECT o.id,o.qty,o.status,o.checked_in,o.checked_in_at,o.kind,o.event_id,
+            coalesce(o.custom_answers, '{}'::jsonb) AS custom_answers,
             CASE WHEN o.kind IN ('invitation','walk_in') THEN o.guest_name ELSE u.name END AS name,
             CASE WHEN o.kind IN ('invitation','walk_in') THEN o.guest_org ELSE u.church END AS church,
             CASE WHEN o.kind IN ('invitation','walk_in') THEN o.guest_age ELSE u.age END AS age,
-            CASE WHEN o.kind IN ('invitation','walk_in') THEN coalesce(o.guest_phone, '') ELSE u.whatsapp END AS whatsapp,e.name AS event_name
+            CASE WHEN o.kind IN ('invitation','walk_in') THEN coalesce(o.guest_phone, '') ELSE u.whatsapp END AS whatsapp,
+            e.name AS event_name,
+            coalesce(e.enable_nametag, false)::boolean AS enable_nametag,
+            coalesce(e.enable_certificate, false)::boolean AS enable_certificate
             FROM orders o JOIN users u ON u.id=o.user_id JOIN events e ON e.id=o.event_id WHERE o.ticket_code=$1`, [code]);
           if (!rows.length) return json({ ok: true, data: { result: 'NOT_FOUND', code } });
           const o = rows[0];
@@ -960,7 +1022,7 @@ export default {
 
           const cpInfo = (await neonQuery(env, `SELECT checkpoint_key, name, icon, checkpoint_type FROM event_checkpoints WHERE event_id=$1::uuid AND checkpoint_key=$2`, [o.event_id, cpKey]))[0] || { checkpoint_key: cpKey, name: cpKey === 'main_gate' ? 'Pintu Masuk Utama' : cpKey, icon: '📍', checkpoint_type: 'facility' };
 
-          const base = { code, kind: o.kind, name: o.name, church: o.church, age: o.age, whatsapp: o.whatsapp, event: o.event_name, qty: o.qty, at: o.checked_in_at, checkpoint: cpInfo };
+          const base = { code, kind: o.kind, name: o.name, church: o.church, age: o.age, whatsapp: o.whatsapp, event: o.event_name, qty: o.qty, at: o.checked_in_at, checkpoint: cpInfo, enable_nametag: o.enable_nametag, enable_certificate: o.enable_certificate, custom_answers: o.custom_answers };
           if (o.status === 'cancelled') return json({ ok: true, data: { ...base, result: 'CANCELLED' } });
           if (o.status === 'pending_payment') return json({ ok: true, data: { ...base, result: 'UNPAID' } });
 
@@ -1049,6 +1111,7 @@ export default {
         if (action === 'orders' || action === 'ordersAll') {
           needRole(2);
           const sql = `SELECT o.id,o.order_code,o.ticket_code,o.qty,o.total,o.status,o.checked_in,o.checked_in_at,o.created_at,o.kind,
+            coalesce(o.custom_answers, '{}'::jsonb) AS custom_answers,
             coalesce(o.emailed, false) AS emailed, o.email_error, o.emailed_at,
             CASE WHEN o.kind IN ('invitation','walk_in') THEN o.guest_name ELSE u.name END AS name,
             CASE WHEN o.kind='invitation' THEN 'Undangan' WHEN o.kind='walk_in' THEN coalesce(nullif(o.guest_email,''), 'Walk-In') ELSE u.email END AS email,
@@ -1193,11 +1256,22 @@ export default {
         if (action === 'saveEvent') {
           needRole(3);
           const paid = !!params.is_paid, quota = parseInt(params.quota, 10), maxp = parseInt(params.max_per_order, 10), walkinQuota = parseInt(params.walkin_quota, 10) || 0;
+          const customFields = Array.isArray(params.custom_fields) ? JSON.stringify(params.custom_fields) : (params.custom_fields || '[]');
+          const enableNametag = !!params.enable_nametag;
+          const enableCertificate = !!params.enable_certificate;
+          const certConfig = typeof params.certificate_config === 'object' ? JSON.stringify(params.certificate_config || {}) : (params.certificate_config || '{}');
+
           const v = [params.name.trim(), params.category || '', params.banner_url || '', params.description || '', params.announcement || '', params.event_date, params.start_time, params.end_time || null, params.location.trim(),
-            quota, walkinQuota, paid, paid ? Math.max(0, parseInt(params.price, 10) || 0) : 0, maxp, !!params.one_order_per_account, params.is_active !== false, params.payment_instructions || '', String(params.terms || '').slice(0, 8000)];
-          const r = await neonQuery(env, `INSERT INTO events(name,category,banner_url,description,announcement,event_date,start_time,end_time,location,quota,walkin_quota,is_paid,price,max_per_order,one_order_per_account,is_active,payment_instructions,terms,id)
-            VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19::uuid) ON CONFLICT(id) DO UPDATE SET
-            name=EXCLUDED.name,quota=EXCLUDED.quota,walkin_quota=EXCLUDED.walkin_quota,is_active=EXCLUDED.is_active,price=EXCLUDED.price,event_date=EXCLUDED.event_date,start_time=EXCLUDED.start_time,location=EXCLUDED.location
+            quota, walkinQuota, paid, paid ? Math.max(0, parseInt(params.price, 10) || 0) : 0, maxp, !!params.one_order_per_account, params.is_active !== false, params.payment_instructions || '', String(params.terms || '').slice(0, 8000),
+            customFields, enableNametag, enableCertificate, certConfig];
+          const r = await neonQuery(env, `INSERT INTO events(name,category,banner_url,description,announcement,event_date,start_time,end_time,location,quota,walkin_quota,is_paid,price,max_per_order,one_order_per_account,is_active,payment_instructions,terms,custom_fields,enable_nametag,enable_certificate,certificate_config,id)
+            VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19::jsonb,$20::boolean,$21::boolean,$22::jsonb,$23::uuid) ON CONFLICT(id) DO UPDATE SET
+            name=EXCLUDED.name,category=EXCLUDED.category,banner_url=EXCLUDED.banner_url,description=EXCLUDED.description,announcement=EXCLUDED.announcement,
+            quota=EXCLUDED.quota,walkin_quota=EXCLUDED.walkin_quota,is_paid=EXCLUDED.is_paid,is_active=EXCLUDED.is_active,price=EXCLUDED.price,
+            event_date=EXCLUDED.event_date,start_time=EXCLUDED.start_time,end_time=EXCLUDED.end_time,location=EXCLUDED.location,
+            max_per_order=EXCLUDED.max_per_order,one_order_per_account=EXCLUDED.one_order_per_account,
+            payment_instructions=EXCLUDED.payment_instructions,terms=EXCLUDED.terms,
+            custom_fields=EXCLUDED.custom_fields,enable_nametag=EXCLUDED.enable_nametag,enable_certificate=EXCLUDED.enable_certificate,certificate_config=EXCLUDED.certificate_config
             RETURNING id`, [...v, params.id || crypto.randomUUID()]);
           return json({ ok: true, data: r[0] });
         }

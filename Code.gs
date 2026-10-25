@@ -33,7 +33,7 @@ function doGet(e) {
 /* ---------- API JSON untuk tampilan yang dihosting di luar Apps Script (mis. GitHub Pages) ----------
  * Klien memanggil POST ke alamat /exec dengan isi {"fn":"nama","args":[...]} (Content-Type: text/plain agar tanpa preflight CORS).
  * Hanya fungsi pada daftar putih di bawah yang bisa dipanggil; semuanya sama dengan yang dipakai google.script.run. */
-const API_FNS = { init: init, register: register, loginPw: loginPw, loginGoogle: loginGoogle, forgotRequest: forgotRequest, forgotReset: forgotReset, legalPublic: legalPublic, ticketPublic: ticketPublic, eventsPublic: eventsPublic, feedbackPublic: feedbackPublic, surveyInfo: surveyInfo, surveyStagePoll: surveyStagePoll, api: api, migrateOauth: migrateOauth, gateLogin: gateLogin, ticketFacilities: ticketFacilities, sessionSelfCheckin: sessionSelfCheckin, checkpointPublicInfo: checkpointPublicInfo, sessionStageLiveCount: sessionStageLiveCount };
+const API_FNS = { init: init, register: register, loginPw: loginPw, loginGoogle: loginGoogle, forgotRequest: forgotRequest, forgotReset: forgotReset, legalPublic: legalPublic, ticketPublic: ticketPublic, eventsPublic: eventsPublic, feedbackPublic: feedbackPublic, surveyInfo: surveyInfo, surveyStagePoll: surveyStagePoll, api: api, migrateOauth: migrateOauth, gateLogin: gateLogin, ticketFacilities: ticketFacilities, sessionSelfCheckin: sessionSelfCheckin, checkpointPublicInfo: checkpointPublicInfo, sessionStageLiveCount: sessionStageLiveCount, certificateVerify: certificateVerify };
 function jsonOut(o) { return ContentService.createTextOutput(JSON.stringify(o === undefined ? null : o)).setMimeType(ContentService.MimeType.JSON); }
 function doPost(e) {
   let out;
@@ -2071,3 +2071,34 @@ function checkpointExportCsv(u, p) {
     ORDER BY cl.claimed_at DESC
   `, [evId]);
 }
+
+function certificateVerify(p) {
+  var code = String(p && p.code || '').trim().toUpperCase().replace(/\s/g, '');
+  if (!code) throw new Error('NOT_FOUND');
+  var rows = neonQuery(`SELECT o.ticket_code, o.checked_in, o.checked_in_at,
+    coalesce(o.custom_answers, '{}'::jsonb) AS custom_answers,
+    CASE WHEN o.kind IN ('invitation','walk_in') THEN o.guest_name ELSE u.name END AS name,
+    CASE WHEN o.kind IN ('invitation','walk_in') THEN o.guest_org ELSE u.church END AS org,
+    e.name AS event_name, e.event_date::text AS event_date, to_char(e.start_time, 'HH24:MI') AS start_time, e.location,
+    coalesce(e.enable_certificate, false)::boolean AS enable_certificate,
+    coalesce(e.certificate_config, '{}'::jsonb) AS certificate_config
+    FROM orders o JOIN events e ON e.id=o.event_id LEFT JOIN users u ON u.id=o.user_id
+    WHERE o.ticket_code=$1`, [code]);
+  if (!rows || !rows.length) return { verified: false, code: code };
+  var r = rows[0];
+  var valid = r.enable_certificate && r.checked_in > 0;
+  return {
+    verified: valid,
+    code: r.ticket_code,
+    name: r.name,
+    org: r.org,
+    eventName: r.event_name,
+    eventDate: r.event_date,
+    startTime: r.start_time,
+    location: r.location,
+    checkedInAt: r.checked_in_at,
+    config: r.certificate_config,
+    customAnswers: r.custom_answers
+  };
+}
+

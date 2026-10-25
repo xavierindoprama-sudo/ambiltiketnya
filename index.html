@@ -351,6 +351,7 @@ async function ticketView(code){
   +(r.status!=='OK'?'<div class="tkm">'+t('tk_'+r.status)+'</div>':'')
   +'<div class="tkb"><div class="info">'+f(t('date'),fd(r.edate,{weekday:'long',day:'numeric',month:'long',year:'numeric'}))+f(t('time'),r.stime+' WIB')+f(t('place'),r.location)+f(t('qty'),r.qty+' '+t('tix'))+'</div>'
   +'<div id="tk_facilities_box" style="margin-top:14px"></div>'
+  +(r.enable_certificate?(r.status==='USED'||r.checked_in>0?`<div style="margin-top:14px;padding:12px 14px;border-radius:12px;background:linear-gradient(135deg,rgba(245,158,11,.12),rgba(217,119,6,.05));border:1.5px solid rgba(245,158,11,.35);display:flex;justify-content:space-between;align-items:center"><div style="display:flex;align-items:center;gap:8px"><span style="font-size:22px">🎓</span><div><b style="font-size:13px;color:#b45309;display:block">E-Sertifikat Resmi</b><small style="opacity:.8;font-size:11px">Kehadiran terkonfirmasi</small></div></div><button class="btn sm" data-act="openCertModal" data-code="${esc(r.code)}" style="background:linear-gradient(135deg,#f59e0b,#d97706);color:#fff;border:none;font-weight:700;padding:6px 14px;border-radius:10px">🎓 Unduh Sertifikat</button></div>`:`<div style="margin-top:12px;padding:8px 12px;border-radius:10px;background:var(--in,rgba(0,0,0,.03));border:1px dashed var(--bd,rgba(0,0,0,.15));font-size:11.5px;color:var(--mu);display:flex;align-items:center;gap:8px"><span>🎓</span><span><b>E-Sertifikat Digital:</b> Akan aktif otomatis setelah Anda hadir dan melakukan check-in di gerbang.</span></div>`):'')
   +'<div style="text-align:center;margin-top:14px"><button class="btn sm" data-act="fbOpenPublic" data-ev="'+esc(r.event_id)+'" data-code="'+esc(r.code)+'" data-name="'+esc(r.name)+'" style="border-radius:20px;padding:8px 18px;background:var(--in);border:1px solid var(--bd);color:var(--tx);font-weight:700">⭐ '+t('fb_btn')+' &amp; Survey</button></div></div>'+back);
  pub('ticketFacilities',{code:r.code}).then(fac=>{
   const box=$('#tk_facilities_box');
@@ -369,6 +370,7 @@ async function ticketView(code){
  }).catch(()=>{});}
 async function boot(){applyTheme();
  const qp=new URLSearchParams(location.search);
+ if(qp.get('verify_cert'))return certificateVerifyView(qp.get('verify_cert'));
  if(qp.get('session_checkin'))return sessionCheckinView(qp.get('ev')||'',qp.get('cp')||'');
  if(qp.get('stage')==='session_qr')return sessionQrStageView(qp.get('ev')||'',qp.get('cp')||'');
  const tkc=ticketParam();if(tkc)return ticketView(tkc);
@@ -494,8 +496,9 @@ ${ok?`<div id="pass_facilities_box" style="margin-top:14px;border-top:1px solid 
       <span style="font-size:11px;font-weight:700;padding:3px 8px;border-radius:12px;${(o.checked_in>0)?'background:var(--ok,#10b981);color:#fff':'background:var(--in,rgba(0,0,0,.08));color:var(--mu,#666)'}">${(o.checked_in>0)?'✓ Hadir':'Belum Masuk'}</span>
     </div>
   </div>
+  ${o.enable_certificate?(o.checked_in>0?`<div style="margin-top:8px;padding:8px 12px;border-radius:10px;background:linear-gradient(135deg,rgba(245,158,11,.12),rgba(217,119,6,.05));border:1px solid rgba(245,158,11,.3);display:flex;justify-content:space-between;align-items:center"><div style="display:flex;align-items:center;gap:6px"><span style="font-size:16px">🎓</span><b style="font-size:12px;color:#b45309">E-Sertifikat Resmi</b></div><button class="btn sm" data-act="openCertModal" data-code="${esc(o.ticket_code)}" style="background:linear-gradient(135deg,#f59e0b,#d97706);color:#fff;border:none;font-weight:700;font-size:11px;padding:3px 10px;border-radius:8px">Unduh &#8599;</button></div>`:`<div style="margin-top:8px;padding:6px 10px;border-radius:8px;background:var(--in,rgba(0,0,0,.03));border:1px dashed var(--bd,rgba(0,0,0,.15));font-size:11px;color:var(--mu);display:flex;align-items:center;gap:6px"><span>🎓</span><span><b>E-Sertifikat:</b> Akan aktif otomatis setelah Anda hadir &amp; check-in di gerbang acara.</span></div>`):''}
 </div>`:''}</div>
-${ok?`<div class="pacts noprint">${(o.guest_phone||inv||(S.user&&S.user.whatsapp))?`<button class="btn wa" data-act="wa" data-id="${o.id}">${t('wa')}</button>`:''}<a class="btn sm" href="${location.pathname}?tiket=${encodeURIComponent(o.ticket_code)}" target="_blank" style="text-decoration:none;display:inline-flex;align-items:center;gap:4px;background:var(--in);border:1px solid var(--bd);padding:8px 12px;border-radius:12px;font-weight:600">🎟️ E-Tiket &#8599;</a><button class="btn" data-act="print" data-id="${o.id}">${t('print')}</button><button class="btn" data-act="dlpng" data-id="${o.id}">${t('png')}</button><button class="btn pri" data-act="dl" data-id="${o.id}">${t('pdf')}</button><button class="btn" data-act="fbOpenModal" data-id="${o.id}" data-ev="${o.event_id}" data-code="${o.ticket_code}" data-name="${esc(o.name)}" style="background:var(--in)">⭐ ${t('fb_btn')}</button></div>`:''}`);
+${ok?`<div class="pacts noprint">${(o.guest_phone||inv||(S.user&&S.user.whatsapp))?`<button class="btn wa" data-act="wa" data-id="${o.id}">${t('wa')}</button>`:''}<a class="btn sm" href="${location.pathname}?tiket=${encodeURIComponent(o.ticket_code)}" target="_blank" style="text-decoration:none;display:inline-flex;align-items:center;gap:4px;background:var(--in);border:1px solid var(--bd);padding:8px 12px;border-radius:12px;font-weight:600">🎟️ E-Tiket &#8599;</a>${(o.enable_certificate&&o.checked_in>0)?`<button class="btn sm" data-act="openCertModal" data-code="${esc(o.ticket_code)}" style="background:linear-gradient(135deg,#f59e0b,#d97706);color:#fff;border:none;font-weight:700">🎓 E-Sertifikat</button>`:''}<button class="btn" data-act="print" data-id="${o.id}">${t('print')}</button><button class="btn" data-act="dlpng" data-id="${o.id}">${t('png')}</button><button class="btn pri" data-act="dl" data-id="${o.id}">${t('pdf')}</button><button class="btn" data-act="fbOpenModal" data-id="${o.id}" data-ev="${o.event_id}" data-code="${o.ticket_code}" data-name="${esc(o.name)}" style="background:var(--in)">⭐ ${t('fb_btn')}</button></div>`:''}`);
  if(ok){
   pub('ticketFacilities',{code:o.ticket_code}).then(fac=>{
    const box=$('#pass_facilities_items');
@@ -622,8 +625,8 @@ ${sortedSlots.length?`<div style="display:flex;align-items:flex-end;gap:12px;hei
 
 function exportOrdersCsv(targetEventId){const evId=targetEventId||($('#of')&&$('#of').value)||($('#an_ev')&&$('#an_ev').value)||'';
  const orders=(S.anOrds||S.ord||[]).filter(o=>!evId||o.event_id===evId);if(!orders.length)return toast('Tidak ada data pesanan untuk diekspor.',1);
- const headers=['Kode Tiket','Kode Pesanan','Nama Lengkap / Tamu','Email','No. WhatsApp','Asal Gereja / Komunitas','Usia','Nama Acara','Jumlah Tiket','Jenis Tiket','Status Pesanan','Status Kehadiran','Waktu Check-In','Tanggal Pemesanan'];
- const rows=orders.map(o=>[o.ticket_code||'',o.order_code||'',o.kind==='walk_in'?(o.guest_name||o.name||''):o.kind==='invitation'?(o.guest_name||o.name||''):(o.name||''),o.kind==='walk_in'?(o.guest_email||o.email||''):(o.email||''),(o.kind==='walk_in'?(o.guest_phone||o.whatsapp):(o.whatsapp))?"'"+(o.kind==='walk_in'?(o.guest_phone||o.whatsapp):o.whatsapp):'',o.kind==='walk_in'?(o.guest_org||o.church||''):o.kind==='invitation'?(o.guest_org||o.church||''):(o.church||''),o.age!=null?o.age:'',o.event_name||'',o.qty||1,o.kind==='invitation'?'Undangan VIP':o.kind==='walk_in'?'Walk-In (Di Tempat)':'Reguler',t('st_'+o.status)||o.status,(o.checked_in>=o.qty)?'HADIR':'BELUM HADIR',o.checked_in_at?new Date(o.checked_in_at).toLocaleString('id-ID'):'-',o.created_at?new Date(o.created_at).toLocaleString('id-ID'):'-']);
+ const headers=['Kode Tiket','Kode Pesanan','Nama Lengkap / Tamu','Email','No. WhatsApp','Asal Gereja / Komunitas','Usia','Nama Acara','Jumlah Tiket','Jenis Tiket','Status Pesanan','Status Kehadiran','Waktu Check-In','Tanggal Pemesanan','Data Tambahan (Formulir Kustom)'];
+ const rows=orders.map(o=>[o.ticket_code||'',o.order_code||'',o.kind==='walk_in'?(o.guest_name||o.name||''):o.kind==='invitation'?(o.guest_name||o.name||''):(o.name||''),o.kind==='walk_in'?(o.guest_email||o.email||''):(o.email||''),(o.kind==='walk_in'?(o.guest_phone||o.whatsapp):(o.whatsapp))?"'"+(o.kind==='walk_in'?(o.guest_phone||o.whatsapp):o.whatsapp):'',o.kind==='walk_in'?(o.guest_org||o.church||''):o.kind==='invitation'?(o.guest_org||o.church||''):(o.church||''),o.age!=null?o.age:'',o.event_name||'',o.qty||1,o.kind==='invitation'?'Undangan VIP':o.kind==='walk_in'?'Walk-In (Di Tempat)':'Reguler',t('st_'+o.status)||o.status,(o.checked_in>=o.qty)?'HADIR':'BELUM HADIR',o.checked_in_at?new Date(o.checked_in_at).toLocaleString('id-ID'):'-',o.created_at?new Date(o.created_at).toLocaleString('id-ID'):'-',o.custom_answers?(typeof o.custom_answers==='object'?Object.values(o.custom_answers).map(a=>((a&&a.label)||'')+': '+((a&&a.value)||'')).join(' | '):String(o.custom_answers)):'']);
  const csvContent='\uFEFF'+[headers].concat(rows).map(r=>r.map(c=>'"'+String(c).replace(/"/g,'""')+'"').join(',')).join('\r\n');
  const blob=new Blob([csvContent],{type:'text/csv;charset=utf-8;'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);
  const evName=(S.aev&&S.aev.find(x=>x.id===evId))?S.aev.find(x=>x.id===evId).name.replace(/[^a-zA-Z0-9]/g,'_'):'Semua_Acara';
@@ -1655,7 +1658,113 @@ function evForm(id){const e=S.aev.find(x=>x.id===id)||{name:'',category:'',quota
 <label>${t('f_desc')}</label><textarea name="description" rows="3">${esc(e.description)}</textarea><label>${t('f_ann')}</label><textarea name="announcement" rows="2">${esc(e.announcement)}</textarea><label>${t('f_terms')}</label><textarea name="terms" rows="6">${esc(e.terms)}</textarea>
 <div style="margin:12px 0">${seg([['0',t('f_free')],['1',t('f_paid')]],S.paid?'1':'0','paid')}</div><div class="fg"><div><label>${t('f_price')}</label><input name="price" id="pr" type="number" min="0" value="${e.price}" ${S.paid?'':'disabled'}></div>${f('max_per_order','f_max',e.max_per_order,'number')}</div>
 <label>${t('f_pay')}</label><textarea name="payment_instructions" rows="2">${esc(e.payment_instructions)}</textarea>
-<label style="display:flex;gap:8px;align-items:center"><input type="checkbox" name="one_order_per_account" style="width:auto" ${e.one_order_per_account?'checked':''}>${t('f_one')}</label><label style="display:flex;gap:8px;align-items:center"><input type="checkbox" name="is_active" style="width:auto" ${e.is_active?'checked':''}>${t('f_act')}</label></form><div class="acts"><button class="btn pri" data-act="saveEv">${t('save')}</button></div>`,1)}
+<label style="display:flex;gap:8px;align-items:center"><input type="checkbox" name="one_order_per_account" style="width:auto" ${e.one_order_per_account?'checked':''}>${t('f_one')}</label><label style="display:flex;gap:8px;align-items:center"><input type="checkbox" name="is_active" style="width:auto" ${e.is_active?'checked':''}>${t('f_act')}</label>
+
+<div style="background:var(--in,rgba(0,0,0,.03));border:1px solid var(--bd,rgba(0,0,0,.08));border-radius:12px;padding:14px;margin:16px 0">
+  <b style="display:flex;align-items:center;gap:6px;font-size:13px;margin-bottom:8px">⚙️ Opsi Fasilitas Tambahan &amp; Formulir Acara</b>
+  
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;margin-bottom:14px">
+    <label style="display:flex;gap:8px;align-items:flex-start;background:var(--card,#fff);padding:10px 12px;border-radius:10px;border:1px solid var(--bd,rgba(0,0,0,.08));cursor:pointer">
+      <input type="checkbox" name="enable_nametag" id="ef_nametag" style="width:auto;margin-top:3px" ${e.enable_nametag?'checked':''}>
+      <div>
+        <b style="font-size:12px;display:block">🖨️ Cetak Name Tag Thermal</b>
+        <small style="opacity:.7;font-size:11px">Aktifkan tombol/auto-print stiker thermal (58mm/80mm) di gerbang scanner</small>
+      </div>
+    </label>
+    
+    <label style="display:flex;gap:8px;align-items:flex-start;background:var(--card,#fff);padding:10px 12px;border-radius:10px;border:1px solid var(--bd,rgba(0,0,0,.08));cursor:pointer">
+      <input type="checkbox" name="enable_certificate" id="ef_cert" style="width:auto;margin-top:3px" ${e.enable_certificate?'checked':''} onchange="$('#ef_cert_box').style.display=this.checked?'block':'none'">
+      <div>
+        <b style="font-size:12px;display:block">🎓 E-Sertifikat Digital</b>
+        <small style="opacity:.7;font-size:11px">Peserta yang hadir dapat mengunduh sertifikat resmi ber-QR Code</small>
+      </div>
+    </label>
+  </div>
+
+  <div id="ef_cert_box" style="display:${e.enable_certificate?'block':'none'};background:var(--card,#fff);border:1px dashed var(--bd);border-radius:10px;padding:12px;margin-bottom:14px">
+    <small style="font-weight:700;text-transform:uppercase;letter-spacing:1px;font-size:11px;color:var(--mu);display:block;margin-bottom:8px">Pengaturan Sertifikat</small>
+    <div class="fg">
+      <div><label style="font-size:11px">Judul Sertifikat</label><input name="cert_title" value="${esc(e.certificate_config&&e.certificate_config.title||'SERTIFIKAT PARTISIPASI')}" placeholder="Contoh: SERTIFIKAT PENGHARGAAN"></div>
+      <div><label style="font-size:11px">Nama Penandatangan</label><input name="cert_signatory" value="${esc(e.certificate_config&&e.certificate_config.signatory||'')}" placeholder="Contoh: Pdt. John Doe, M.Th"></div>
+      <div><label style="font-size:11px">Jabatan Penandatangan</label><input name="cert_signatory_title" value="${esc(e.certificate_config&&e.certificate_config.signatory_title||'Ketua Panitia')}" placeholder="Contoh: Ketua Panitia Acara"></div>
+    </div>
+  </div>
+
+  <div style="border-top:1px solid var(--bd);padding-top:12px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+      <div>
+        <b style="font-size:12px;display:block">📋 Formulir Pertanyaan Kustom</b>
+        <small style="opacity:.7;font-size:11px">Pertanyaan tambahan saat pendaftaran (ukuran kaos, sesi, dll.)</small>
+      </div>
+      <button class="btn sm" type="button" onclick="addCustomFieldRow()" style="font-size:11px;padding:4px 10px;border-radius:8px;background:var(--ac,#5b4ef0);color:#fff">+ Tambah Pertanyaan</button>
+    </div>
+    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px">
+      <small style="opacity:.7;font-size:11px;align-self:center">Preset Cepat:</small>
+      <button type="button" class="btn sm" onclick="addCustomFieldPreset('Asal Gereja / Komunitas','text',true)" style="font-size:10px;padding:2px 7px;background:var(--in)">+ Asal Gereja</button>
+      <button type="button" class="btn sm" onclick="addCustomFieldPreset('Usia','number',true)" style="font-size:10px;padding:2px 7px;background:var(--in)">+ Usia</button>
+      <button type="button" class="btn sm" onclick="addCustomFieldPreset('Ukuran Kaos / Baju','select',false,'S, M, L, XL, XXL')" style="font-size:10px;padding:2px 7px;background:var(--in)">+ Ukuran Kaos</button>
+      <button type="button" class="btn sm" onclick="addCustomFieldPreset('Pilihan Menu Makan','select',false,'Biasa, Vegetarian, Halal')" style="font-size:10px;padding:2px 7px;background:var(--in)">+ Pilihan Menu</button>
+      <button type="button" class="btn sm" onclick="addCustomFieldPreset('Pilihan Kelas Workshop','select',false,'Kelas A (Dasar), Kelas B (Lanjutan)')" style="font-size:10px;padding:2px 7px;background:var(--in)">+ Pilihan Kelas</button>
+    </div>
+    <div id="custom_fields_container" style="display:flex;flex-direction:column;gap:8px">
+      ${((e.custom_fields&&Array.isArray(e.custom_fields))?e.custom_fields:[]).map((cf,idx)=>renderCustomFieldRow(cf,idx)).join('')}
+    </div>
+  </div>
+</div>
+</form><div class="acts"><button class="btn pri" data-act="saveEv">${t('save')}</button></div>`,1)}
+function renderCustomFieldRow(cf, idx){
+ const id=(cf&&cf.id)||('cf_'+(idx!=null?idx:Date.now())+'_'+Math.random().toString(36).slice(2,6));
+ const label=(cf&&cf.label)||'';
+ const type=(cf&&cf.type)||'text';
+ const opts=(cf&&Array.isArray(cf.options))?cf.options.join(', '):((cf&&cf.options)||'');
+ const req=(cf&&cf.required)!==false;
+ return `<div class="cf-row" data-id="${esc(id)}" style="display:flex;gap:8px;align-items:flex-start;background:var(--card,#fff);border:1px solid var(--bd,rgba(0,0,0,.08));border-radius:10px;padding:8px 10px;margin-bottom:6px">
+  <div style="flex:2;min-width:140px">
+    <input class="cf-label" value="${esc(label)}" placeholder="Pertanyaan (misal: Ukuran Kaos)" style="width:100%;font-size:12px;font-weight:600;padding:6px 8px;border-radius:6px;border:1px solid var(--bd)">
+  </div>
+  <div style="flex:1;min-width:110px">
+    <select class="cf-type" onchange="const p=this.closest('.cf-row').querySelector('.cf-opts-box');if(p)p.style.display=this.value==='select'?'block':'none'" style="width:100%;font-size:12px;padding:6px;border-radius:6px;border:1px solid var(--bd)">
+      <option value="text" ${type==='text'?'selected':''}>Teks Bebas</option>
+      <option value="number" ${type==='number'?'selected':''}>Angka / Usia</option>
+      <option value="select" ${type==='select'?'selected':''}>Pilihan (Dropdown)</option>
+    </select>
+  </div>
+  <div class="cf-opts-box" style="flex:2;min-width:130px;display:${type==='select'?'block':'none'}">
+    <input class="cf-opts" value="${esc(opts)}" placeholder="Pilihan: S, M, L, XL" style="width:100%;font-size:12px;padding:6px 8px;border-radius:6px;border:1px solid var(--bd)">
+  </div>
+  <label style="display:flex;align-items:center;gap:4px;font-size:11px;font-weight:600;white-space:nowrap;margin:0;cursor:pointer;padding-top:7px">
+    <input type="checkbox" class="cf-req" ${req?'checked':''} style="width:auto"> Wajib
+  </label>
+  <button type="button" class="btn sm" onclick="this.closest('.cf-row').remove()" style="padding:4px 8px;font-size:11px;color:var(--er,#ef4444);border-color:var(--er,#ef4444);background:transparent;margin-top:2px" title="Hapus">&#10005;</button>
+ </div>`;
+}
+
+function addCustomFieldRow(cf){
+ const box=$('#custom_fields_container');
+ if(!box)return;
+ const idx=box.querySelectorAll('.cf-row').length;
+ const div=document.createElement('div');
+ div.innerHTML=renderCustomFieldRow(cf||{},idx);
+ box.appendChild(div.firstElementChild);
+}
+
+function addCustomFieldPreset(label,type,req,opts){
+ addCustomFieldRow({label,type,required:req,options:opts});
+}
+
+function getCustomFieldsFromEditor(){
+ const rows=Array.from(document.querySelectorAll('#custom_fields_container .cf-row'));
+ return rows.map((r,i)=>{
+  const label=(r.querySelector('.cf-label')?.value||'').trim();
+  if(!label)return null;
+  const type=r.querySelector('.cf-type')?.value||'text';
+  const opts=(r.querySelector('.cf-opts')?.value||'').split(',').map(s=>s.trim()).filter(Boolean);
+  const req=!!r.querySelector('.cf-req')?.checked;
+  const id=r.dataset.id||('cf_'+i);
+  return {id,label,type,options:opts,required:req};
+ }).filter(Boolean);
+}
+
 async function ordView(c){c.innerHTML=`<div class="bar2"><select id="of"><option value="">${t('all_ev')}</option></select><select id="os"><option value="">${t('all_st')}</option>${['confirmed','pending_payment','cancelled'].map(s=>`<option value="${s}">${t('st_'+s)}</option>`).join('')}</select><select id="okind"><option value="">${t('kind_filter')}</option><option value="order">${t('kind_reg')}</option><option value="invitation">${t('kind_inv')}</option><option value="walk_in">${t('kind_walkin')}</option></select><select id="oem"><option value="">${t('em_filter_all')}</option><option value="pending">${t('em_filter_pending')}</option><option value="sent">${t('em_filter_sent')}</option></select><input id="oq" placeholder="${t('search')}"><button class="btn pri" data-act="walkinModal" style="flex:none;font-weight:700">🚶‍♂️ ${t('walkin')}</button><button id="btn_batch_email" class="btn wn" data-act="batchEmail" style="display:none;flex:none;font-weight:700">✉️ ${t('em_batch_btn')} (<span id="batch_em_cnt">0</span>)</button><button class="btn" data-act="expcsv" style="flex:none;background:var(--card);border:1px solid var(--border)">📥 ${t('an_export')}</button></div><div id="ot">${skel(1)}</div>`;
  try{if(!S.aev)S.aev=await api('adminEvents');$('#of').innerHTML+=S.aev.map(e=>`<option value="${e.id}">${esc(e.name)}</option>`).join('');loadOrders()}catch(e){fail(e)}}
 async function loadOrders(){try{const r=await api('ordersAll',{eventId:$('#of').value,status:$('#os').value});S.ord=r.rows;S.ordTr=r.truncated;S.ordPage=1;paintOrders()}catch(e){fail(e)}}
@@ -1677,7 +1786,7 @@ function paintOrders(){const k=($('#oq').value||'').toLowerCase(),emF=$('#oem')?
   if(rk()>=2&&o.status==='confirmed'&&o.checked_in<o.qty)b+=`<button class="btn sm pri" data-act="ci" data-id="${o.id}">${t('ci')}</button>`;
   if(canEdit()||rk()>=2){if(o.status==='pending_payment'&&canEdit())b+=`<button class="btn sm pri" data-act="cpay" data-id="${o.id}">${t('confirmpay')}</button>`;if(o.status==='confirmed'&&o.kind==='order')b+=`<button class="btn sm" data-act="resend" data-id="${o.id}" title="${t('resend')}">✉️ ${t('resend')}</button>`;if(o.status!=='cancelled'&&canEdit())b+=`<button class="btn sm dg" data-act="cxl" data-id="${o.id}">${t('cancel')}</button>`}
   return b?`<div class="acts" style="margin:0;justify-content:flex-end">${b}</div>`:''};
- $('#ot').innerHTML=`<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:8px"><div><b style="font-size:20px">${l.reduce((a,o)=>a+o.qty,0)}</b> ${t('tix')} / ${n} pemesan ${pendingCnt>0?`<span class="pill wn" style="font-weight:700;margin-left:6px">⚠️ ${pendingCnt} ${t('em_pending')}</span>`:''}</div></div>${S.ordTr?'<p class="muted">'+t('pg_trunc')+'</p>':''}<div class="tw"><table class="rt"><tr>${th}</tr>${rows.map(o=>`<tr><td data-l="${t('c_code')}" class="mono"><b>${esc(o.ticket_code)}</b><br><small class="muted">${new Date(o.created_at).toLocaleString(loc())}</small></td><td data-l="${t('c_name')}">${esc(o.name)}${o.kind==='invitation'?' <span class="pill gd">'+t('inv_badge')+'</span>':o.kind==='walk_in'?' <span class="pill wn" style="background:#10b981;color:#fff;font-weight:700">'+t('walkin_badge')+'</span>':''}<br><small class="muted">${o.kind==='invitation'?esc(o.church):o.kind==='walk_in'?(o.guest_org?esc(o.guest_org)+'<br>':'')+(o.guest_phone?'+'+esc(o.guest_phone)+' &#183; ':'')+(o.guest_email?esc(o.guest_email):'Di tempat'):esc(o.email)+'<br>+'+esc(o.whatsapp)+' &#183; '+esc(o.age)+' &#183; '+esc(o.church)}</small>${o.kind==='order'&&o.status==='confirmed'?`<div style="margin-top:3px;display:flex;align-items:center;flex-wrap:wrap;gap:4px"><span class="pill ${o.emailed?'ok':'er'}" style="font-size:10px;padding:2px 7px;font-weight:700" title="${esc(o.email_error||(o.emailed?'Terkirim pada '+(o.emailed_at?new Date(o.emailed_at).toLocaleString(loc()):'-'):'Belum terkirim'))}">${o.emailed?'✓ '+t('em_sent'):'⚠️ '+t('em_pending')}</span>${o.emailed&&o.email_error?`<span class="muted" style="font-size:10px;font-weight:600">(${esc(o.email_error)})</span>`:''}${!o.emailed&&o.email_error?`<div style="font-size:10px;color:var(--er);margin-top:2px;width:100%;white-space:normal;line-height:1.2">${esc(o.email_error)}</div>`:''}</div>`:''}</td><td data-l="${t('c_event')}">${esc(o.event_name)}</td><td data-l="${t('c_qty')}">${o.qty}</td><td data-l="${t('c_status')}">${stPill(o.status)}</td><td data-l="${t('c_chk')}" class="mono">${o.checked_in}/${o.qty}</td><td>${acts(o)}</td></tr>`).join('')}</table></div>${pagerHtml(n,S.ordPage,pages,from,rows.length)}`}
+ $('#ot').innerHTML=`<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:8px"><div><b style="font-size:20px">${l.reduce((a,o)=>a+o.qty,0)}</b> ${t('tix')} / ${n} pemesan ${pendingCnt>0?`<span class="pill wn" style="font-weight:700;margin-left:6px">⚠️ ${pendingCnt} ${t('em_pending')}</span>`:''}</div></div>${S.ordTr?'<p class="muted">'+t('pg_trunc')+'</p>':''}<div class="tw"><table class="rt"><tr>${th}</tr>${rows.map(o=>`<tr><td data-l="${t('c_code')}" class="mono"><b>${esc(o.ticket_code)}</b><br><small class="muted">${new Date(o.created_at).toLocaleString(loc())}</small></td><td data-l="${t('c_name')}">${esc(o.name)}${o.kind==='invitation'?' <span class="pill gd">'+t('inv_badge')+'</span>':o.kind==='walk_in'?' <span class="pill wn" style="background:#10b981;color:#fff;font-weight:700">'+t('walkin_badge')+'</span>':''}<br><small class="muted">${o.kind==='invitation'?esc(o.church):o.kind==='walk_in'?(o.guest_org?esc(o.guest_org)+'<br>':'')+(o.guest_phone?'+'+esc(o.guest_phone)+' &#183; ':'')+(o.guest_email?esc(o.guest_email):'Di tempat'):esc(o.email)+'<br>+'+esc(o.whatsapp)+' &#183; '+esc(o.age)+' &#183; '+esc(o.church)}</small>${(o.custom_answers&&typeof o.custom_answers==='object'&&Object.keys(o.custom_answers).length>0)?`<div style="margin-top:4px;display:flex;flex-wrap:wrap;gap:3px">${Object.values(o.custom_answers).map(a=>`<span style="background:var(--in,rgba(0,0,0,.05));border:1px solid var(--bd,rgba(0,0,0,.1));padding:1px 6px;border-radius:4px;font-size:10px;font-weight:600">${esc(a.label)}: <b>${esc(a.value)}</b></span>`).join('')}</div>`:''}${o.kind==='order'&&o.status==='confirmed'?`<div style="margin-top:3px;display:flex;align-items:center;flex-wrap:wrap;gap:4px"><span class="pill ${o.emailed?'ok':'er'}" style="font-size:10px;padding:2px 7px;font-weight:700" title="${esc(o.email_error||(o.emailed?'Terkirim pada '+(o.emailed_at?new Date(o.emailed_at).toLocaleString(loc()):'-'):'Belum terkirim'))}">${o.emailed?'✓ '+t('em_sent'):'⚠️ '+t('em_pending')}</span>${o.emailed&&o.email_error?`<span class="muted" style="font-size:10px;font-weight:600">(${esc(o.email_error)})</span>`:''}${!o.emailed&&o.email_error?`<div style="font-size:10px;color:var(--er);margin-top:2px;width:100%;white-space:normal;line-height:1.2">${esc(o.email_error)}</div>`:''}</div>`:''}</td><td data-l="${t('c_event')}">${esc(o.event_name)}</td><td data-l="${t('c_qty')}">${o.qty}</td><td data-l="${t('c_status')}">${stPill(o.status)}</td><td data-l="${t('c_chk')}" class="mono">${o.checked_in}/${o.qty}</td><td>${acts(o)}</td></tr>`).join('')}</table></div>${pagerHtml(n,S.ordPage,pages,from,rows.length)}`}
 
 /* ===== Scanner Engine (Continuous, Audio, Torch, Haptic) ===== */
 let _muted=false,_stream=null,_track=null,_torch=false,_facing='environment',_scanning=false,_cooldown=false,_lastCode='',_lastTime=0,_sessionCount=0,_resTimer=null;
@@ -1770,6 +1879,7 @@ function scCardHtml(r){const isOk=r.result==='VALID',isAlready=r.result==='ALREA
   <div class="sc-status-h"><span class="icn">${ic}</span><div style="flex:1;min-width:0"><div style="font-size:16px;font-weight:800;color:var(--${isOk?'ok':isWn?'wn':'er'})">${title} ${r.isOffline?'<span class="pill wn" style="font-size:11px;vertical-align:middle;margin-left:4px">⚡ Offline</span>':''}</div><div class="mono" style="font-size:12px;opacity:.85">${esc(r.code)} ${isInv?'<span class="pill gd">'+t('inv_badge')+'</span>':isWalkin?'<span class="pill wn" style="background:#10b981;color:#fff;font-weight:700">'+t('walkin_badge')+'</span>':''}</div></div>${isOk?`<div class="sc-qty-pill">${r.claimed_qty||r.entered||r.qty||1} ${r.checkpoint&&r.checkpoint.checkpoint_type==='meal'?'porsi':t('tix')}</div>`:''}</div>
   ${r.name?`<div style="margin-top:8px;font-size:13px;display:grid;grid-template-columns:1fr 1fr;gap:4px"><div><b>${esc(r.name)}</b><br><small style="opacity:.75">${isWalkin?'Walk-In: '+(esc(r.church)||'-'):esc(r.church||'-')}${(!isInv&&!isWalkin&&r.age)?' · '+esc(r.age):''}</small></div><div style="text-align:right"><span>${r.checkpoint?esc(r.checkpoint.name):'Check-in'}: <b>${isOk?'Klaim Sukses':isAlready?'Sudah Diambil':isNotCheckIn?'Ditolak':(r.checked||r.qty)+'/'+r.qty}</b></span><br><small style="opacity:.75">${esc(r.event||'')}</small></div></div>`:''}
   ${r.message?`<div style="margin-top:8px;font-size:12px;padding:6px 10px;border-radius:8px;background:rgba(0,0,0,.25);line-height:1.4">${esc(r.message)}</div>`:''}
+  ${(isOk&&r.enable_nametag)?`<div style="margin-top:8px;text-align:right"><button class="btn sm" data-act="printThermalNametag" data-code="${esc(r.code)}" style="background:#2563eb;color:#fff;border-color:#2563eb;font-size:11px;font-weight:700;padding:4px 10px;border-radius:8px;display:inline-flex;align-items:center;gap:4px">🖨️ Cetak Name Tag (Thermal)</button></div>`:''}
   <div class="sc-cool-bar"><div class="sc-cool-fill"></div></div></div>`}
 
 async function handleScanCode(raw){const code=String(raw||'').trim().toUpperCase();if(!code)return;const now=Date.now();
@@ -1788,6 +1898,9 @@ async function handleScanCode(raw){const code=String(raw||'').trim().toUpperCase
    _sessionCount+=(r.claimed_qty||r.entered||r.qty||1);
    const cnt=$('#sc_cnt'),dc=$('#dash_sc_cnt');if(cnt)cnt.textContent=_sessionCount;if(dc)dc.textContent=_sessionCount;
    if(S.activeEventId)loadCheckpoints(S.activeEventId);
+   if(r.enable_nametag&&ls.g('atk_sc_autoprint')==='1'){
+     setTimeout(()=>printThermalNametag(r),400);
+   }
   }
   snd(r.result);vib(r.result);
   if(fr)fr.className='sc-frame '+(r.result==='VALID'?'valid':(r.result==='USED'||r.result==='UNPAID'||r.result==='ALREADY_CLAIMED'||r.result==='NOT_CHECKED_IN')?'used':'error');
@@ -1888,6 +2001,12 @@ function scanView(c){
           <option value="voucher">🏷️ Voucher Diskon Bazaar</option>
         </select>
       </div>
+    </div>
+    <div style="margin-top:8px;display:flex;justify-content:flex-end">
+      <label style="display:inline-flex;align-items:center;gap:6px;font-size:11.5px;color:rgba(255,255,255,.9);cursor:pointer;background:rgba(255,255,255,.1);padding:4px 10px;border-radius:8px">
+        <input type="checkbox" id="sc_autoprint" style="width:auto" onchange="ls.s('atk_sc_autoprint',this.checked?'1':'0')" ${ls.g('atk_sc_autoprint')==='1'?'checked':''}>
+        <span>🖨️ Auto-Print Name Tag Thermal</span>
+      </label>
     </div>
   </div>
 
@@ -3204,6 +3323,308 @@ async function walkinModal(fromScanner){
  +'<button class="btn" data-act="cm">'+t('close')+'</button>'
  +'</div>');
 }
+function printThermalNametag(d){
+ if(!d)return;
+ const name=d.name||d.guest_name||'Peserta';
+ const org=d.church||d.org||d.guest_org||'';
+ const evName=d.event||d.eventName||(S.ev&&find(S.ev,S.activeEventId)&&find(S.ev,S.activeEventId).name)||'ACARA';
+ const code=d.code||d.ticket_code||'';
+ const ans=d.custom_answers||{};
+ const tags=Object.values(ans).map(a=>`<span style="display:inline-block;border:1px solid #000;padding:1px 5px;border-radius:4px;font-size:10px;font-weight:700;margin:1px 2px">${esc(a.label)}: ${esc(a.value)}</span>`).join(' ');
+
+ const w=window.open('','_blank','width=380,height=520');
+ if(!w)return toast('Pop-up printer diblokir browser. Izinkan pop-up di browser.',1);
+ w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Name Tag - ${esc(name)}</title>
+ <style>
+   @page { size: 58mm auto; margin: 0; }
+   @media print { body { margin: 0; padding: 3mm 2mm; width: 54mm; } }
+   body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif; margin: 0; padding: 10px; color: #000; background: #fff; text-align: center; }
+   .ev { font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: 1px; border-bottom: 1.5px solid #000; padding-bottom: 3px; margin-bottom: 6px; line-height: 1.2; word-break: break-word; }
+   .nm { font-size: 20px; font-weight: 900; line-height: 1.15; margin: 6px 0; word-break: break-word; text-transform: uppercase; }
+   .og { font-size: 13px; font-weight: 700; margin-bottom: 4px; word-break: break-word; }
+   .qr { margin: 6px auto; width: 85px; height: 85px; }
+   .qr img, .qr canvas { width: 100% !important; height: auto !important; }
+   .cd { font-family: monospace; font-size: 11px; font-weight: 800; letter-spacing: 1px; }
+   .ft { font-size: 8.5px; opacity: .7; margin-top: 6px; border-top: 1px dashed #666; padding-top: 3px; }
+ </style></head><body>
+   <div class="ev">${esc(evName)}</div>
+   <div class="nm">${esc(name)}</div>
+   ${org?`<div class="og">${esc(org)}</div>`:''}
+   ${tags?`<div style="margin:3px 0">${tags}</div>`:''}
+   <div class="qr">${typeof qrcode!=='undefined'?qr(code):''}</div>
+   <div class="cd">${esc(code)}</div>
+   <div class="ft">Check-In Terverifikasi &#183; AmbilTiketnya</div>
+   <script>
+     setTimeout(function(){ window.print(); setTimeout(function(){ window.close(); }, 500); }, 350);
+   </` + `script>
+ </body></html>`);
+ w.document.close();
+}
+
+function drawCertificateCanvas(cv, r){
+ if(!cv)return;
+ const ctx=cv.getContext('2d');
+ const W=cv.width, H=cv.height;
+ ctx.fillStyle='#fdfcf7';
+ ctx.fillRect(0,0,W,H);
+ ctx.fillStyle='#f8f6ee';
+ ctx.fillRect(40,40,W-80,H-80);
+
+ ctx.strokeStyle='#0f172a';
+ ctx.lineWidth=16;
+ ctx.strokeRect(60,60,W-120,H-120);
+
+ ctx.strokeStyle='#d97706';
+ ctx.lineWidth=5;
+ ctx.strokeRect(84,84,W-168,H-168);
+
+ function corner(x, y, dx, dy){
+   ctx.strokeStyle='#d97706';
+   ctx.lineWidth=4;
+   ctx.beginPath();
+   ctx.moveTo(x, y + dy*40);
+   ctx.lineTo(x, y);
+   ctx.lineTo(x + dx*40, y);
+   ctx.stroke();
+   ctx.fillStyle='#0f172a';
+   ctx.fillRect(x - 5, y - 5, 10, 10);
+ }
+ corner(96, 96, 1, 1);
+ corner(W - 96, 96, -1, 1);
+ corner(96, H - 96, 1, -1);
+ corner(W - 96, H - 96, -1, -1);
+
+ ctx.fillStyle='#0f172a';
+ ctx.textAlign='center';
+ ctx.font='700 24px "Segoe UI", Arial, sans-serif';
+ ctx.fillText('AMBILTIKETNYA OFFICIAL VERIFICATION', W/2, 170);
+
+ ctx.fillStyle='#d97706';
+ ctx.font='900 68px "Georgia", serif';
+ ctx.fillText(((r.config&&r.config.title)||'SERTIFIKAT PARTISIPASI').toUpperCase(), W/2, 275);
+
+ ctx.fillStyle='#475569';
+ ctx.font='italic 32px "Georgia", serif';
+ ctx.fillText('Diberikan dengan penuh apresiasi kepada:', W/2, 360);
+
+ ctx.fillStyle='#0f172a';
+ ctx.font='900 78px "Georgia", serif';
+ const pName=(r.name||'Nama Peserta').toUpperCase();
+ ctx.fillText(pName, W/2, 470);
+
+ ctx.strokeStyle='#d97706';
+ ctx.lineWidth=3;
+ ctx.beginPath();
+ ctx.moveTo(W/2 - 280, 505);
+ ctx.lineTo(W/2 + 280, 505);
+ ctx.stroke();
+
+ if(r.org){
+   ctx.fillStyle='#64748b';
+   ctx.font='700 32px "Segoe UI", Arial, sans-serif';
+   ctx.fillText(r.org, W/2, 560);
+ }
+
+ ctx.fillStyle='#334155';
+ ctx.font='400 32px "Georgia", serif';
+ ctx.fillText('Atas partisipasi dan kehadirannya dalam kegiatan:', W/2, 650);
+
+ ctx.fillStyle='#0f172a';
+ ctx.font='800 48px "Segoe UI", Arial, sans-serif';
+ ctx.fillText(r.eventName||'Nama Acara', W/2, 730);
+
+ ctx.fillStyle='#64748b';
+ ctx.font='400 28px "Segoe UI", Arial, sans-serif';
+ const dateStr=r.eventDate?fd(r.eventDate,{weekday:'long',day:'numeric',month:'long',year:'numeric'}):'';
+ ctx.fillText((dateStr?'Diselenggarakan pada '+dateStr:'')+(r.location?' bertempat di '+r.location:''), W/2, 800);
+
+ const qrUrl=location.origin+location.pathname+'?verify_cert='+encodeURIComponent(r.code);
+ 
+ ctx.textAlign='left';
+ ctx.fillStyle='#0f172a';
+ ctx.font='700 22px monospace';
+ ctx.fillText('NO: CERT-'+r.code, 150, 1140);
+ ctx.fillStyle='#64748b';
+ ctx.font='400 20px sans-serif';
+ ctx.fillText('Keaslian sertifikat terdaftar resmi di sistem.', 150, 1175);
+ ctx.fillText('Pindai QR untuk verifikasi keaslian daring.', 150, 1205);
+
+ ctx.textAlign='center';
+ const sigX=W - 350;
+ ctx.strokeStyle='#0f172a';
+ ctx.lineWidth=2;
+ ctx.beginPath();
+ ctx.moveTo(sigX - 180, 1180);
+ ctx.lineTo(sigX + 180, 1180);
+ ctx.stroke();
+
+ ctx.fillStyle='#0f172a';
+ ctx.font='800 30px "Segoe UI", Arial, sans-serif';
+ ctx.fillText((r.config&&r.config.signatory)||'Penyelenggara Acara', sigX, 1220);
+
+ ctx.fillStyle='#64748b';
+ ctx.font='600 24px "Segoe UI", Arial, sans-serif';
+ ctx.fillText((r.config&&r.config.signatory_title)||'Ketua Panitia', sigX, 1260);
+
+ if(typeof QRCode!=='undefined'||typeof qrcode!=='undefined'){
+   const tempDiv=document.createElement('div');
+   tempDiv.innerHTML=qr(qrUrl);
+   const img=tempDiv.querySelector('img');
+   if(img){
+     img.onload=function(){ ctx.drawImage(img, 150, 930, 160, 160); };
+     if(img.complete) ctx.drawImage(img, 150, 930, 160, 160);
+   }
+ }
+}
+
+async function openCertModal(ticketCode){
+ bz(1,'Menyiapkan Sertifikat...');
+ try{
+   const r=await pub('certificateVerify',{code:ticketCode});
+   bz(-1);
+   if(!r||!r.verified){
+     return toast('Sertifikat belum dapat diunduh. Pastikan Anda telah hadir di acara.',1);
+   }
+   modal(`<button class="btn sm x" data-act="cm">&#10005;</button>
+   <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
+     <span style="font-size:26px">🎓</span>
+     <div>
+       <h2 style="margin:0;font-size:18px">E-Sertifikat Resmi</h2>
+       <small class="muted">Terverifikasi atas nama <b>${esc(r.name)}</b></small>
+     </div>
+   </div>
+   <div style="margin:10px 0;text-align:center">
+     <canvas id="cert_canvas" width="2000" height="1414" style="width:100%;max-width:640px;height:auto;border-radius:10px;box-shadow:0 4px 20px rgba(0,0,0,.15);border:1px solid var(--bd)"></canvas>
+   </div>
+   <div class="acts" style="margin-top:14px;flex-wrap:wrap">
+     <button class="btn pri" data-act="downloadCertPng" data-name="${esc(r.name)}" style="background:linear-gradient(135deg,#f59e0b,#d97706);color:#fff;border:none;font-weight:700">📥 Unduh Gambar (PNG HD)</button>
+     <button class="btn" data-act="printCert">🖨️ Cetak / Simpan PDF</button>
+     <button class="btn" data-act="copyCertLink" data-code="${esc(r.code)}">🔗 Salin Tautan Verifikasi</button>
+     <button class="btn" data-act="cm">${t('close')}</button>
+   </div>`,1);
+
+   setTimeout(()=>{
+     const cv=$('#cert_canvas');
+     if(cv)drawCertificateCanvas(cv,r);
+   },60);
+ }catch(e){bz(-1);fail(e)}
+}
+
+function downloadCertPng(el){
+ const cv=$('#cert_canvas');
+ if(!cv)return;
+ const name=(el&&el.dataset.name)||'Peserta';
+ const a=document.createElement('a');
+ a.download='Sertifikat_'+name.replace(/[^A-Za-z0-9]/g,'_')+'.png';
+ a.href=cv.toDataURL('image/png');
+ a.click();
+ a.remove();
+ toast('Sertifikat berhasil diunduh!',0);
+}
+
+function printCert(){
+ const cv=$('#cert_canvas');
+ if(!cv)return;
+ const imgUri=cv.toDataURL('image/png');
+ const w=window.open('','_blank');
+ if(!w)return toast('Pop-up printer diblokir browser',1);
+ w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Cetak Sertifikat</title>
+ <style>
+   @page { size: A4 landscape; margin: 0; }
+   body { margin: 0; display: flex; align-items: center; justify-content: center; min-height: 100vh; background: #fff; }
+   img { width: 100vw; height: 100vh; object-fit: contain; }
+ </style></head><body>
+   <img src="${imgUri}">
+   <script>setTimeout(function(){ window.print(); setTimeout(function(){ window.close(); }, 500); }, 400);</` + `script>
+ </body></html>`);
+ w.document.close();
+}
+
+async function certificateVerifyView(code){
+ const shell=b=>`<div class="gate"><div class="card tkc">${b}</div></div>`;
+ $('#app').innerHTML=shell('<div class="tkh"><small style="letter-spacing:3px;font-size:11px;font-weight:700">VERIFIKASI SERTIFIKAT</small><h1>&nbsp;</h1></div><div class="tkq"><p class="muted">Memeriksa keaslian sertifikat...</p></div>');
+ let r=null;
+ try{r=await pub('certificateVerify',{code:code})}catch(e){r=null}
+ const back=`<div class="tkb"><div class="acts"><a class="btn pri" style="text-decoration:none;text-align:center" href="${esc(location.pathname)}">Buka Aplikasi AmbilTiketnya</a></div></div>`;
+ if(!r||!r.verified){
+   $('#app').innerHTML=shell(`<div class="tkh"><small style="letter-spacing:3px;font-size:11px;font-weight:700">VERIFIKASI SERTIFIKAT</small><h1>Sertifikat Tidak Sah</h1></div><div class="tkm" style="color:var(--er)">⛔ Sertifikat tidak ditemukan atau peserta belum terkonfirmasi hadir di acara.</div><div style="height:12px"></div>${back}`);
+   return;
+ }
+ $('#app').innerHTML=shell(`
+  <div class="tkh" style="background:linear-gradient(135deg,#064e3b,#047857);color:#fff">
+    <div style="font-size:42px;margin-bottom:6px">🛡️</div>
+    <div style="letter-spacing:3px;font-size:11px;font-weight:800;text-transform:uppercase;color:#a7f3d0">Sertifikat Resmi Terverifikasi</div>
+    <h1 style="color:#fff;margin:6px 0 0">Sah &amp; Asli</h1>
+  </div>
+  <div class="tkq" style="text-align:left;padding:16px 20px">
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px;padding-bottom:12px;border-bottom:1px solid var(--bd)">
+      <span style="font-size:28px">🎓</span>
+      <div>
+        <small class="muted" style="text-transform:uppercase;font-size:11px;font-weight:700">Penerima Sertifikat</small>
+        <div style="font-size:18px;font-weight:800;color:var(--tx)">${esc(r.name)}</div>
+        ${r.org?`<small style="color:var(--mu);font-weight:600">${esc(r.org)}</small>`:''}
+      </div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr;gap:10px;font-size:13px">
+      <div><small class="muted" style="display:block;font-size:11px;font-weight:700">Acara</small><b>${esc(r.eventName)}</b></div>
+      <div><small class="muted" style="display:block;font-size:11px;font-weight:700">Waktu &amp; Lokasi</small><b>${fd(r.eventDate)} &#183; ${esc(r.location)}</b></div>
+      <div><small class="muted" style="display:block;font-size:11px;font-weight:700">Nomor Sertifikat</small><b class="mono" style="color:var(--ac)">CERT-${esc(r.code)}</b></div>
+      <div><small class="muted" style="display:block;font-size:11px;font-weight:700">Status Kehadiran di Gerbang</small><b style="color:var(--ok)">✓ Hadir (Telah Check-In)</b></div>
+    </div>
+  </div>
+  ${back}
+ `);
+}
+
+function showCheckoutQuestionsModal(ev, qty){
+ const fields=(ev&&Array.isArray(ev.custom_fields))?ev.custom_fields:[];
+ modal(`<button class="btn sm x" data-act="cm">&#10005;</button>
+ <h2>📝 Informasi Pendaftaran</h2>
+ <p class="muted" style="margin:2px 0 14px">Silakan lengkapi data tambahan untuk <b>${esc(ev.name)}</b> (${qty} ${t('tix')}):</p>
+ <form id="cq_form" onsubmit="return false">
+   ${fields.map(f=>{
+     const reqBadge=f.required?'<span style="color:var(--er);margin-left:3px">*</span>':'<small class="muted" style="margin-left:4px;font-weight:normal">(Opsional)</small>';
+     let inp='';
+     let defaultVal='';
+     const lblLower=(f.label||'').toLowerCase();
+     if(lblLower.includes('gereja')||lblLower.includes('instansi'))defaultVal=(S.user&&S.user.church)||'';
+     else if(lblLower.includes('usia')||lblLower.includes('umur'))defaultVal=(S.user&&S.user.age)||'';
+     
+     if(f.type==='select'){
+       const opts=(Array.isArray(f.options)?f.options:(f.options||'').split(',')).map(s=>s.trim()).filter(Boolean);
+       inp=`<select class="cq-val" data-id="${esc(f.id)}" data-lbl="${esc(f.label)}" data-req="${f.required?'1':'0'}" style="width:100%;padding:10px;border-radius:10px;border:1px solid var(--bd);font-size:14px">
+         <option value="">-- Pilih ${esc(f.label)} --</option>
+         ${opts.map(o=>`<option value="${esc(o)}">${esc(o)}</option>`).join('')}
+       </select>`;
+     }else if(f.type==='number'){
+       inp=`<input type="number" class="cq-val" data-id="${esc(f.id)}" data-lbl="${esc(f.label)}" data-req="${f.required?'1':'0'}" value="${esc(defaultVal)}" placeholder="Masukkan ${esc(f.label)}" style="width:100%;padding:10px;border-radius:10px;border:1px solid var(--bd);font-size:14px">`;
+     }else{
+       inp=`<input type="text" class="cq-val" data-id="${esc(f.id)}" data-lbl="${esc(f.label)}" data-req="${f.required?'1':'0'}" value="${esc(defaultVal)}" placeholder="Masukkan ${esc(f.label)}" style="width:100%;padding:10px;border-radius:10px;border:1px solid var(--bd);font-size:14px">`;
+     }
+     return `<div style="margin-bottom:12px"><label style="font-size:12px;font-weight:700;display:block;margin-bottom:4px">${esc(f.label)} ${reqBadge}</label>${inp}</div>`;
+   }).join('')}
+ </form>
+ <div class="acts" style="margin-top:16px">
+   <button class="btn" data-act="cm">${t('close')}</button>
+   <button class="btn pri" data-act="submitCheckoutQuestions" data-id="${ev.id}" data-qty="${qty}">Lanjutkan &amp; Dapatkan Tiket &#8250;</button>
+ </div>`);
+}
+
+async function executeBooking(ev, qty, customAnswers){
+ const auto=!!(ev&&!ev.is_paid), w=auto?openWait():null;
+ try{
+   const r=await api('book',{eventId:ev.id,qty:qty,custom_answers:customAnswers||{}},t('booking'));
+   S.tix=await api('myTickets');
+   const o=find(S.tix,r.id);
+   S.preT=S.tix;
+   S.tab='tickets';
+   renderUser();
+   const wa=auto&&r.status==='confirmed';
+   passModal(o,r.status==='confirmed'?t('ok')+' '+(r.emailed?t('emailed'):'')+(wa?' '+t('wa_auto'):''):t('okp'));
+   if(wa)waGo(await waHref(o),w);else if(w)try{w.close()}catch(x){}
+ }catch(e){if(w)try{w.close()}catch(x){}fail(e)}
+}
+
 const NL=String.fromCharCode(10),find=(a,id)=>a.find(x=>x.id===id),A={
  walkinModal(el){walkinModal(false)},
  scWalkin(){stopCamera();walkinModal(true)},
@@ -3280,7 +3701,25 @@ const NL=String.fromCharCode(10),find=(a,id)=>a.find(x=>x.id===id),A={
  async dlpng(el){const o=find(S.tix,el.dataset.id);if(!o)return;const f=await ticketImg(o);if(!f)return toast(t('e_E_GENERIC'),1);const a=document.createElement('a');a.href=URL.createObjectURL(f);a.download=f.name;document.body.append(a);a.click();a.remove()},
  async dl(el){bz(1,t('preparing'));try{let o=S.tix&&find(S.tix,el.dataset.id);if(!o){S.tix=await api('myTickets');o=find(S.tix,el.dataset.id)}if(!o)throw new Error('NOT_FOUND');await generateTicketPdf(o)}catch(e){fail(e)}finally{bz(-1,t('preparing'))}},
  scOpen(){openScannerModal()},scClose(){closeScannerModal()},scTorch(){toggleTorch()},scAudio(){toggleAudio()},scFlip(){toggleCamera()},scFs(){toggleFullscreen()},cpRefresh(){A_cpRefresh()},cpExport(){A_cpExport()},cpManageModal(el){cpManageModal(el.dataset.id)},cpAddAdmin(){cpEditFormModal(null)},cpEditAdmin(el){const id=el.dataset.id,key=el.dataset.key,cp=S_cpAdmin.checkpoints.find(x=>(id&&x.id===id)||(key&&x.checkpoint_key===key));cpEditFormModal(cp)},cpDeleteAdmin(el){A_cpDeleteAdmin(el)},cpToggleActive(el){A_cpToggleActive(el)},cpSaveAdminSubmit(el){A_cpSaveAdminSubmit(el)},cpResetDefaults(){A_cpResetDefaults()},cpShowQr(el){const id=el.dataset.id,key=el.dataset.key,cp=S_cpAdmin.checkpoints.find(x=>(id&&x.id===id)||(key&&x.checkpoint_key===key));cpShowQrModal(cp)},copySessionLink(el){navigator.clipboard.writeText(el.dataset.url).then(()=>toast('Tautan presensi disalin!',0)).catch(()=>toast('Gagal menyalin',1))},openSelfScan(el){openSelfScanModal(el.dataset.code)},closeSelfScan(){closeSelfScanModal()},evForm(el){evForm(el.dataset.id)},paid(el){S.paid=el.dataset.v==='1';document.querySelectorAll('[data-act=paid]').forEach(b=>b.classList.toggle('on',b===el));const p=$('#pr');p.disabled=!S.paid;if(!S.paid)p.value=0},
- async saveEv(){const f=$('#ef'),d=Object.fromEntries(new FormData(f));d.one_order_per_account=f.one_order_per_account.checked;d.is_active=f.is_active.checked;d.is_paid=S.paid;d.price=S.paid?d.price:0;d.quota=parseInt(d.quota,10)||0;d.walkin_quota=parseInt(d.walkin_quota,10)||0;if(!d.id)delete d.id;try{await api('saveEvent',d,t('loading'));cm();toast(t('saved'));S.aev=null;adminView()}catch(e){fail(e)}},
+ async saveEv(){
+  const f=$('#ef'),d=Object.fromEntries(new FormData(f));
+  d.one_order_per_account=f.one_order_per_account.checked;
+  d.is_active=f.is_active.checked;
+  d.is_paid=S.paid;
+  d.price=S.paid?d.price:0;
+  d.quota=parseInt(d.quota,10)||0;
+  d.walkin_quota=parseInt(d.walkin_quota,10)||0;
+  d.enable_nametag=!!(f.enable_nametag&&f.enable_nametag.checked);
+  d.enable_certificate=!!(f.enable_certificate&&f.enable_certificate.checked);
+  d.certificate_config={
+    title: (f.cert_title?f.cert_title.value:'').trim()||'SERTIFIKAT PARTISIPASI',
+    signatory: (f.cert_signatory?f.cert_signatory.value:'').trim(),
+    signatory_title: (f.cert_signatory_title?f.cert_signatory_title.value:'').trim()||'Ketua Panitia'
+  };
+  d.custom_fields=getCustomFieldsFromEditor();
+  if(!d.id)delete d.id;
+  try{await api('saveEvent',d,t('loading'));cm();toast(t('saved'));S.aev=null;adminView()}catch(e){fail(e)}
+ },
  async cxl(el){if(await ask(t('ask_cancel')))try{await api('cancelOrder',{id:el.dataset.id},t('loading'));S.view==='inv'?invView($('#ac')):loadOrders()}catch(e){fail(e)}},
  ordpg(el){S.ordPage=parseInt(el.dataset.v,10)||1;paintOrders();const tb=$('#ot');if(tb&&tb.scrollIntoView)tb.scrollIntoView({block:'start'})},
  usrpg(el){S.usrPage=parseInt(el.dataset.v,10)||1;paintUsers();const tb=$('#ut');if(tb&&tb.scrollIntoView)tb.scrollIntoView({block:'start'})},
