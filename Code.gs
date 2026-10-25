@@ -33,7 +33,7 @@ function doGet(e) {
 /* ---------- API JSON untuk tampilan yang dihosting di luar Apps Script (mis. GitHub Pages) ----------
  * Klien memanggil POST ke alamat /exec dengan isi {"fn":"nama","args":[...]} (Content-Type: text/plain agar tanpa preflight CORS).
  * Hanya fungsi pada daftar putih di bawah yang bisa dipanggil; semuanya sama dengan yang dipakai google.script.run. */
-const API_FNS = { init: init, register: register, loginPw: loginPw, loginGoogle: loginGoogle, forgotRequest: forgotRequest, forgotReset: forgotReset, legalPublic: legalPublic, ticketPublic: ticketPublic, eventsPublic: eventsPublic, feedbackPublic: feedbackPublic, surveyInfo: surveyInfo, surveyStagePoll: surveyStagePoll, api: api, migrateOauth: migrateOauth, gateLogin: gateLogin, ticketFacilities: ticketFacilities, sessionSelfCheckin: sessionSelfCheckin, checkpointPublicInfo: checkpointPublicInfo, sessionStageLiveCount: sessionStageLiveCount, certificateVerify: certificateVerify, organizerPublic: organizerPublic, guestbookWall: guestbookWall };
+const API_FNS = { init: init, register: register, loginPw: loginPw, loginGoogle: loginGoogle, forgotRequest: forgotRequest, forgotReset: forgotReset, legalPublic: legalPublic, ticketPublic: ticketPublic, eventsPublic: eventsPublic, feedbackPublic: feedbackPublic, surveyInfo: surveyInfo, surveyStagePoll: surveyStagePoll, api: api, migrateOauth: migrateOauth, gateLogin: gateLogin, ticketFacilities: ticketFacilities, sessionSelfCheckin: sessionSelfCheckin, checkpointPublicInfo: checkpointPublicInfo, sessionStageLiveCount: sessionStageLiveCount, certificateVerify: certificateVerify, organizerPublic: organizerPublic, guestbookWall: guestbookWall, digitalInvitationInfo: digitalInvitationInfo, digitalInvitationRsvp: digitalInvitationRsvp };
 function jsonOut(o) { return ContentService.createTextOutput(JSON.stringify(o === undefined ? null : o)).setMimeType(ContentService.MimeType.JSON); }
 function doPost(e) {
   let out;
@@ -2212,3 +2212,116 @@ function assignTable(u, p) {
   neonQuery(`UPDATE orders SET table_assignment=$1 WHERE id=$2::uuid`, [table, ordId]);
   return true;
 }
+
+
+function digitalInvitationInfo(p) {
+        const code = String(p && (p.code || p.invite || p.undangan) || '').trim();
+        if (!code) throw new Error('CODE_REQUIRED');
+  ensureFeatureTables();
+
+        // Check if code matches an order (ticket_code, order_code, id)
+        const ordRows = neonQuery( `
+          SELECT o.id, o.order_code, o.ticket_code, o.qty, o.total, o.status, o.checked_in, o.checked_in_at, o.kind,
+            coalesce(o.rsvp_status, 'pending') AS rsvp_status,
+            coalesce(o.plus_one_count, 0)::int AS plus_one_count,
+            coalesce(o.guestbook_message, '') AS guestbook_message,
+            coalesce(o.table_assignment, '') AS table_assignment,
+            coalesce(o.guest_name, u.name) AS guest_name,
+            coalesce(o.guest_org, u.church) AS guest_org,
+            coalesce(o.guest_phone, u.whatsapp) AS guest_phone,
+            e.id AS event_id, e.name AS event_name, e.category, e.banner_url, e.description,
+            e.event_date::text AS event_date, to_char(e.start_time, 'HH24:MI') AS start_time, to_char(e.end_time, 'HH24:MI') AS end_time,
+            e.location, e.announcement, e.terms,
+            coalesce(e.active_modules, '["ticketing"]'::jsonb) AS active_modules,
+            coalesce(e.module_config, '{}'::jsonb) AS module_config,
+            coalesce(org.name, 'Ambiltiketnya') AS organizer_name,
+            coalesce(org.logo_url, '') AS organizer_logo
+          FROM orders o
+          JOIN events e ON e.id = o.event_id
+          LEFT JOIN users u ON u.id = o.user_id
+          LEFT JOIN organizers org ON org.id = e.organizer_id
+          WHERE o.ticket_code = $1 OR o.order_code = $1 OR o.id::text = $1
+          LIMIT 1
+        `, [code]);
+
+        if (ordRows.length) {
+          const o = ordRows[0];
+          const wishes = neonQuery( `
+            SELECT coalesce(o.guest_name, u.name) AS name, coalesce(o.guest_org, u.church) AS org,
+              o.guestbook_message AS message, to_char(o.created_at AT TIME ZONE 'Asia/Jakarta', 'DD Mon HH24:MI') AS time_str
+            FROM orders o
+            LEFT JOIN users u ON u.id = o.user_id
+            WHERE o.event_id = $1::uuid AND o.guestbook_message <> '' AND o.status <> 'cancelled' AND o.status <> 'declined'
+            ORDER BY o.created_at DESC LIMIT 15
+          `, [o.event_id]);
+          return { found: true, type: 'order', order: o, wishes } });
+        }
+
+        // Check if code matches an event ID
+        const evRows = neonQuery( `
+          SELECT e.id, e.name AS event_name, e.category, e.banner_url, e.description,
+            e.event_date::text AS event_date, to_char(e.start_time, 'HH24:MI') AS start_time, to_char(e.end_time, 'HH24:MI') AS end_time,
+            e.location, e.announcement, e.terms,
+            coalesce(e.active_modules, '["ticketing"]'::jsonb) AS active_modules,
+            coalesce(e.module_config, '{}'::jsonb) AS module_config,
+            coalesce(org.name, 'Ambiltiketnya') AS organizer_name,
+            coalesce(org.logo_url, '') AS organizer_logo
+          FROM events e
+          LEFT JOIN organizers org ON org.id = e.organizer_id
+          WHERE e.id::text = $1 AND e.is_active = true
+          LIMIT 1
+        `, [code]);
+
+        if (evRows.length) {
+          const ev = evRows[0];
+          const wishes = neonQuery( `
+            SELECT coalesce(o.guest_name, u.name) AS name, coalesce(o.guest_org, u.church) AS org,
+              o.guestbook_message AS message, to_char(o.created_at AT TIME ZONE 'Asia/Jakarta', 'DD Mon HH24:MI') AS time_str
+            FROM orders o
+            LEFT JOIN users u ON u.id = o.user_id
+            WHERE o.event_id = $1::uuid AND o.guestbook_message <> '' AND o.status <> 'cancelled' AND o.status <> 'declined'
+            ORDER BY o.created_at DESC LIMIT 15
+          `, [ev.id]);
+          return { found: true, type: 'event', event: ev, wishes } });
+        }
+
+        return { found: false } });
+      }
+
+function digitalInvitationRsvp(p) {
+        const code = String(p && p.code || '').trim();
+        const rsvpStatus = String(p && p.rsvp_status || 'attending').trim().toLowerCase();
+        const plusOne = Math.max(0, parseInt(p && p.plus_one_count, 10) || 0);
+        const message = String(p && p.guestbook_message || '').trim().slice(0, 1000);
+        const guestName = String(p && p.guest_name || '').trim();
+        const guestPhone = String(p && p.guest_phone || '').trim();
+        const guestOrg = String(p && p.guest_org || '').trim();
+
+  ensureFeatureTables();
+
+        // Check if updating existing order
+        const ordRows = neonQuery( `SELECT id, event_id, qty, status FROM orders WHERE ticket_code=$1 OR order_code=$1 OR id::text=$1`, [code]);
+        if (ordRows.length) {
+          const ord = ordRows[0];
+          const isDeclined = rsvpStatus === 'declined';
+          const newQty = isDeclined ? 1 : (1 + plusOne);
+          const newStatus = isDeclined ? 'declined' : 'confirmed';
+          neonQuery( `UPDATE orders SET rsvp_status=$1, plus_one_count=$2, guestbook_message=$3, qty=$4, status=$5 WHERE id=$6::uuid`, [rsvpStatus, plusOne, message, newQty, newStatus, ord.id]);
+          return { success: true, status: newStatus, rsvp_status: rsvpStatus } });
+        }
+
+        // Open event registration
+        const evRows = neonQuery( `SELECT id, name, quota FROM events WHERE id::text=$1 AND is_active=true`, [code]);
+        if (!evRows.length) throw new Error('NOT_FOUND');
+        const ev = evRows[0];
+        const isDeclined = rsvpStatus === 'declined';
+        const qty = isDeclined ? 1 : (1 + plusOne);
+        const prefix = (ev.name.replace(/[^A-Za-z]/g, '').slice(0, 4).toUpperCase() || 'EVNT');
+        const tCode = 'INV-' + prefix + '-' + rnd(6);
+        const oCode = rnd(8);
+
+        const defaultUser = (neonQuery( `SELECT id FROM users ORDER BY created_at ASC LIMIT 1`))[0];
+        const r = neonQuery( `INSERT INTO orders(order_code,ticket_code,user_id,event_id,qty,total,status,kind,guest_name,guest_org,guest_phone,rsvp_status,plus_one_count,guestbook_message)
+          VALUES($1,$2,$3::uuid,$4::uuid,$5::int,0,$6,'invitation',$7,$8,$9,$10,$11::int,$12) RETURNING id,ticket_code`, [oCode, tCode, defaultUser.id, ev.id, qty, isDeclined ? 'declined' : 'confirmed', guestName || 'Tamu Undangan', guestOrg || '', guestPhone || null, rsvpStatus, plusOne, message]);
+        return { success: true, ticket_code: r[0].ticket_code, rsvp_status: rsvpStatus } });
+      }
