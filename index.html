@@ -5270,7 +5270,8 @@ const NL=String.fromCharCode(10),find=(a,id)=>a.find(x=>x.id===id),A={
  async copyInvLink(el){
   const o=S.inv.find(x=>x.id===el.dataset.id)||(S.ord&&S.ord.find(x=>x.id===el.dataset.id));
   if(!o)return;
-  const u=location.origin+location.pathname+'?invite='+encodeURIComponent(o.ticket_code)+'&to='+encodeURIComponent(o.guest_name||'');
+  const origin=(location.origin&&location.origin.startsWith('http'))?location.origin:'https://ambiltiketnya.online';
+  const u=origin+'/inv?code='+encodeURIComponent(o.ticket_code)+'&to='+encodeURIComponent(o.guest_name||'');
   try{
    if(navigator.clipboard&&navigator.clipboard.writeText){await navigator.clipboard.writeText(u)}
    else{const ta=document.createElement('textarea');ta.value=u;document.body.appendChild(ta);ta.select();document.execCommand('copy');document.body.removeChild(ta)}
@@ -5284,7 +5285,8 @@ const NL=String.fromCharCode(10),find=(a,id)=>a.find(x=>x.id===id),A={
   const evDateStr=ev.event_date?fd(ev.event_date,{weekday:'long',day:'numeric',month:'long',year:'numeric'}):'';
   const fmtTime=t=>String(t||'').trim().replace(/^(\d{1,2}:\d{2})(?::\d{2})?$/, '$1');
   const timeStr=ev.start_time?(fmtTime(ev.start_time)+(ev.end_time?' - '+fmtTime(ev.end_time):'')+' WIB'):'';
-  const invUrl=location.origin+location.pathname+'?invite='+encodeURIComponent(o.ticket_code)+'&to='+encodeURIComponent(o.guest_name||'');
+  const origin=(location.origin&&location.origin.startsWith('http'))?location.origin:'https://ambiltiketnya.online';
+  const invUrl=origin+'/inv?code='+encodeURIComponent(o.ticket_code)+'&to='+encodeURIComponent(o.guest_name||'');
   const isRsvp=hasMod(ev,'rsvp');
   let msg='Kepada Yth.\n*'+(o.guest_name||'Bapak/Ibu/Saudara/i')+'*\n\n'+
    'Dengan hormat,\n'+

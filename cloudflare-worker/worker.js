@@ -466,7 +466,8 @@ export default {
     }
 
     // Dynamic Invitation Link Preview for WhatsApp / Telegram / Social Media crawlers
-    if (url.pathname === '/invite' || url.pathname === '/inv') {
+    const pathnameNorm = url.pathname.toLowerCase().replace(/\/+$/, '');
+    if (pathnameNorm === '/invite' || pathnameNorm === '/inv') {
       const code = String(url.searchParams.get('code') || url.searchParams.get('invite') || '').trim().toUpperCase();
       const guestTo = String(url.searchParams.get('to') || '').trim();
       let eventName = 'Undangan Acara';
