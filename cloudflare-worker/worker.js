@@ -1376,7 +1376,7 @@ export default {
           }
           const sql = `SELECT o.id,o.order_code,o.ticket_code,o.qty,o.total,o.status,o.checked_in,o.checked_in_at,o.created_at,o.kind,
             coalesce(o.custom_answers, '{}'::jsonb) AS custom_answers,
-          coalesce(o.rsvp_status, 'attending') AS rsvp_status,
+          coalesce(o.rsvp_status, '') AS rsvp_status,
           coalesce(o.plus_one_count, 0)::int AS plus_one_count,
           coalesce(o.guestbook_message, '') AS guestbook_message,
           coalesce(o.table_assignment, '') AS table_assignment,
