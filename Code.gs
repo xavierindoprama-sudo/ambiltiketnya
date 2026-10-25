@@ -702,6 +702,11 @@ function ensureEmailColumns() {
 }
 
 const ORDERS_SQL = `SELECT o.id,o.order_code,o.ticket_code,o.qty,o.total,o.status,o.checked_in,o.checked_in_at,o.created_at,o.kind,
+    coalesce(o.custom_answers, '{}'::jsonb) AS custom_answers,
+    coalesce(o.rsvp_status, 'attending') AS rsvp_status,
+    coalesce(o.plus_one_count, 0)::int AS plus_one_count,
+    coalesce(o.guestbook_message, '') AS guestbook_message,
+    coalesce(o.table_assignment, '') AS table_assignment,
     coalesce(o.emailed, false) AS emailed, o.email_error, o.emailed_at,
     CASE WHEN o.kind IN ('invitation','walk_in') THEN o.guest_name ELSE u.name END AS name,
     CASE WHEN o.kind='invitation' THEN 'Undangan' WHEN o.kind='walk_in' THEN coalesce(nullif(o.guest_email,''), 'Walk-In') ELSE u.email END AS email,
@@ -723,13 +728,23 @@ function ordersAll(u, p) {
 
 function saveEvent(u, p) {
   ensureWalkinSchema();
-  const cols = ['name', 'category', 'banner_url', 'description', 'announcement', 'event_date', 'start_time', 'end_time', 'location', 'quota', 'walkin_quota', 'is_paid', 'price', 'max_per_order', 'one_order_per_account', 'is_active', 'payment_instructions', 'terms'];
-  const types = ['text', 'text', 'text', 'text', 'text', 'date', 'time', 'time', 'text', 'int', 'int', 'bool', 'int', 'int', 'bool', 'bool', 'text', 'text'];
+  ensureFeatureTables();
+  const cols = ['name', 'category', 'banner_url', 'description', 'announcement', 'event_date', 'start_time', 'end_time', 'location', 'quota', 'walkin_quota', 'is_paid', 'price', 'max_per_order', 'one_order_per_account', 'is_active', 'payment_instructions', 'terms', 'custom_fields', 'enable_nametag', 'enable_certificate', 'certificate_config', 'active_modules', 'module_config'];
+  const types = ['text', 'text', 'text', 'text', 'text', 'date', 'time', 'time', 'text', 'int', 'int', 'bool', 'int', 'int', 'bool', 'bool', 'text', 'text', 'jsonb', 'bool', 'bool', 'jsonb', 'jsonb', 'jsonb'];
   const paid = !!p.is_paid, quota = parseInt(p.quota, 10), maxp = parseInt(p.max_per_order, 10), walkinQuota = Math.max(0, parseInt(p.walkin_quota, 10) || 0);
   if (!String(p.name || '').trim() || !String(p.location || '').trim() || !/^\d{4}-\d{2}-\d{2}$/.test(p.event_date || '') || !/^\d{2}:\d{2}/.test(p.start_time || '')) throw new Error('BAD_EVENT');
   if (!(quota > 0) || !(maxp > 0)) throw new Error('BAD_EVENT');
+
+  const customFields = Array.isArray(p.custom_fields) ? JSON.stringify(p.custom_fields) : (p.custom_fields || '[]');
+  const enableNametag = !!p.enable_nametag;
+  const enableCertificate = !!p.enable_certificate;
+  const certConfig = typeof p.certificate_config === 'object' ? JSON.stringify(p.certificate_config || {}) : (p.certificate_config || '{}');
+  const activeModules = Array.isArray(p.active_modules) ? JSON.stringify(p.active_modules) : (p.active_modules || '["ticketing"]');
+  const moduleConfig = typeof p.module_config === 'object' ? JSON.stringify(p.module_config || {}) : (p.module_config || '{}');
+
   const v = [p.name.trim(), p.category || '', p.banner_url || '', p.description || '', p.announcement || '', p.event_date, p.start_time, p.end_time || null, p.location.trim(),
-    quota, walkinQuota, paid, paid ? Math.max(0, parseInt(p.price, 10) || 0) : 0, maxp, !!p.one_order_per_account, p.is_active !== false, p.payment_instructions || '', String(p.terms || '').slice(0, 8000)];
+    quota, walkinQuota, paid, paid ? Math.max(0, parseInt(p.price, 10) || 0) : 0, maxp, !!p.one_order_per_account, p.is_active !== false, p.payment_instructions || '', String(p.terms || '').slice(0, 8000),
+    customFields, enableNametag, enableCertificate, certConfig, activeModules, moduleConfig];
   const ph = cols.map((c, i) => `$${i + 1}::${types[i]}`).join(',');
   const upd = cols.map(c => `${c}=EXCLUDED.${c}`).join(',');
   return q(`INSERT INTO events(${cols.join(',')},id) VALUES(${ph},$${cols.length + 1}::uuid) ON CONFLICT(id) DO UPDATE SET ${upd} RETURNING id`, v.concat([p.id || Utilities.getUuid()]))[0];
@@ -2289,39 +2304,59 @@ function digitalInvitationInfo(p) {
       }
 
 function digitalInvitationRsvp(p) {
-        const code = String(p && p.code || '').trim();
-        const rsvpStatus = String(p && p.rsvp_status || 'attending').trim().toLowerCase();
-        const plusOne = Math.max(0, parseInt(p && p.plus_one_count, 10) || 0);
-        const message = String(p && p.guestbook_message || '').trim().slice(0, 1000);
-        const guestName = String(p && p.guest_name || '').trim();
-        const guestPhone = String(p && p.guest_phone || '').trim();
-        const guestOrg = String(p && p.guest_org || '').trim();
+  var code = String(p && p.code || '').trim();
+  var rsvpStatus = String(p && p.rsvp_status || 'attending').trim().toLowerCase();
+  var plusOne = Math.max(0, parseInt(p && p.plus_one_count, 10) || 0);
+  var message = String(p && p.guestbook_message || '').trim().slice(0, 1000);
+  var guestName = String(p && p.guest_name || '').trim();
+  var guestPhone = String(p && p.guest_phone || '').trim();
+  var guestOrg = String(p && p.guest_org || '').trim();
 
   ensureFeatureTables();
 
-        // Check if updating existing order
-        const ordRows = neonQuery( `SELECT id, event_id, qty, status FROM orders WHERE ticket_code=$1 OR order_code=$1 OR id::text=$1`, [code]);
-        if (ordRows.length) {
-          const ord = ordRows[0];
-          const isDeclined = rsvpStatus === 'declined';
-          const newQty = isDeclined ? 1 : (1 + plusOne);
-          const newStatus = isDeclined ? 'declined' : 'confirmed';
-          neonQuery( `UPDATE orders SET rsvp_status=$1, plus_one_count=$2, guestbook_message=$3, qty=$4, status=$5 WHERE id=$6::uuid`, [rsvpStatus, plusOne, message, newQty, newStatus, ord.id]);
-          return { success: true, status: newStatus, rsvp_status: rsvpStatus } });
-        }
+  var ordRows = neonQuery(`SELECT o.id, o.event_id, o.qty, o.status, e.module_config FROM orders o JOIN events e ON e.id=o.event_id WHERE o.ticket_code=$1 OR o.order_code=$1 OR o.id::text=$1`, [code]);
+  if (ordRows.length) {
+    var ord = ordRows[0];
+    var maxPO = 2;
+    var allowPO = true;
+    if (ord.module_config) {
+      var cfg = ord.module_config;
+      if (typeof cfg === 'string') { try { cfg = JSON.parse(cfg); } catch(x) { cfg = {}; } }
+      if (cfg.allow_plus_one === false) allowPO = false;
+      if (cfg.max_plus_one != null) maxPO = Math.max(0, parseInt(cfg.max_plus_one, 10) || 0);
+    }
+    if (!allowPO || maxPO === 0) plusOne = 0;
+    else plusOne = Math.min(maxPO, plusOne);
 
-        // Open event registration
-        const evRows = neonQuery( `SELECT id, name, quota FROM events WHERE id::text=$1 AND is_active=true`, [code]);
-        if (!evRows.length) throw new Error('NOT_FOUND');
-        const ev = evRows[0];
-        const isDeclined = rsvpStatus === 'declined';
-        const qty = isDeclined ? 1 : (1 + plusOne);
-        const prefix = (ev.name.replace(/[^A-Za-z]/g, '').slice(0, 4).toUpperCase() || 'EVNT');
-        const tCode = 'INV-' + prefix + '-' + rnd(6);
-        const oCode = rnd(8);
+    var isDeclined = rsvpStatus === 'declined';
+    var newQty = isDeclined ? 1 : (1 + plusOne);
+    var newStatus = isDeclined ? 'declined' : 'confirmed';
+    neonQuery(`UPDATE orders SET rsvp_status=$1, plus_one_count=$2, guestbook_message=$3, qty=$4, status=$5 WHERE id=$6::uuid`, [rsvpStatus, plusOne, message, newQty, newStatus, ord.id]);
+    return { success: true, status: newStatus, rsvp_status: rsvpStatus, plus_one_count: plusOne };
+  }
 
-        const defaultUser = (neonQuery( `SELECT id FROM users ORDER BY created_at ASC LIMIT 1`))[0];
-        const r = neonQuery( `INSERT INTO orders(order_code,ticket_code,user_id,event_id,qty,total,status,kind,guest_name,guest_org,guest_phone,rsvp_status,plus_one_count,guestbook_message)
-          VALUES($1,$2,$3::uuid,$4::uuid,$5::int,0,$6,'invitation',$7,$8,$9,$10,$11::int,$12) RETURNING id,ticket_code`, [oCode, tCode, defaultUser.id, ev.id, qty, isDeclined ? 'declined' : 'confirmed', guestName || 'Tamu Undangan', guestOrg || '', guestPhone || null, rsvpStatus, plusOne, message]);
-        return { success: true, ticket_code: r[0].ticket_code, rsvp_status: rsvpStatus } });
-      }
+  var evRows = neonQuery(`SELECT id, name, quota, module_config FROM events WHERE id::text=$1 AND is_active=true`, [code]);
+  if (!evRows.length) throw new Error('NOT_FOUND');
+  var ev = evRows[0];
+  var maxPO = 2;
+  var allowPO = true;
+  if (ev.module_config) {
+    var cfg = ev.module_config;
+    if (typeof cfg === 'string') { try { cfg = JSON.parse(cfg); } catch(x) { cfg = {}; } }
+    if (cfg.allow_plus_one === false) allowPO = false;
+    if (cfg.max_plus_one != null) maxPO = Math.max(0, parseInt(cfg.max_plus_one, 10) || 0);
+  }
+  if (!allowPO || maxPO === 0) plusOne = 0;
+  else plusOne = Math.min(maxPO, plusOne);
+
+  var isDeclined = rsvpStatus === 'declined';
+  var qty = isDeclined ? 1 : (1 + plusOne);
+  var prefix = (ev.name.replace(/[^A-Za-z]/g, '').slice(0, 4).toUpperCase() || 'EVNT');
+  var tCode = 'INV-' + prefix + '-' + rnd(6);
+  var oCode = rnd(8);
+
+  var defaultUser = (neonQuery(`SELECT id FROM users ORDER BY created_at ASC LIMIT 1`))[0];
+  var r = neonQuery(`INSERT INTO orders(order_code,ticket_code,user_id,event_id,qty,total,status,kind,guest_name,guest_org,guest_phone,rsvp_status,plus_one_count,guestbook_message)
+    VALUES($1,$2,$3::uuid,$4::uuid,$5::int,0,$6,'invitation',$7,$8,$9,$10,$11::int,$12) RETURNING id,ticket_code`, [oCode, tCode, defaultUser.id, ev.id, qty, isDeclined ? 'declined' : 'confirmed', guestName || 'Tamu Undangan', guestOrg || '', guestPhone || null, rsvpStatus, plusOne, message]);
+  return { success: true, ticket_code: r[0].ticket_code, rsvp_status: rsvpStatus, plus_one_count: plusOne };
+}

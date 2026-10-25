@@ -714,7 +714,7 @@ export default {
         const [p] = args;
         const code = String(p && p.code || '').trim();
         const rsvpStatus = String(p && p.rsvp_status || 'attending').trim().toLowerCase();
-        const plusOne = Math.max(0, parseInt(p && p.plus_one_count, 10) || 0);
+        let plusOne = Math.max(0, parseInt(p && p.plus_one_count, 10) || 0);
         const message = String(p && p.guestbook_message || '').trim().slice(0, 1000);
         const guestName = String(p && p.guest_name || '').trim();
         const guestPhone = String(p && p.guest_phone || '').trim();
@@ -723,20 +723,42 @@ export default {
         await ensureFeatureTables(env);
 
         // Check if updating existing order
-        const ordRows = await neonQuery(env, `SELECT id, event_id, qty, status FROM orders WHERE ticket_code=$1 OR order_code=$1 OR id::text=$1`, [code]);
+        const ordRows = await neonQuery(env, `SELECT o.id, o.event_id, o.qty, o.status, e.module_config FROM orders o JOIN events e ON e.id=o.event_id WHERE o.ticket_code=$1 OR o.order_code=$1 OR o.id::text=$1`, [code]);
         if (ordRows.length) {
           const ord = ordRows[0];
+          let maxPO = 2;
+          let allowPO = true;
+          if (ord.module_config) {
+            let cfg = ord.module_config;
+            if (typeof cfg === 'string') { try { cfg = JSON.parse(cfg); } catch(x) { cfg = {}; } }
+            if (cfg.allow_plus_one === false) allowPO = false;
+            if (cfg.max_plus_one != null) maxPO = Math.max(0, parseInt(cfg.max_plus_one, 10) || 0);
+          }
+          if (!allowPO || maxPO === 0) plusOne = 0;
+          else plusOne = Math.min(maxPO, plusOne);
+
           const isDeclined = rsvpStatus === 'declined';
           const newQty = isDeclined ? 1 : (1 + plusOne);
           const newStatus = isDeclined ? 'declined' : 'confirmed';
           await neonQuery(env, `UPDATE orders SET rsvp_status=$1, plus_one_count=$2, guestbook_message=$3, qty=$4, status=$5 WHERE id=$6::uuid`, [rsvpStatus, plusOne, message, newQty, newStatus, ord.id]);
-          return json({ ok: true, data: { success: true, status: newStatus, rsvp_status: rsvpStatus } });
+          return json({ ok: true, data: { success: true, status: newStatus, rsvp_status: rsvpStatus, plus_one_count: plusOne } });
         }
 
         // Open event registration
-        const evRows = await neonQuery(env, `SELECT id, name, quota FROM events WHERE id::text=$1 AND is_active=true`, [code]);
+        const evRows = await neonQuery(env, `SELECT id, name, quota, module_config FROM events WHERE id::text=$1 AND is_active=true`, [code]);
         if (!evRows.length) throw new Error('NOT_FOUND');
         const ev = evRows[0];
+        let maxPO = 2;
+        let allowPO = true;
+        if (ev.module_config) {
+          let cfg = ev.module_config;
+          if (typeof cfg === 'string') { try { cfg = JSON.parse(cfg); } catch(x) { cfg = {}; } }
+          if (cfg.allow_plus_one === false) allowPO = false;
+          if (cfg.max_plus_one != null) maxPO = Math.max(0, parseInt(cfg.max_plus_one, 10) || 0);
+        }
+        if (!allowPO || maxPO === 0) plusOne = 0;
+        else plusOne = Math.min(maxPO, plusOne);
+
         const isDeclined = rsvpStatus === 'declined';
         const qty = isDeclined ? 1 : (1 + plusOne);
         const prefix = (ev.name.replace(/[^A-Za-z]/g, '').slice(0, 4).toUpperCase() || 'EVNT');
@@ -746,7 +768,7 @@ export default {
         const defaultUser = (await neonQuery(env, `SELECT id FROM users ORDER BY created_at ASC LIMIT 1`))[0];
         const r = await neonQuery(env, `INSERT INTO orders(order_code,ticket_code,user_id,event_id,qty,total,status,kind,guest_name,guest_org,guest_phone,rsvp_status,plus_one_count,guestbook_message)
           VALUES($1,$2,$3::uuid,$4::uuid,$5::int,0,$6,'invitation',$7,$8,$9,$10,$11::int,$12) RETURNING id,ticket_code`, [oCode, tCode, defaultUser.id, ev.id, qty, isDeclined ? 'declined' : 'confirmed', guestName || 'Tamu Undangan', guestOrg || '', guestPhone || null, rsvpStatus, plusOne, message]);
-        return json({ ok: true, data: { success: true, ticket_code: r[0].ticket_code, rsvp_status: rsvpStatus } });
+        return json({ ok: true, data: { success: true, ticket_code: r[0].ticket_code, rsvp_status: rsvpStatus, plus_one_count: plusOne } });
       }
 
       if (fn === 'organizerPublic') {

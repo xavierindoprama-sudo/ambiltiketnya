@@ -471,6 +471,8 @@ const hasMod=(e,m)=>{
   return Array.isArray(a)?a.includes(m):(m==='ticketing');
 };
 window.hasMod=hasMod;
+function getModConfig(e){if(!e)return{};let c=e.module_config;if(c==null)return{};if(typeof c==='string'){try{c=JSON.parse(c)}catch(x){return{}}}return(c&&typeof c==='object')?c:{};}
+window.getModConfig=getModConfig;
 function getCurEvId(){return S.curEvId||ls.g('atk_cur_ev')||'';}
 function setCurEvId(evId){S.curEvId=evId||'';if(evId)ls.s('atk_cur_ev',evId);else ls.d('atk_cur_ev');S.sel=evId;S.anSelEv=evId;S_fb.evId=evId;S_dp.evId=evId;}
 function getCurEv(){const id=getCurEvId();if(!id||!S.aev)return null;return S.aev.find(e=>e.id===id)||null;}
@@ -1754,14 +1756,14 @@ ${rk()>=3?`<div style="margin:10px 0"><label>🏢 Penyelenggara (EO Workspace)</
     <small style="font-weight:700;text-transform:uppercase;letter-spacing:1px;font-size:10px;color:var(--mu);display:block;margin-bottom:8px">Opsi Modul RSVP</small>
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px">
       <label style="display:flex;gap:6px;align-items:center;font-size:12px;cursor:pointer">
-        <input type="checkbox" name="rsvp_allow_plus_one" style="width:auto" ${e.module_config?.allow_plus_one?'checked':''}> Izinkan Bawa Pendamping (Plus-One)
+        <input type="checkbox" name="rsvp_allow_plus_one" id="ef_rsvp_allow_plus" style="width:auto" ${(getModConfig(e).allow_plus_one!==false)?'checked':''} onchange="var b=document.getElementById('ef_plus_one_cnt_box');if(b)b.style.display=this.checked?'flex':'none'"> Izinkan Bawa Pendamping (Plus-One)
       </label>
-      <div style="display:flex;align-items:center;gap:6px">
+      <div id="ef_plus_one_cnt_box" style="display:${(getModConfig(e).allow_plus_one!==false)?'flex':'none'};align-items:center;gap:6px">
         <label style="font-size:11px;white-space:nowrap;margin:0">Maks. Pendamping:</label>
-        <input name="rsvp_max_plus_one" type="number" min="1" max="10" value="${e.module_config?.max_plus_one||2}" style="width:60px;padding:4px">
+        <input name="rsvp_max_plus_one" type="number" min="0" max="10" value="${getModConfig(e).max_plus_one!=null?getModConfig(e).max_plus_one:2}" style="width:60px;padding:4px">
       </div>
       <label style="display:flex;gap:6px;align-items:center;font-size:12px;cursor:pointer">
-        <input type="checkbox" name="rsvp_enable_table" style="width:auto" ${e.module_config?.enable_table?'checked':''}> Aktifkan Alokasi Nomor Meja Tamu
+        <input type="checkbox" name="rsvp_enable_table" style="width:auto" ${(getModConfig(e).enable_table!==false)?'checked':''}> Aktifkan Alokasi Nomor Meja Tamu
       </label>
     </div>
   </div>
@@ -1922,10 +1924,11 @@ function paintOrders(){const k=($('#oq').value||'').toLowerCase(),emF=$('#oem')?
   if(canEdit()||rk()>=2){if(o.status==='pending_payment'&&canEdit())b+=`<button class="btn sm pri" data-act="cpay" data-id="${o.id}">${t('confirmpay')}</button>`;if(o.status==='confirmed'&&o.kind==='order')b+=`<button class="btn sm" data-act="resend" data-id="${o.id}" title="${t('resend')}">✉️ ${t('resend')}</button>`;if(o.status!=='cancelled'&&canEdit())b+=`<button class="btn sm dg" data-act="cxl" data-id="${o.id}">${t('cancel')}</button>`}
   return b?`<div class="acts" style="margin:0;justify-content:flex-end">${b}</div>`:''};
  $('#ot').innerHTML=`<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:8px"><div><b style="font-size:20px">${l.reduce((a,o)=>a+o.qty,0)}</b> ${isRsvpEv?'pax hadir':t('tix')} / ${n} ${termOrders} ${pendingCnt>0?`<span class="pill wn" style="font-weight:700;margin-left:6px">⚠️ ${pendingCnt} ${t('em_pending')}</span>`:''}</div></div>${S.ordTr?'<p class="muted">'+t('pg_trunc')+'</p>':''}<div class="tw"><table class="rt"><tr>${th}</tr>${rows.map(o=>`<tr><td data-l="${t('c_code')}" class="mono"><b>${esc(o.ticket_code)}</b><br><small class="muted">${new Date(o.created_at).toLocaleString(loc())}</small></td><td data-l="${t('c_name')}">${esc(o.name)}${o.kind==='invitation'?' <span class="pill gd">'+t('inv_badge')+'</span>':o.kind==='walk_in'?' <span class="pill wn" style="background:#10b981;color:#fff;font-weight:700">'+t('walkin_badge')+'</span>':''}<br><small class="muted">${o.kind==='invitation'?esc(o.church):o.kind==='walk_in'?(o.guest_org?esc(o.guest_org)+'<br>':'')+(o.guest_phone?'+'+esc(o.guest_phone)+' &#183; ':'')+(o.guest_email?esc(o.guest_email):'Di tempat'):esc(o.email)+'<br>+'+esc(o.whatsapp)+' &#183; '+esc(o.age)+' &#183; '+esc(o.church)}</small>${o.rsvp_status?`<div style="margin-top:2px">${o.rsvp_status==='declined'?'<span class="pill er" style="font-size:10px">🔴 Tidak Hadir</span>':o.rsvp_status==='tentative'?'<span class="pill wn" style="font-size:10px">🟡 Ragu-ragu</span>':(o.plus_one_count>0?`<span class="pill ok" style="font-size:10px">🟢 Hadir (+${o.plus_one_count})</span>`:'')}</div>`:''}${(()=>{
-  const evOfOrd=(S.aev||[]).find(e=>e.id===o.event_id)||activeEv;
-  const isRsvpOrd=(evOfOrd&&hasMod(evOfOrd,'rsvp'))||(o.kind==='invitation'&&evOfOrd&&hasMod(evOfOrd,'rsvp'));
-  const allowTbl=isRsvpOrd&&rk()>=2&&(!evOfOrd||!evOfOrd.module_config||evOfOrd.module_config.enable_table!==false);
-  return allowTbl?`<div style="margin-top:3px"><button class="btn sm" data-act="openTableModal" data-id="${o.id}" data-tbl="${esc(o.table_assignment||'')}" style="font-size:10px;padding:1px 6px;border-radius:4px;border:1px dashed var(--bd);background:var(--in)">🪑 ${esc(o.table_assignment||'+ Set Meja')}</button></div>`:'';
+  const evOfOrd=(S.aev||[]).find(e=>String(e.id).toLowerCase()===String(o.event_id||curEvId).toLowerCase())||activeEv;
+  const cfg=getModConfig(evOfOrd);
+  const isRsvpOrd=(evOfOrd&&hasMod(evOfOrd,'rsvp'))||(activeEv&&hasMod(activeEv,'rsvp'))||(o.rsvp_status&&o.rsvp_status!=='pending')||o.kind==='invitation';
+  const allowTbl=isRsvpOrd&&rk()>=2&&cfg.enable_table!==false;
+  return (allowTbl||o.table_assignment)?`<div style="margin-top:3px"><button class="btn sm" data-act="openTableModal" data-id="${o.id}" data-tbl="${esc(o.table_assignment||'')}" style="font-size:10px;padding:1px 6px;border-radius:4px;border:1px dashed var(--bd);background:var(--in)">🪑 ${esc(o.table_assignment||'+ Set Meja')}</button></div>`:'';
 })()}${o.guestbook_message?`<div style="font-size:11px;color:var(--mu);margin-top:3px;font-style:italic">💌 "${esc(o.guestbook_message)}"</div>`:''}${(o.custom_answers&&typeof o.custom_answers==='object'&&Object.keys(o.custom_answers).length>0)?`<div style="margin-top:4px;display:flex;flex-wrap:wrap;gap:3px">${Object.values(o.custom_answers).map(a=>`<span style="background:var(--in,rgba(0,0,0,.05));border:1px solid var(--bd,rgba(0,0,0,.1));padding:1px 6px;border-radius:4px;font-size:10px;font-weight:600">${esc(a.label)}: <b>${esc(a.value)}</b></span>`).join('')}</div>`:''}${o.kind==='order'&&o.status==='confirmed'?`<div style="margin-top:3px;display:flex;align-items:center;flex-wrap:wrap;gap:4px"><span class="pill ${o.emailed?'ok':'er'}" style="font-size:10px;padding:2px 7px;font-weight:700" title="${esc(o.email_error||(o.emailed?'Terkirim pada '+(o.emailed_at?new Date(o.emailed_at).toLocaleString(loc()):'-'):'Belum terkirim'))}">${o.emailed?'✓ '+t('em_sent'):'⚠️ '+t('em_pending')}</span>${o.emailed&&o.email_error?`<span class="muted" style="font-size:10px;font-weight:600">(${esc(o.email_error)})</span>`:''}${!o.emailed&&o.email_error?`<div style="font-size:10px;color:var(--er);margin-top:2px;width:100%;white-space:normal;line-height:1.2">${esc(o.email_error)}</div>`:''}</div>`:''}</td><td data-l="${t('c_event')}">${esc(o.event_name)}</td><td data-l="${t('c_qty')}">${o.qty}</td><td data-l="${t('c_status')}">${stPill(o.status)}</td><td data-l="${t('c_chk')}" class="mono">${o.checked_in}/${o.qty}</td><td>${acts(o)}</td></tr>`).join('')}</table></div>${pagerHtml(n,S.ordPage,pages,from,rows.length)}`}
 
 /* ===== Scanner Engine (Continuous, Audio, Torch, Haptic) ===== */
@@ -4108,8 +4111,8 @@ async function digitalInvitationView(code, toParam) {
     <div style="min-height:100vh;background:#090d16;display:flex;align-items:center;justify-content:center;color:#f8fafc;font-family:system-ui,-apple-system,sans-serif;padding:20px">
       <div style="max-width:440px;width:100%;background:#111827;border:1px solid rgba(212,175,55,.3);border-radius:20px;padding:32px 24px;text-align:center;box-shadow:0 20px 40px rgba(0,0,0,.6)">
         <div style="font-size:48px;margin-bottom:12px">⚠️</div>
-        <h2 style="margin:0 0 8px;font-size:20px;color:#f1f5f9">Undangan Tidak Ditemukan</h2>
-        <p style="color:#94a3b8;font-size:14px;line-height:1.6;margin:0 0 20px">Link atau kode undangan yang Anda tuju tidak terdaftar atau sudah kadaluarsa.</p>
+        <h2 style="margin:0 0 8px;font-size:20px;color:#f1f5f9">Undangan / Tiket Tidak Ditemukan</h2>
+        <p style="color:#94a3b8;font-size:14px;line-height:1.6;margin:0 0 20px">Link atau kode tiket undangan yang Anda tuju tidak terdaftar atau sudah kadaluarsa.</p>
         <a class="btn pri" href="${location.pathname}" style="text-decoration:none;display:inline-block;padding:10px 24px">Menuju Beranda</a>
       </div>
     </div>`;
@@ -4122,17 +4125,21 @@ async function digitalInvitationView(code, toParam) {
   const ord = isOrder ? res.order : null;
   const ev = isOrder ? ord : res.event;
 
+  const isRsvpEvent = hasMod(ev, 'rsvp');
+  const modConfig = getModConfig(ev);
+  const allowPlusOne = modConfig.allow_plus_one !== false;
+  const maxPlusOne = allowPlusOne ? (modConfig.max_plus_one != null ? Math.max(0, parseInt(modConfig.max_plus_one, 10) || 0) : 2) : 0;
+
   let guestName = (ord && ord.guest_name) || toParam || 'Tamu Terhormat';
   let guestOrg = (ord && ord.guest_org) || '';
   let guestPhone = (ord && ord.guest_phone) || '';
-  let rsvpStatus = (ord && ord.rsvp_status) || 'pending';
+  let rsvpStatus = (ord && ord.rsvp_status) || (isRsvpEvent ? 'pending' : 'attending');
   let plusOne = (ord && ord.plus_one_count) || 0;
   let guestbookMsg = (ord && ord.guestbook_message) || '';
   let tableAssignment = (ord && ord.table_assignment) || '';
   let ticketCode = (ord && ord.ticket_code) || '';
   let wishes = res.wishes || [];
 
-  const modConfig = (ev.module_config && typeof ev.module_config === 'object') ? ev.module_config : {};
   const musicUrl = modConfig.music_url || 'https://assets.mixkit.co/music/preview/mixkit-wedding-dreams-565.mp3';
 
   // Format date and time
@@ -4174,15 +4181,22 @@ async function digitalInvitationView(code, toParam) {
   }
 
   function renderVipPass() {
-    if (rsvpStatus !== 'attending' || !ticketCode) return '';
-    return `
-    <div style="background:linear-gradient(135deg,#0f172a 0%,#1e293b 100%);border:2px solid #d4af37;border-radius:20px;padding:24px 20px;margin-top:24px;text-align:center;position:relative;overflow:hidden;box-shadow:0 12px 30px rgba(212,175,55,.2)">
-      <div style="position:absolute;top:0;right:0;background:linear-gradient(135deg,#d4af37,#92400e);color:#0f172a;font-size:10px;letter-spacing:2px;font-weight:900;padding:4px 20px;border-bottom-left-radius:12px;text-transform:uppercase">VIP E-PASS</div>
-      <div style="color:#d4af37;letter-spacing:4px;font-size:11px;font-weight:800;text-transform:uppercase;margin-bottom:6px">PAS KEDATANGAN RESMI</div>
-      <h3 style="margin:0 0 4px;font-size:18px;color:#fff">${esc(guestName)}</h3>
-      <div style="font-size:12px;color:#94a3b8;margin-bottom:16px">Jumlah Tamu: <b style="color:#fef08a">${1 + plusOne} Orang</b></div>
+    if (isRsvpEvent && rsvpStatus !== 'attending') return '';
+    if (!ticketCode && !ord) return '';
 
-      ${tableAssignment ? `
+    const passHeader = isRsvpEvent ? 'PAS KEDATANGAN RESMI' : 'PAS MASUK ACARA (E-TIKET)';
+    const passBadge = isRsvpEvent ? 'VIP E-PASS' : 'E-TIKET RESMI';
+    const paxStr = isRsvpEvent ? `Jumlah Tamu: <b style="color:#fef08a">${1 + plusOne} Orang</b>` : `Jumlah Tiket: <b style="color:#818cf8">${(ord && ord.qty) || 1} Tiket</b>`;
+    const hintStr = isRsvpEvent ? 'Tunjukkan kode QR ini kepada penerima tamu di gerbang registrasi untuk check-in instan.' : 'Tunjukkan kode QR ini kepada petugas di pintu masuk (gate) saat tiba di lokasi acara.';
+
+    return `
+    <div style="background:linear-gradient(135deg,#0f172a 0%,#1e293b 100%);border:2px solid ${isRsvpEvent?'#d4af37':'#6366f1'};border-radius:20px;padding:24px 20px;margin-top:24px;text-align:center;position:relative;overflow:hidden;box-shadow:0 12px 30px ${isRsvpEvent?'rgba(212,175,55,.2)':'rgba(99,102,241,.2)'}">
+      <div style="position:absolute;top:0;right:0;background:linear-gradient(135deg,${isRsvpEvent?'#d4af37,#92400e':'#6366f1,#4f46e5'});color:#fff;font-size:10px;letter-spacing:2px;font-weight:900;padding:4px 20px;border-bottom-left-radius:12px;text-transform:uppercase">${passBadge}</div>
+      <div style="color:${isRsvpEvent?'#d4af37':'#818cf8'};letter-spacing:4px;font-size:11px;font-weight:800;text-transform:uppercase;margin-bottom:6px">${passHeader}</div>
+      <h3 style="margin:0 0 4px;font-size:18px;color:#fff">${esc(guestName)}</h3>
+      <div style="font-size:12px;color:#94a3b8;margin-bottom:16px">${paxStr}</div>
+
+      ${(isRsvpEvent && tableAssignment) ? `
       <div style="background:rgba(212,175,55,.12);border:1px solid rgba(212,175,55,.4);border-radius:12px;padding:10px;margin-bottom:16px">
         <div style="font-size:10px;letter-spacing:2px;text-transform:uppercase;color:#d4af37;font-weight:700">NOMOR / POSISI MEJA</div>
         <div style="font-size:20px;font-weight:900;color:#fff;letter-spacing:1px">${esc(tableAssignment)}</div>
@@ -4193,8 +4207,8 @@ async function digitalInvitationView(code, toParam) {
           ${typeof qrcode !== 'undefined' ? qr(ticketCode) : '<p style="color:#000">Memuat QR...</p>'}
         </div>
       </div>
-      <div style="margin-top:10px;font-family:monospace;font-size:14px;letter-spacing:2px;font-weight:800;color:#fef08a">${esc(ticketCode)}</div>
-      <p style="margin:8px 0 16px;font-size:11px;color:#94a3b8;line-height:1.4">Tunjukkan kode QR ini kepada penerima tamu di gerbang registrasi untuk check-in instan.</p>
+      <div style="margin-top:10px;font-family:monospace;font-size:14px;letter-spacing:2px;font-weight:800;color:${isRsvpEvent?'#fef08a':'#a5b4fc'}">${esc(ticketCode)}</div>
+      <p style="margin:8px 0 16px;font-size:11px;color:#94a3b8;line-height:1.4">${hintStr}</p>
 
       <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap">
         <a class="btn sm" href="${location.pathname}?tiket=${encodeURIComponent(ticketCode)}" target="_blank" style="text-decoration:none;border-color:rgba(255,255,255,.2);color:#fff">📱 Buka E-Tiket Penuh</a>
@@ -4211,38 +4225,61 @@ async function digitalInvitationView(code, toParam) {
     return `<div style="display:inline-flex;align-items:center;gap:6px;background:rgba(245,158,11,.15);border:1px solid #f59e0b;padding:6px 16px;border-radius:999px;font-size:12px;font-weight:700;color:#fcd34d">&#9203; Menunggu Konfirmasi Kehadiran Anda</div>`;
   }
 
+  // Generate Plus One Selector according to maxPlusOne setting
+  let plusOneHtml = '';
+  if (allowPlusOne && maxPlusOne > 0) {
+    let opts = `<option value="0" ${plusOne===0?'selected':''}>Hadir Sendiri (1 Orang)</option>`;
+    for (let i = 1; i <= maxPlusOne; i++) {
+      const lbl = (i === 1) ? 'Membawa 1 Pasangan/Pendamping (+1 Orang)' : `Membawa ${i} Orang Pendamping (+${i} Orang)`;
+      opts += `<option value="${i}" ${plusOne===i?'selected':''}>${lbl}</option>`;
+    }
+    plusOneHtml = `
+    <div id="inv_plus_one_box" style="margin-bottom:16px;display:${rsvpStatus==='declined'?'none':'block'}">
+      <label style="display:block;font-size:12px;color:#cbd5e1;margin-bottom:4px">Membawa Pendamping / Pasangan (Maks. ${maxPlusOne} Orang)</label>
+      <select id="inv_plus_one" style="width:100%;box-sizing:border-box;background:#1e293b;border:1px solid rgba(255,255,255,.12);color:#fff;border-radius:10px;padding:10px 14px">
+        ${opts}
+      </select>
+    </div>`;
+  } else {
+    plusOneHtml = `
+    <input type="hidden" id="inv_plus_one" value="0">
+    <div id="inv_plus_one_box" style="margin-bottom:14px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:10px;padding:8px 12px;font-size:11px;color:#94a3b8;display:${rsvpStatus==='declined'?'none':'block'}">
+      ℹ️ Undangan ini berlaku khusus untuk <b>1 orang tamu</b> (tanpa pendamping tambahan).
+    </div>`;
+  }
+
   c.innerHTML = `
   <div id="inv_page" style="min-height:100vh;background:#070a13;color:#f8fafc;font-family:system-ui,-apple-system,sans-serif;position:relative;overflow-x:hidden">
     <!-- Envelope Cover Screen Overlay -->
     <div id="inv_cover" style="position:fixed;inset:0;z-index:9999;background:radial-gradient(circle at 50% 30%, #1e293b 0%, #090d16 80%, #030712 100%);color:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;text-align:center;transition:transform 0.8s cubic-bezier(0.16,1,0.3,1), opacity 0.8s ease">
-      <div style="display:inline-flex;align-items:center;gap:6px;background:rgba(212,175,55,.12);border:1px solid rgba(212,175,55,.3);padding:6px 16px;border-radius:999px;font-size:11px;letter-spacing:3px;text-transform:uppercase;color:#e6ca65;font-weight:700;margin-bottom:20px">
-        <span>✉️</span> UNDANGAN RESMI
+      <div style="display:inline-flex;align-items:center;gap:6px;background:${isRsvpEvent?'rgba(212,175,55,.12)':'rgba(99,102,241,.15)'};border:1px solid ${isRsvpEvent?'rgba(212,175,55,.3)':'rgba(99,102,241,.4)'};padding:6px 16px;border-radius:999px;font-size:11px;letter-spacing:3px;text-transform:uppercase;color:${isRsvpEvent?'#e6ca65':'#a5b4fc'};font-weight:700;margin-bottom:20px">
+        <span>${isRsvpEvent?'✉️':'🎟️'}</span> ${isRsvpEvent?'UNDANGAN RESMI':'E-TIKET RESMI'}
       </div>
 
-      <div style="width:78px;height:78px;border-radius:50%;background:radial-gradient(circle at 35% 35%, #fde68a, #d4af37 60%, #92400e 100%);box-shadow:0 12px 30px rgba(212,175,55,.4), inset 0 2px 4px rgba(255,255,255,.6);display:grid;place-items:center;font-size:32px;margin:0 auto 16px;border:2px solid #fef3c7">
-        💌
+      <div style="width:78px;height:78px;border-radius:50%;background:radial-gradient(circle at 35% 35%, ${isRsvpEvent?'#fde68a,#d4af37 60%,#92400e':'#a5b4fc,#6366f1 60%,#312e81'} 100%);box-shadow:0 12px 30px ${isRsvpEvent?'rgba(212,175,55,.4)':'rgba(99,102,241,.4)'}, inset 0 2px 4px rgba(255,255,255,.6);display:grid;place-items:center;font-size:32px;margin:0 auto 16px;border:2px solid #fef3c7">
+        ${isRsvpEvent?'💌':'🎟️'}
       </div>
 
-      <div style="font-size:12px;letter-spacing:4px;text-transform:uppercase;color:#d4af37;font-weight:700;margin-bottom:6px">${esc(ev.organizer_name || 'Ambiltiketnya')}</div>
+      <div style="font-size:12px;letter-spacing:4px;text-transform:uppercase;color:${isRsvpEvent?'#d4af37':'#a5b4fc'};font-weight:700;margin-bottom:6px">${esc(ev.organizer_name || 'Ambiltiketnya')}</div>
       <h1 style="font-family:Georgia,serif;font-size:clamp(22px,5vw,32px);color:#f8fafc;margin:0 0 20px;font-weight:700;line-height:1.3;max-width:480px">${esc(ev.event_name)}</h1>
 
-      <div style="background:rgba(15,23,42,.7);border:1px solid rgba(212,175,55,.25);border-radius:16px;padding:16px 24px;margin-bottom:28px;max-width:380px;width:100%;backdrop-filter:blur(8px);box-shadow:0 8px 24px rgba(0,0,0,.4)">
+      <div style="background:rgba(15,23,42,.7);border:1px solid ${isRsvpEvent?'rgba(212,175,55,.25)':'rgba(99,102,241,.3)'};border-radius:16px;padding:16px 24px;margin-bottom:28px;max-width:380px;width:100%;backdrop-filter:blur(8px);box-shadow:0 8px 24px rgba(0,0,0,.4)">
         <div style="font-size:12px;color:#94a3b8;letter-spacing:1px;text-transform:uppercase;margin-bottom:4px">Kepada Yth. Bapak/Ibu/Saudara/i:</div>
-        <div style="font-size:20px;font-weight:800;color:#fef08a">${esc(guestName)}</div>
+        <div style="font-size:20px;font-weight:800;color:${isRsvpEvent?'#fef08a':'#fff'}">${esc(guestName)}</div>
         ${guestOrg ? `<div style="font-size:13px;color:#cbd5e1;margin-top:2px">${esc(guestOrg)}</div>` : ''}
       </div>
 
-      <button id="btn_buka_undangan" style="background:linear-gradient(135deg,#f59e0b 0%,#d97706 50%,#b45309 100%);color:#fff;font-weight:800;font-size:15px;padding:14px 34px;border-radius:999px;border:1px solid rgba(254,240,138,.4);cursor:pointer;box-shadow:0 12px 30px rgba(217,119,6,.4);display:inline-flex;align-items:center;gap:10px;letter-spacing:.5px;transition:transform .2s">
-        <span>✉️ Buka Undangan</span>
+      <button id="btn_buka_undangan" style="background:${isRsvpEvent?'linear-gradient(135deg,#f59e0b 0%,#d97706 50%,#b45309 100%)':'linear-gradient(135deg,#6366f1 0%,#4f46e5 100%)'};color:#fff;font-weight:800;font-size:15px;padding:14px 34px;border-radius:999px;border:1px solid rgba(255,255,255,.2);cursor:pointer;box-shadow:0 12px 30px ${isRsvpEvent?'rgba(217,119,6,.4)':'rgba(99,102,241,.4)'};display:inline-flex;align-items:center;gap:10px;letter-spacing:.5px;transition:transform .2s">
+        <span>${isRsvpEvent?'✉️ Buka Undangan':'🎟️ Buka E-Tiket'}</span>
       </button>
-      <div style="font-size:11px;color:#64748b;margin-top:14px">Klik tombol di atas untuk membuka undangan</div>
+      <div style="font-size:11px;color:#64748b;margin-top:14px">${isRsvpEvent?'Klik tombol di atas untuk membuka undangan':'Klik tombol di atas untuk membuka tiket digital resmi Anda'}</div>
     </div>
 
     <!-- Background Audio Element -->
     <audio id="inv_bgm" loop preload="auto" src="${esc(musicUrl)}"></audio>
 
     <!-- Floating Audio Toggle Button -->
-    <button id="btn_toggle_audio" style="position:fixed;bottom:20px;right:20px;z-index:998;width:46px;height:46px;border-radius:50%;background:rgba(15,23,42,.85);border:1px solid rgba(212,175,55,.4);color:#d4af37;font-size:18px;display:grid;place-items:center;cursor:pointer;box-shadow:0 8px 20px rgba(0,0,0,.5);backdrop-filter:blur(8px)" title="Putar / Hentikan Musik">
+    <button id="btn_toggle_audio" style="position:fixed;bottom:20px;right:20px;z-index:998;width:46px;height:46px;border-radius:50%;background:rgba(15,23,42,.85);border:1px solid ${isRsvpEvent?'rgba(212,175,55,.4)':'rgba(99,102,241,.4)'};color:${isRsvpEvent?'#d4af37':'#a5b4fc'};font-size:18px;display:grid;place-items:center;cursor:pointer;box-shadow:0 8px 20px rgba(0,0,0,.5);backdrop-filter:blur(8px)" title="Putar / Hentikan Musik">
       🎵
     </button>
 
@@ -4250,29 +4287,29 @@ async function digitalInvitationView(code, toParam) {
     <div style="max-width:640px;margin:0 auto;padding:24px 20px 80px;position:relative">
       
       <!-- Event Hero Card -->
-      <div style="background:linear-gradient(180deg,#111827 0%,#0f172a 100%);border:1px solid rgba(212,175,55,.2);border-radius:24px;overflow:hidden;box-shadow:0 20px 50px rgba(0,0,0,.5);margin-bottom:24px;text-align:center">
+      <div style="background:linear-gradient(180deg,#111827 0%,#0f172a 100%);border:1px solid ${isRsvpEvent?'rgba(212,175,55,.2)':'rgba(99,102,241,.25)'};border-radius:24px;overflow:hidden;box-shadow:0 20px 50px rgba(0,0,0,.5);margin-bottom:24px;text-align:center">
         ${ev.banner_url ? `
         <div style="position:relative;height:220px;overflow:hidden">
           <img src="${esc(ev.banner_url)}" alt="${esc(ev.event_name)}" style="width:100%;height:100%;object-fit:cover">
           <div style="position:absolute;inset:0;background:linear-gradient(to top,#111827,transparent 70%)"></div>
         </div>` : `
-        <div style="height:40px;background:linear-gradient(90deg,#b45309,#d4af37,#b45309)"></div>`}
+        <div style="height:40px;background:${isRsvpEvent?'linear-gradient(90deg,#b45309,#d4af37,#b45309)':'linear-gradient(90deg,#4338ca,#6366f1,#4338ca)'}"></div>`}
 
         <div style="padding:28px 24px 32px">
-          <div style="display:inline-flex;align-items:center;gap:6px;background:rgba(212,175,55,.1);border:1px solid rgba(212,175,55,.25);padding:4px 14px;border-radius:999px;font-size:11px;letter-spacing:2px;text-transform:uppercase;color:#d4af37;font-weight:700;margin-bottom:12px">
-            ${esc(ev.category || 'Special Event')}
+          <div style="display:inline-flex;align-items:center;gap:6px;background:${isRsvpEvent?'rgba(212,175,55,.1)':'rgba(99,102,241,.1)'};border:1px solid ${isRsvpEvent?'rgba(212,175,55,.25)':'rgba(99,102,241,.25)'};padding:4px 14px;border-radius:999px;font-size:11px;letter-spacing:2px;text-transform:uppercase;color:${isRsvpEvent?'#d4af37':'#a5b4fc'};font-weight:700;margin-bottom:12px">
+            ${esc(ev.category || (isRsvpEvent ? 'Special Event' : 'Concert & Event'))}
           </div>
           <h1 style="font-family:Georgia,serif;font-size:clamp(22px,5vw,30px);color:#f8fafc;margin:0 0 10px;line-height:1.3">${esc(ev.event_name)}</h1>
           <div style="font-size:13px;color:#94a3b8;margin-bottom:20px">${esc(ev.organizer_name || 'Official Host')}</div>
 
           ${ev.description ? `
-          <div style="background:rgba(255,255,255,.02);border:1px dashed rgba(212,175,55,.2);border-radius:16px;padding:16px 20px;font-style:italic;color:#cbd5e1;font-size:13px;line-height:1.7;margin-bottom:24px;white-space:pre-wrap">
+          <div style="background:rgba(255,255,255,.02);border:1px dashed ${isRsvpEvent?'rgba(212,175,55,.2)':'rgba(255,255,255,.1)'};border-radius:16px;padding:16px 20px;font-style:italic;color:#cbd5e1;font-size:13px;line-height:1.7;margin-bottom:24px;white-space:pre-wrap">
             "${esc(ev.description)}"
           </div>` : ''}
 
           <!-- Countdown Timer -->
           <div style="margin-bottom:24px">
-            <div style="font-size:11px;letter-spacing:3px;text-transform:uppercase;color:#d4af37;font-weight:700;margin-bottom:10px">HITUNG MUNDUR ACARA</div>
+            <div style="font-size:11px;letter-spacing:3px;text-transform:uppercase;color:${isRsvpEvent?'#d4af37':'#a5b4fc'};font-weight:700;margin-bottom:10px">HITUNG MUNDUR ACARA</div>
             <div id="inv_cd_box" style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;max-width:360px;margin:0 auto">
               <!-- Live populated by countdown -->
             </div>
@@ -4318,12 +4355,13 @@ async function digitalInvitationView(code, toParam) {
         </div>
       </div>
 
-      <!-- VIP Pass Display Container (If Attending) -->
+      <!-- VIP Pass / E-Ticket Display Container -->
       <div id="inv_vip_box">
         ${renderVipPass()}
       </div>
 
-      <!-- Interactive RSVP Box -->
+      ${isRsvpEvent ? `
+      <!-- Interactive RSVP Box (Only for RSVP Events) -->
       <div style="background:linear-gradient(180deg,#111827 0%,#0f172a 100%);border:1px solid rgba(212,175,55,.2);border-radius:24px;padding:28px 24px;margin-top:24px;box-shadow:0 12px 30px rgba(0,0,0,.4)">
         <div style="text-align:center;margin-bottom:20px">
           <div style="font-size:11px;letter-spacing:3px;text-transform:uppercase;color:#d4af37;font-weight:700;margin-bottom:6px">KONFIRMASI KEHADIRAN</div>
@@ -4357,16 +4395,8 @@ async function digitalInvitationView(code, toParam) {
             <input id="inv_inp_org" value="${esc(guestOrg)}" placeholder="Opsional" style="width:100%;box-sizing:border-box;background:#1e293b;border:1px solid rgba(255,255,255,.12);color:#fff;border-radius:10px;padding:10px 14px">
           </div>` : ''}
 
-          <!-- Plus One Field -->
-          <div id="inv_plus_one_box" style="margin-bottom:16px;display:${rsvpStatus==='declined'?'none':'block'}">
-            <label style="display:block;font-size:12px;color:#cbd5e1;margin-bottom:4px">Membawa Pendamping / Pasangan (Plus One)</label>
-            <select id="inv_plus_one" style="width:100%;box-sizing:border-box;background:#1e293b;border:1px solid rgba(255,255,255,.12);color:#fff;border-radius:10px;padding:10px 14px">
-              <option value="0" ${plusOne===0?'selected':''}>Hadir Sendiri (1 Orang)</option>
-              <option value="1" ${plusOne===1?'selected':''}>Membawa 1 Pasangan/Pendamping (+1 Orang)</option>
-              <option value="2" ${plusOne===2?'selected':''}>Membawa 2 Orang Pendamping (+2 Orang)</option>
-              <option value="3" ${plusOne===3?'selected':''}>Membawa 3 Orang Pendamping (+3 Orang)</option>
-            </select>
-          </div>
+          <!-- Plus One Field (Dynamically synchronized with maxPlusOne) -->
+          ${plusOneHtml}
 
           <!-- Guestbook Wishes Message -->
           <div style="margin-bottom:20px">
@@ -4378,26 +4408,27 @@ async function digitalInvitationView(code, toParam) {
             💾 Kirim Konfirmasi &amp; Ucapan
           </button>
         </form>
-      </div>
+      </div>` : ''}
 
+      ${(isRsvpEvent || hasMod(ev, 'guestbook')) ? `
       <!-- Live Wishes Wall Feed -->
-      <div style="background:linear-gradient(180deg,#111827 0%,#0f172a 100%);border:1px solid rgba(212,175,55,.2);border-radius:24px;padding:24px;margin-top:24px;box-shadow:0 12px 30px rgba(0,0,0,.4)">
+      <div style="background:linear-gradient(180deg,#111827 0%,#0f172a 100%);border:1px solid ${isRsvpEvent?'rgba(212,175,55,.2)':'rgba(255,255,255,.1)'};border-radius:24px;padding:24px;margin-top:24px;box-shadow:0 12px 30px rgba(0,0,0,.4)">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;border-bottom:1px solid rgba(255,255,255,.08);padding-bottom:12px">
           <div>
-            <div style="font-size:10px;letter-spacing:2px;text-transform:uppercase;color:#d4af37;font-weight:700">BUKU TAMU DIGITAL</div>
+            <div style="font-size:10px;letter-spacing:2px;text-transform:uppercase;color:${isRsvpEvent?'#d4af37':'#38bdf8'};font-weight:700">BUKU TAMU DIGITAL</div>
             <h3 style="margin:2px 0 0;font-size:16px;color:#fff">Ucapan &amp; Doa Restu</h3>
           </div>
-          <span id="inv_wishes_cnt" style="background:rgba(212,175,55,.15);color:#fef08a;font-size:11px;font-weight:700;padding:3px 10px;border-radius:999px">${wishes.length} Pesan</span>
+          <span id="inv_wishes_cnt" style="background:${isRsvpEvent?'rgba(212,175,55,.15)':'rgba(56,189,248,.15)'};color:${isRsvpEvent?'#fef08a':'#7dd3fc'};font-size:11px;font-weight:700;padding:3px 10px;border-radius:999px">${wishes.length} Pesan</span>
         </div>
 
         <div id="inv_wishes_list">
           ${renderWishesFeed()}
         </div>
-      </div>
+      </div>` : ''}
 
       <!-- Footer Branding -->
       <div style="text-align:center;margin-top:40px;color:#64748b;font-size:12px">
-        <div>Undangan Digital Resmi &#183; Powered by <b style="color:#d4af37">Ambiltiketnya</b></div>
+        <div>Undangan Digital Resmi &#183; Powered by <b style="color:${isRsvpEvent?'#d4af37':'#818cf8'}">Ambiltiketnya</b></div>
       </div>
 
     </div>
@@ -4422,7 +4453,7 @@ async function digitalInvitationView(code, toParam) {
       const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
       const seconds = Math.floor((diff % (1000 * 60)) / 1000);
 
-      const b = (v, l) => `<div style="background:rgba(15,23,42,.8);border:1px solid rgba(212,175,55,.25);border-radius:10px;padding:8px 4px"><div style="font-size:clamp(18px,4vw,24px);font-weight:800;color:#fef08a;font-family:monospace">${v}</div><div style="font-size:9px;letter-spacing:1px;text-transform:uppercase;color:#94a3b8;margin-top:2px">${l}</div></div>`;
+      const b = (v, l) => `<div style="background:rgba(15,23,42,.8);border:1px solid ${isRsvpEvent?'rgba(212,175,55,.25)':'rgba(255,255,255,.1)'};border-radius:10px;padding:8px 4px"><div style="font-size:clamp(18px,4vw,24px);font-weight:800;color:${isRsvpEvent?'#fef08a':'#fff'};font-family:monospace">${v}</div><div style="font-size:9px;letter-spacing:1px;text-transform:uppercase;color:#94a3b8;margin-top:2px">${l}</div></div>`;
       el.innerHTML = b(days, 'Hari') + b(hours, 'Jam') + b(minutes, 'Menit') + b(seconds, 'Detik');
     };
     tick();
@@ -4446,7 +4477,7 @@ async function digitalInvitationView(code, toParam) {
       bgm.play().then(() => {
         isPlaying = true;
         btnToggleAudio.innerHTML = '🎵';
-        btnToggleAudio.style.borderColor = '#d4af37';
+        btnToggleAudio.style.borderColor = isRsvpEvent ? '#d4af37' : '#6366f1';
       }).catch(() => {});
     }
   }
@@ -4464,102 +4495,102 @@ async function digitalInvitationView(code, toParam) {
     };
   }
 
-  // RSVP Form Choices
-  let curChoice = (rsvpStatus === 'declined') ? 'declined' : 'attending';
-  const btnAttending = document.getElementById('btn_choice_attending');
-  const btnDeclined = document.getElementById('btn_choice_declined');
-  const plusOneBox = document.getElementById('inv_plus_one_box');
+  // RSVP Form Choices & Handlers (Only when isRsvpEvent is true)
+  if (isRsvpEvent) {
+    let curChoice = (rsvpStatus === 'declined') ? 'declined' : 'attending';
+    const btnAttending = document.getElementById('btn_choice_attending');
+    const btnDeclined = document.getElementById('btn_choice_declined');
+    const plusOneBox = document.getElementById('inv_plus_one_box');
 
-  function updateChoiceUI(choice) {
-    curChoice = choice;
-    if (choice === 'attending') {
-      btnAttending.style.borderColor = '#10b981';
-      btnAttending.style.background = 'rgba(16,185,129,.15)';
-      btnAttending.style.color = '#6ee7b7';
-      btnDeclined.style.borderColor = 'rgba(255,255,255,.1)';
-      btnDeclined.style.background = 'transparent';
-      btnDeclined.style.color = '#94a3b8';
-      if (plusOneBox) plusOneBox.style.display = 'block';
-    } else {
-      btnDeclined.style.borderColor = '#ef4444';
-      btnDeclined.style.background = 'rgba(239,68,68,.15)';
-      btnDeclined.style.color = '#fca5a5';
-      btnAttending.style.borderColor = 'rgba(255,255,255,.1)';
-      btnAttending.style.background = 'transparent';
-      btnAttending.style.color = '#94a3b8';
-      if (plusOneBox) plusOneBox.style.display = 'none';
+    function updateChoiceUI(choice) {
+      curChoice = choice;
+      if (choice === 'attending') {
+        btnAttending.style.borderColor = '#10b981';
+        btnAttending.style.background = 'rgba(16,185,129,.15)';
+        btnAttending.style.color = '#6ee7b7';
+        btnDeclined.style.borderColor = 'rgba(255,255,255,.1)';
+        btnDeclined.style.background = 'transparent';
+        btnDeclined.style.color = '#94a3b8';
+        if (plusOneBox) plusOneBox.style.display = 'block';
+      } else {
+        btnDeclined.style.borderColor = '#ef4444';
+        btnDeclined.style.background = 'rgba(239,68,68,.15)';
+        btnDeclined.style.color = '#fca5a5';
+        btnAttending.style.borderColor = 'rgba(255,255,255,.1)';
+        btnAttending.style.background = 'transparent';
+        btnAttending.style.color = '#94a3b8';
+        if (plusOneBox) plusOneBox.style.display = 'none';
+      }
+    }
+
+    if (btnAttending) btnAttending.onclick = () => updateChoiceUI('attending');
+    if (btnDeclined) btnDeclined.onclick = () => updateChoiceUI('declined');
+
+    const rsvpForm = document.getElementById('inv_rsvp_form');
+    const btnSubmit = document.getElementById('btn_submit_rsvp');
+
+    if (rsvpForm) {
+      rsvpForm.onsubmit = async (e) => {
+        e.preventDefault();
+        btnSubmit.disabled = true;
+        btnSubmit.innerHTML = 'Menyimpan...';
+
+        const sendName = document.getElementById('inv_inp_name') ? document.getElementById('inv_inp_name').value.trim() : guestName;
+        const sendPhone = document.getElementById('inv_inp_phone') ? document.getElementById('inv_inp_phone').value.trim() : guestPhone;
+        const sendOrg = document.getElementById('inv_inp_org') ? document.getElementById('inv_inp_org').value.trim() : guestOrg;
+        const sendPlusOne = (curChoice === 'declined') ? 0 : (parseInt((document.getElementById('inv_plus_one')||{}).value, 10) || 0);
+        const sendMsg = (document.getElementById('inv_inp_msg') ? document.getElementById('inv_inp_msg').value.trim() : '');
+
+        try {
+          const resp = await pub('digitalInvitationRsvp', {
+            code: code,
+            rsvp_status: curChoice,
+            plus_one_count: sendPlusOne,
+            guestbook_message: sendMsg,
+            guest_name: sendName,
+            guest_phone: sendPhone,
+            guest_org: sendOrg
+          });
+
+          rsvpStatus = curChoice;
+          plusOne = (resp && resp.plus_one_count != null) ? resp.plus_one_count : sendPlusOne;
+          guestbookMsg = sendMsg;
+          guestName = sendName || guestName;
+          guestOrg = sendOrg || guestOrg;
+          if (resp && resp.ticket_code) ticketCode = resp.ticket_code;
+
+          // Update status badge & VIP pass
+          const badgeEl = document.getElementById('inv_status_badge');
+          if (badgeEl) badgeEl.innerHTML = renderRsvpStatusBadge();
+
+          const vipEl = document.getElementById('inv_vip_box');
+          if (vipEl) vipEl.innerHTML = renderVipPass();
+
+          // If message was written, add to wishes
+          if (sendMsg) {
+            wishes.unshift({
+              name: guestName,
+              org: guestOrg,
+              message: sendMsg,
+              time_str: 'Baru saja'
+            });
+            const wishesListEl = document.getElementById('inv_wishes_list');
+            if (wishesListEl) wishesListEl.innerHTML = renderWishesFeed();
+            const wishesCntEl = document.getElementById('inv_wishes_cnt');
+            if (wishesCntEl) wishesCntEl.innerText = wishes.length + ' Pesan';
+          }
+
+          toast(curChoice === 'attending' ? 'Terima kasih! Konfirmasi kehadiran Anda telah tersimpan.' : 'Terima kasih telah mengonfirmasi bahwa Anda berhalangan hadir.', 0);
+        } catch(err) {
+          toast('Gagal menyimpan konfirmasi: ' + (err.message || 'Terjadi kesalahan'), 1);
+        } finally {
+          btnSubmit.disabled = false;
+          btnSubmit.innerHTML = '💾 Kirim Konfirmasi &amp; Ucapan';
+        }
+      };
     }
   }
-
-  if (btnAttending) btnAttending.onclick = () => updateChoiceUI('attending');
-  if (btnDeclined) btnDeclined.onclick = () => updateChoiceUI('declined');
-
-  // RSVP Form Submit
-  const rsvpForm = document.getElementById('inv_rsvp_form');
-  const btnSubmit = document.getElementById('btn_submit_rsvp');
-
-  if (rsvpForm) {
-    rsvpForm.onsubmit = async (e) => {
-      e.preventDefault();
-      btnSubmit.disabled = true;
-      btnSubmit.innerHTML = 'Menyimpan...';
-
-      const sendName = document.getElementById('inv_inp_name') ? document.getElementById('inv_inp_name').value.trim() : guestName;
-      const sendPhone = document.getElementById('inv_inp_phone') ? document.getElementById('inv_inp_phone').value.trim() : guestPhone;
-      const sendOrg = document.getElementById('inv_inp_org') ? document.getElementById('inv_inp_org').value.trim() : guestOrg;
-      const sendPlusOne = (curChoice === 'declined') ? 0 : (parseInt((document.getElementById('inv_plus_one')||{}).value, 10) || 0);
-      const sendMsg = (document.getElementById('inv_inp_msg') ? document.getElementById('inv_inp_msg').value.trim() : '');
-
-      try {
-        const resp = await pub('digitalInvitationRsvp', {
-          code: code,
-          rsvp_status: curChoice,
-          plus_one_count: sendPlusOne,
-          guestbook_message: sendMsg,
-          guest_name: sendName,
-          guest_phone: sendPhone,
-          guest_org: sendOrg
-        });
-
-        rsvpStatus = curChoice;
-        plusOne = sendPlusOne;
-        guestbookMsg = sendMsg;
-        guestName = sendName || guestName;
-        guestOrg = sendOrg || guestOrg;
-        if (resp && resp.ticket_code) ticketCode = resp.ticket_code;
-
-        // Update status badge & VIP pass
-        const badgeEl = document.getElementById('inv_status_badge');
-        if (badgeEl) badgeEl.innerHTML = renderRsvpStatusBadge();
-
-        const vipEl = document.getElementById('inv_vip_box');
-        if (vipEl) vipEl.innerHTML = renderVipPass();
-
-        // If message was written, add to wishes
-        if (sendMsg) {
-          wishes.unshift({
-            name: guestName,
-            org: guestOrg,
-            message: sendMsg,
-            time_str: 'Baru saja'
-          });
-          const wishesListEl = document.getElementById('inv_wishes_list');
-          if (wishesListEl) wishesListEl.innerHTML = renderWishesFeed();
-          const wishesCntEl = document.getElementById('inv_wishes_cnt');
-          if (wishesCntEl) wishesCntEl.innerText = wishes.length + ' Pesan';
-        }
-
-        toast(curChoice === 'attending' ? 'Terima kasih! Konfirmasi kehadiran Anda telah tersimpan.' : 'Terima kasih telah mengonfirmasi bahwa Anda berhalangan hadir.', 0);
-      } catch(err) {
-        toast('Gagal menyimpan konfirmasi: ' + (err.message || 'Terjadi kesalahan'), 1);
-      } finally {
-        btnSubmit.disabled = false;
-        btnSubmit.innerHTML = '💾 Kirim Konfirmasi &amp; Ucapan';
-      }
-    };
-  }
 }
-
 
 let S_greetingTimer = null;
 async function greetingStageView(evId){
@@ -4854,9 +4885,11 @@ const NL=String.fromCharCode(10),find=(a,id)=>a.find(x=>x.id===id),A={
   if(f.active_mod_rsvp&&f.active_mod_rsvp.checked)mods.push('rsvp');
   if(f.active_mod_guestbook&&f.active_mod_guestbook.checked)mods.push('guestbook');
   d.active_modules=mods.length?mods:['ticketing'];
+  const allowPO=!!(f.rsvp_allow_plus_one&&f.rsvp_allow_plus_one.checked);
+  const maxPO=allowPO?Math.max(0,parseInt(f.rsvp_max_plus_one?f.rsvp_max_plus_one.value:0,10)||0):0;
   d.module_config={
-    allow_plus_one:!!(f.rsvp_allow_plus_one&&f.rsvp_allow_plus_one.checked),
-    max_plus_one:parseInt(f.rsvp_max_plus_one?f.rsvp_max_plus_one.value:2,10)||2,
+    allow_plus_one:allowPO,
+    max_plus_one:maxPO,
     enable_table:!!(f.rsvp_enable_table&&f.rsvp_enable_table.checked),
     enable_live_wall:!!(f.gb_enable_live_wall&&f.gb_enable_live_wall.checked)
   };
@@ -4957,16 +4990,24 @@ const NL=String.fromCharCode(10),find=(a,id)=>a.find(x=>x.id===id),A={
   const ev=(S.aev&&S.aev.find(e=>e.id===o.event_id))||{};
   const evDateStr=ev.event_date?fd(ev.event_date,{weekday:'long',day:'numeric',month:'long',year:'numeric'}):'';
   const invUrl=location.origin+location.pathname+'?invite='+encodeURIComponent(o.ticket_code)+'&to='+encodeURIComponent(o.guest_name||'');
-  const msg='Kepada Yth. *'+(o.guest_name||'Bapak/Ibu/Saudara/i')+'*\n\n'+
+  const isRsvp=hasMod(ev,'rsvp');
+  let msg='Kepada Yth. *'+(o.guest_name||'Bapak/Ibu/Saudara/i')+'*\n\n'+
    'Tanpa mengurangi rasa hormat, kami bermaksud mengundang Anda untuk hadir pada acara kami:\n\n'+
    '*'+(o.name||ev.name||'Undangan Acara')+'*\n'+
    (evDateStr?'📅 *Hari/Tanggal:* '+evDateStr+'\n':'')+
    (ev.start_time?'⏰ *Waktu:* '+ev.start_time+(ev.end_time?' - '+ev.end_time:'')+' WIB\n':'')+
-   (ev.location?'📍 *Lokasi:* '+ev.location+'\n\n':'\n')+
-   'Untuk informasi detail acara dan konfirmasi kehadiran (RSVP), silakan buka tautan undangan digital Anda di bawah ini:\n'+
-   invUrl+'\n\n'+
-   'Merupakan suatu kehormatan dan kebahagiaan bagi kami apabila Anda berkenan hadir dan memberikan doa restu.\n\n'+
-   'Terima kasih.';
+   (ev.location?'📍 *Lokasi:* '+ev.location+'\n\n':'\n');
+  if(isRsvp){
+   msg+='Untuk informasi detail acara dan konfirmasi kehadiran (RSVP), silakan buka tautan undangan digital Anda di bawah ini:\n'+
+    invUrl+'\n\n'+
+    'Merupakan suatu kehormatan dan kebahagiaan bagi kami apabila Anda berkenan hadir dan memberikan doa restu.\n\n'+
+    'Terima kasih.';
+  } else {
+   msg+='Untuk informasi detail acara dan akses e-tiket masuk resmi Anda, silakan buka tautan di bawah ini:\n'+
+    invUrl+'\n\n'+
+    'Silakan tunjukkan kode QR pada e-tiket tersebut saat tiba di pintu masuk (gate) acara.\n\n'+
+    'Terima kasih.';
+  }
   const targetWa=normPhone(o.guest_phone)||'';
   const waUrl='https://wa.me/'+targetWa+'?text='+encodeURIComponent(msg);
   window.open(waUrl,'_blank');
