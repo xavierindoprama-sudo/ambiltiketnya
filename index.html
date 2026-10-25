@@ -56,7 +56,7 @@ label{display:block;font-size:12px;font-weight:600;color:var(--mu);margin:12px 0
 .pill.gd{background:linear-gradient(135deg,#d4af37,#f3dc8a);color:#2b2100}.pass.inv{border:1.5px solid #d4af37;background:linear-gradient(160deg,rgba(212,175,55,.14),var(--card))}.pass.inv .qr{border:2px solid #d4af37}.inv-t{color:#b8921f;letter-spacing:5px;font-weight:700;font-size:12px}.invto{margin:4px 0 8px}.invto small{display:block;color:#b8921f;letter-spacing:2px;font-size:10px}.invto b{font-size:17px;display:block;line-height:1.25}.invto span{color:var(--mu);font-size:13px}.tkh.inv{background:#0b1026;border-bottom:5px solid #d4af37}.tkh.inv small{color:#d4af37;letter-spacing:5px}
 .pass.wlk{border:1.5px solid #10b981;background:linear-gradient(160deg,rgba(16,185,129,.12),var(--card))}.pass.wlk .qr{border:2px solid #10b981}.wlk-t{color:#059669;letter-spacing:4px;font-weight:700;font-size:12px}.tkh.wlk{background:#064e3b;border-bottom:5px solid #10b981}.tkh.wlk small{color:#34d399;letter-spacing:4px}
 .lgb{max-height:60vh;overflow:auto;line-height:1.55;font-size:13.5px;margin-top:8px}.lgb h2{font-size:15px;margin:14px 0 4px;padding:0}.lgb p,.lgb li{margin:4px 0}.lgb ul{padding-left:18px;margin:4px 0}.lglk .lnk{font-size:12px}.tcl{display:block;margin:2px 0 8px;font-size:13px}.lglk{font-size:12px;color:var(--mu);text-align:center;line-height:1.7;margin-top:14px}.lglk a{color:var(--ac);font-weight:600;text-decoration:none}.wab{display:flex;gap:10px;align-items:center;justify-content:space-between;padding:8px 10px;border-radius:12px;background:var(--in);margin:6px 0;font-size:13px}.wab .btn{text-decoration:none;white-space:nowrap}.pacts{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;margin-top:14px}.pacts .btn{white-space:nowrap}
-@keyframes fi{from{opacity:0}}@keyframes up{from{transform:translateY(20px);opacity:0}}
+@keyframes fi{from{opacity:0}}@keyframes up{from{transform:translateY(20px);opacity:0}}@keyframes spin{to{transform:rotate(360deg)}}
 .info{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:12px 0}.info div{background:var(--in);border:1px solid var(--bd);border-radius:14px;padding:10px 12px}.info small{color:var(--mu);display:block;font-size:11px}
 .pass{border:1px solid var(--bd);border-radius:18px;padding:16px;background:linear-gradient(160deg,var(--in),var(--card))}.pass .qr{background:#fff;padding:12px;border-radius:14px;width:190px;margin:0 auto}.qr svg{display:block;width:100%}.mono{font-family:ui-monospace,Menlo,monospace}
 .pgrid{display:grid;grid-template-columns:200px 1fr;gap:16px;align-items:center}.acts{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}.acts .btn{flex:1;white-space:nowrap}
@@ -850,7 +850,11 @@ function paintFeedback(c) {
     <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:16px">
       <div style="display:flex;align-items:center;gap:10px;flex:1;min-width:240px">
         <label style="margin:0;font-weight:700">Acara:</label>
-        <select data-ch="fbEvSel" style="flex:1;max-width:320px">${evOpts}</select>
+        <select data-ch="fbEvSel" style="flex:1;max-width:300px">${evOpts}</select>
+        <button class="btn sm" data-act="fbRefresh" title="Muat ulang data ulasan" style="display:inline-flex;align-items:center;gap:5px;padding:6px 12px;font-weight:700">
+          <span class="fb-spin" style="display:inline-block">🔄</span>
+          <span>Refresh</span>
+        </button>
       </div>
       <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
         ${S_fb.evId ? `<button class="btn sm" data-act="fbOpenStage" style="display:inline-flex;align-items:center;gap:6px;background:linear-gradient(135deg,#6366f1,#4f46e5);color:#fff;font-weight:700">📽️ Layar Videotron QR</button>` : ''}
@@ -2293,6 +2297,18 @@ const NL=String.fromCharCode(10),find=(a,id)=>a.find(x=>x.id===id),A={
     await fbLoadData();
     paintFeedback();
    }catch(e){fail(e)}
+  },
+  async fbRefresh(el){
+   const icon=el?el.querySelector('.fb-spin'):null;
+   if(icon)icon.style.animation='spin .6s linear infinite';
+   try{
+    await fbLoadData();
+    paintFeedback();
+    toast('Data ulasan diperbarui 🔄',0);
+   }catch(e){fail(e)}
+   finally{
+    if(icon)icon.style.animation='';
+   }
   },
   fbExportCsv(){
   const rows = (S_fb.data && S_fb.data.rows) || [];
