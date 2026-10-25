@@ -2145,7 +2145,7 @@ function paintOrders(){const k=($('#oq').value||'').toLowerCase(),emF=$('#oem')?
   }
   const tblBtn=allowTbl?`<div style="margin-top:3px"><button class="btn sm" data-act="openTableModal" data-id="${o.id}" data-tbl="${esc(o.table_assignment||'')}" style="font-size:10px;padding:1px 6px;border-radius:4px;border:1px dashed var(--bd);background:var(--in)">🪑 ${esc(o.table_assignment||'+ Set Meja')}</button></div>`:'';
   return (pill?`<div style="margin-top:2px">${pill}</div>`:'')+tblBtn;
-})()}${o.guestbook_message?`<div style="font-size:11px;color:var(--mu);margin-top:3px;font-style:italic">💌 "${esc(o.guestbook_message)}"</div>`:''}${(o.custom_answers&&typeof o.custom_answers==='object'&&Object.keys(o.custom_answers).length>0)?`<div style="margin-top:4px;display:flex;flex-wrap:wrap;gap:3px">${Object.values(o.custom_answers).map(a=>`<span style="background:var(--in,rgba(0,0,0,.05));border:1px solid var(--bd,rgba(0,0,0,.1));padding:1px 6px;border-radius:4px;font-size:10px;font-weight:600">${esc(a.label)}: <b>${esc(a.value)}</b></span>`).join('')}</div>`:''}${o.kind==='order'&&o.status==='confirmed'?`<div style="margin-top:3px;display:flex;align-items:center;flex-wrap:wrap;gap:4px"><span class="pill ${o.emailed?'ok':'er'}" style="font-size:10px;padding:2px 7px;font-weight:700" title="${esc(o.email_error||(o.emailed?'Terkirim pada '+(o.emailed_at?new Date(o.emailed_at).toLocaleString(loc()):'-'):'Belum terkirim'))}">${o.emailed?'✓ '+t('em_sent'):'⚠️ '+t('em_pending')}</span>${o.emailed&&o.email_error?`<span class="muted" style="font-size:10px;font-weight:600">(${esc(o.email_error)})</span>`:''}${!o.emailed&&o.email_error?`<div style="font-size:10px;color:var(--er);margin-top:2px;width:100%;white-space:normal;line-height:1.2">${esc(o.email_error)}</div>`:''}</div>`:''}</td><td data-l="${t('c_event')}">${esc(o.event_name)}</td><td data-l="${t('c_qty')}">${o.qty}</td><td data-l="${t('c_status')}">${stPill(o.status)}</td><td data-l="${t('c_chk')}" class="mono">${o.checked_in}/${o.qty}</td><td>${acts(o)}</td></tr>`).join('')}</table></div>${pagerHtml(n,S.ordPage,pages,from,rows.length)}`}
+})()}${o.guestbook_message?`<div style="font-size:11px;color:var(--mu);margin-top:3px;font-style:italic">✉️ "${esc(o.guestbook_message)}"</div>`:''}${(o.custom_answers&&typeof o.custom_answers==='object'&&Object.keys(o.custom_answers).length>0)?`<div style="margin-top:4px;display:flex;flex-wrap:wrap;gap:3px">${Object.values(o.custom_answers).map(a=>`<span style="background:var(--in,rgba(0,0,0,.05));border:1px solid var(--bd,rgba(0,0,0,.1));padding:1px 6px;border-radius:4px;font-size:10px;font-weight:600">${esc(a.label)}: <b>${esc(a.value)}</b></span>`).join('')}</div>`:''}${o.kind==='order'&&o.status==='confirmed'?`<div style="margin-top:3px;display:flex;align-items:center;flex-wrap:wrap;gap:4px"><span class="pill ${o.emailed?'ok':'er'}" style="font-size:10px;padding:2px 7px;font-weight:700" title="${esc(o.email_error||(o.emailed?'Terkirim pada '+(o.emailed_at?new Date(o.emailed_at).toLocaleString(loc()):'-'):'Belum terkirim'))}">${o.emailed?'✓ '+t('em_sent'):'⚠️ '+t('em_pending')}</span>${o.emailed&&o.email_error?`<span class="muted" style="font-size:10px;font-weight:600">(${esc(o.email_error)})</span>`:''}${!o.emailed&&o.email_error?`<div style="font-size:10px;color:var(--er);margin-top:2px;width:100%;white-space:normal;line-height:1.2">${esc(o.email_error)}</div>`:''}</div>`:''}</td><td data-l="${t('c_event')}">${esc(o.event_name)}</td><td data-l="${t('c_qty')}">${o.qty}</td><td data-l="${t('c_status')}">${stPill(o.status)}</td><td data-l="${t('c_chk')}" class="mono">${o.checked_in}/${o.qty}</td><td>${acts(o)}</td></tr>`).join('')}</table></div>${pagerHtml(n,S.ordPage,pages,from,rows.length)}`}
 
 /* ===== Scanner Engine (Continuous, Audio, Torch, Haptic) ===== */
 let _muted=false,_stream=null,_track=null,_torch=false,_facing='environment',_scanning=false,_cooldown=false,_lastCode='',_lastTime=0,_sessionCount=0,_resTimer=null;
@@ -4259,9 +4259,9 @@ function showRsvpModal(ev){
    <div id="rsvp_attending_box">
      ${cfg.allow_plus_one ? `
        <div style="margin-bottom:12px">
-         <label style="font-size:12px;font-weight:700">Membawa Pendamping / Pasangan?</label>
+         <label style="font-size:12px;font-weight:700">Bersama Pendamping / Rekan?</label>
          <select name="plus_one_count" style="width:100%;padding:10px;border-radius:8px;border:1px solid var(--bd);font-size:13px">
-           <option value="0">Hadir Sendiri (1 Orang)</option>
+           <option value="0">Hadir Sendiri (Tanpa Pendamping/Rekan)</option>
            ${Array.from({length: maxPlus}, (_, i) => `<option value="${i+1}">Hadir Bersama +${i+1} Orang (Total ${i+2} Orang)</option>`).join('')}
          </select>
        </div>
@@ -4288,7 +4288,7 @@ function showRsvpModal(ev){
    </div>
 
    <div style="margin-bottom:14px">
-     <label style="font-size:12px;font-weight:700">💌 Buku Tamu &amp; Ucapan Hangat (Opsional)</label>
+     <label style="font-size:12px;font-weight:700">✉️ Buku Tamu &amp; Ucapan / Pesan (Opsional)</label>
      <textarea name="guestbook_message" rows="3" placeholder="Tuliskan ucapan selamat, doa, atau pesan untuk penyelenggara..." style="width:100%;border-radius:8px;border:1px solid var(--bd);padding:10px;font-size:13px;box-sizing:border-box"></textarea>
      <small class="muted" style="font-size:10px">Pesan Anda akan tampil di buku tamu digital &amp; layar acara.</small>
    </div>
@@ -4310,7 +4310,7 @@ async function digitalInvitationView(code, toParam) {
   c.innerHTML = `
   <div style="min-height:100vh;background:#090d16;display:flex;align-items:center;justify-content:center;color:#f8fafc;font-family:system-ui,-apple-system,sans-serif">
     <div style="text-align:center;padding:24px">
-      <div style="font-size:48px;animation:pulse 1.5s infinite">💌</div>
+      <div style="font-size:48px;animation:pulse 1.5s infinite">✉️</div>
       <div style="margin-top:16px;font-size:15px;letter-spacing:3px;text-transform:uppercase;color:#d4af37;font-weight:700">Mempersiapkan Undangan...</div>
     </div>
   </div>`;
@@ -4377,7 +4377,7 @@ async function digitalInvitationView(code, toParam) {
 
   function renderWishesFeed() {
     if (!wishes.length) {
-      return `<p style="color:#94a3b8;font-size:13px;text-align:center;padding:20px 0;margin:0">Belum ada ucapan. Jadilah yang pertama memberikan doa restu!</p>`;
+      return `<p style="color:#94a3b8;font-size:13px;text-align:center;padding:20px 0;margin:0">Belum ada ucapan. Jadilah yang pertama memberikan ucapan dan pesan!</p>`;
     }
     return wishes.map(w => `
       <div style="background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.07);border-radius:14px;padding:14px 16px;margin-bottom:10px;text-align:left">
@@ -4446,14 +4446,14 @@ async function digitalInvitationView(code, toParam) {
   // Generate Plus One Selector according to maxPlusOne setting
   let plusOneHtml = '';
   if (allowPlusOne && maxPlusOne > 0) {
-    let opts = `<option value="0" ${plusOne===0?'selected':''}>Hadir Sendiri (1 Orang)</option>`;
+    let opts = `<option value="0" ${plusOne===0?'selected':''}>Hadir Sendiri (Tanpa Pendamping/Rekan)</option>`;
     for (let i = 1; i <= maxPlusOne; i++) {
-      const lbl = (i === 1) ? 'Membawa 1 Pasangan/Pendamping (+1 Orang)' : `Membawa ${i} Orang Pendamping (+${i} Orang)`;
+      const lbl = (i === 1) ? 'Bersama 1 Orang Pendamping / Rekan (+1 Orang)' : `Bersama ${i} Orang Pendamping / Rekan (+${i} Orang)`;
       opts += `<option value="${i}" ${plusOne===i?'selected':''}>${lbl}</option>`;
     }
     plusOneHtml = `
     <div id="inv_plus_one_box" style="margin-bottom:16px;display:${rsvpStatus==='declined'?'none':'block'}">
-      <label style="display:block;font-size:12px;color:#cbd5e1;margin-bottom:4px">Membawa Pendamping / Pasangan (Maks. ${maxPlusOne} Orang)</label>
+      <label style="display:block;font-size:12px;color:#cbd5e1;margin-bottom:4px">Bersama Pendamping / Rekan (Maks. ${maxPlusOne} Orang)</label>
       <select id="inv_plus_one" style="width:100%;box-sizing:border-box;background:#1e293b;border:1px solid rgba(255,255,255,.12);color:#fff;border-radius:10px;padding:10px 14px">
         ${opts}
       </select>
@@ -4475,7 +4475,12 @@ async function digitalInvitationView(code, toParam) {
       </div>
 
       <div style="width:78px;height:78px;border-radius:50%;background:radial-gradient(circle at 35% 35%, ${isRsvpEvent?'#fde68a,#d4af37 60%,#92400e':'#a5b4fc,#6366f1 60%,#312e81'} 100%);box-shadow:0 12px 30px ${isRsvpEvent?'rgba(212,175,55,.4)':'rgba(99,102,241,.4)'}, inset 0 2px 4px rgba(255,255,255,.6);display:grid;place-items:center;font-size:32px;margin:0 auto 16px;border:2px solid #fef3c7">
-        ${isRsvpEvent?'💌':'🎟️'}
+        ${isRsvpEvent ? `
+          <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="filter:drop-shadow(0 2px 4px rgba(0,0,0,.35))">
+            <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
+            <polyline points="22,6 12,13 2,6"/>
+          </svg>
+        ` : '🎟️'}
       </div>
 
       <div style="font-size:12px;letter-spacing:4px;text-transform:uppercase;color:${isRsvpEvent?'#d4af37':'#a5b4fc'};font-weight:700;margin-bottom:6px">${esc(ev.organizer_name || 'Ambiltiketnya')}</div>
@@ -4618,8 +4623,8 @@ async function digitalInvitationView(code, toParam) {
 
           <!-- Guestbook Wishes Message -->
           <div style="margin-bottom:20px">
-            <label style="display:block;font-size:12px;color:#cbd5e1;margin-bottom:4px">Ucapan Selamat &amp; Doa Restu (Buku Tamu)</label>
-            <textarea id="inv_inp_msg" rows="3" placeholder="Tuliskan ucapan selamat atau pesan hangat untuk pihak penyelenggara..." style="width:100%;box-sizing:border-box;background:#1e293b;border:1px solid rgba(255,255,255,.12);color:#fff;border-radius:10px;padding:10px 14px;resize:vertical">${esc(guestbookMsg)}</textarea>
+            <label style="display:block;font-size:12px;color:#cbd5e1;margin-bottom:4px">Ucapan / Pesan (Buku Tamu)</label>
+            <textarea id="inv_inp_msg" rows="3" placeholder="Tuliskan ucapan atau pesan untuk pihak penyelenggara..." style="width:100%;box-sizing:border-box;background:#1e293b;border:1px solid rgba(255,255,255,.12);color:#fff;border-radius:10px;padding:10px 14px;resize:vertical">${esc(guestbookMsg)}</textarea>
           </div>
 
           <button type="submit" id="btn_submit_rsvp" style="width:100%;background:linear-gradient(135deg,#f59e0b 0%,#d97706 50%,#b45309 100%);color:#fff;font-weight:800;font-size:15px;padding:14px;border-radius:12px;border:none;cursor:pointer;box-shadow:0 8px 20px rgba(217,119,6,.35)">
@@ -4634,7 +4639,7 @@ async function digitalInvitationView(code, toParam) {
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;border-bottom:1px solid rgba(255,255,255,.08);padding-bottom:12px">
           <div>
             <div style="font-size:10px;letter-spacing:2px;text-transform:uppercase;color:${isRsvpEvent?'#d4af37':'#38bdf8'};font-weight:700">BUKU TAMU DIGITAL</div>
-            <h3 style="margin:2px 0 0;font-size:16px;color:#fff">Ucapan &amp; Doa Restu</h3>
+            <h3 style="margin:2px 0 0;font-size:16px;color:#fff">Ucapan &amp; Pesan</h3>
           </div>
           <span id="inv_wishes_cnt" style="background:${isRsvpEvent?'rgba(212,175,55,.15)':'rgba(56,189,248,.15)'};color:${isRsvpEvent?'#fef08a':'#7dd3fc'};font-size:11px;font-weight:700;padding:3px 10px;border-radius:999px">${wishes.length} Pesan</span>
         </div>
@@ -4851,9 +4856,9 @@ async function greetingStageView(evId){
      if(res.messages.length === 0){
        grid.innerHTML = `
          <div style="grid-column:1/-1;text-align:center;padding:80px 20px;background:rgba(255,255,255,.02);border:1px dashed rgba(255,255,255,.1);border-radius:16px">
-           <div style="font-size:48px;margin-bottom:12px">💌</div>
+           <div style="font-size:48px;margin-bottom:12px">✉️</div>
            <h3 style="margin:0 0 6px;color:#e2e8f0">Belum Ada Pesan Ucapan</h3>
-           <p style="color:#94a3b8;margin:0">Jadilah yang pertama menuliskan ucapan dan doa hangat untuk acara ini!</p>
+           <p style="color:#94a3b8;margin:0">Jadilah yang pertama menuliskan ucapan dan pesan hangat untuk acara ini!</p>
          </div>`;
        return;
      }
