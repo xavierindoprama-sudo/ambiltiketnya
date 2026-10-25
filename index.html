@@ -269,7 +269,9 @@ e_SOLDOUT:['Kuota tidak mencukupi.','Not enough seats left.'],e_MAX:['Melebihi b
 e_BAD_WALKIN_QUOTA:['Kuota walk-in untuk acara ini sudah penuh.','Walk-in quota for this event is full.'],e_NO_WALKIN_QUOTA:['Acara ini tidak membuka kuota walk-in.','This event does not have walk-in quota.'],e_WALKIN_SOLDOUT:['Kuota walk-in untuk acara ini sudah penuh.','Walk-in quota for this event is full.'],e_WALKIN_DISABLED:['Acara ini tidak membuka kuota walk-in.','This event does not have walk-in quota.'],
 walkin:['Registrasi Walk-In','Walk-In Registration'],walkin_btn:['🚶‍♂️ Registrasi Walk-In','🚶‍♂️ Walk-In Registration'],walkin_title:['Registrasi Walk-In (Di Tempat)','On-Site Walk-In Registration'],walkin_sub:['Pendaftaran langsung di venue dengan kuota terpisah.','Direct on-site registration with separate quota.'],walkin_badge:['Walk-In','Walk-In'],walkin_quota:['Kuota Walk-In (di tempat)','Walk-in quota (on-site)'],walkin_who:['Nama Lengkap Peserta *','Attendee Full Name *'],walkin_org:['Gereja / Komunitas / Instansi','Church / Community / Org'],walkin_phone:['Nomor WhatsApp','WhatsApp Number'],walkin_email:['Email (Opsional untuk tiket)','Email (Optional for ticket)'],walkin_ci:['Langsung Check-In di Gerbang','Instant Check-In at Gate'],walkin_submit:['Daftarkan Peserta Walk-In','Register Walk-In Attendee'],walkin_ok:['Pendaftaran Walk-In berhasil!','Walk-in registration successful!'],walkin_left:['Sisa Kuota Walk-In:','Walk-In Quota Left:'],walkin_pass:['E-Tiket Walk-In Resmi','Official Walk-In Ticket Pass'],
 kind_filter:['Semua Jenis Tiket','All Ticket Types'],kind_reg:['Reguler (Online)','Regular (Online)'],kind_inv:['Undangan VIP','VIP Invitation'],kind_walkin:['Walk-In (Di Tempat)','Walk-In (On-Site)'],
-em_sent:['Terkirim','Sent'],em_pending:['Email Pending','Email Pending'],em_batch_btn:['Kirim Ulang Email Pending','Resend Pending Emails'],em_batch_title:['Kirim Ulang Email Tiket Massal','Bulk Email Resend'],em_filter_all:['Semua Email','All Emails'],em_filter_pending:['⚠️ Belum Terima Email','⚠️ Pending Emails Only'],em_filter_sent:['✓ Email Terkirim','✓ Sent Emails Only'],em_batch_confirm:['Kirim tiket email ke semua pemesan yang belum menerima email?','Resend ticket emails to all pending attendees?'],em_batch_done:['Pengiriman email massal selesai.','Bulk email resend completed.']};
+em_sent:['Terkirim','Sent'],em_pending:['Email Pending','Email Pending'],em_batch_btn:['Kirim Ulang Email Pending','Resend Pending Emails'],em_batch_title:['Kirim Ulang Email Tiket Massal','Bulk Email Resend'],em_filter_all:['Semua Email','All Emails'],em_filter_pending:['⚠️ Belum Terima Email','⚠️ Pending Emails Only'],em_filter_sent:['✓ Email Terkirim','✓ Sent Emails Only'],em_batch_confirm:['Kirim tiket email ke semua pemesan yang belum menerima email?','Resend ticket emails to all pending attendees?'],em_batch_done:['Pengiriman email massal selesai.','Bulk email resend completed.'],
+n_doorprize:['Live Doorprize','Live Doorprize'],dp_title:['Live Doorprize Interactive Stage','Live Doorprize Interactive Stage'],dp_sub:['Layar interaktif pengundian doorprize panggung untuk peserta yang telah hadir di venue.','Interactive stage lucky draw screen for attendees who have checked in at the venue.'],dp_pool:['Peserta Hadir (Pool Undian)','Checked-in Pool'],dp_winners_cnt:['Pemenang Terpilih','Winners Drawn'],dp_spin_btn:['🎲 Putar Undian Sekarang','🎲 Spin Doorprize Now'],dp_spinning:['Mengundi Pemenang...','Drawing Winner...'],dp_prize_lbl:['Nama Hadiah / Doorprize','Prize Name / Category'],dp_confirm_btn:['✅ Simpan Pemenang','✅ Confirm Winner'],dp_redraw_btn:['🔄 Undi Ulang (Batal/Tidak Hadir)','🔄 Redraw (Absent)'],dp_congrats:['SELAMAT KEPADA PEMENANG!','CONGRATULATIONS TO THE WINNER!'],dp_history:['Daftar Pemenang Terpilih','Drawn Winners List'],dp_empty_pool:['Belum ada peserta yang hadir (Check-in) untuk acara ini.','No attendees checked-in yet for this event.'],dp_fs_btn:['⛶ Layar Penuh (Projector)','⛶ Fullscreen (Projector)'],
+n_feedback:['Feedback & Survey','Feedback & Survey'],fb_title:['Survey Kepuasan & Ulasan Peserta','Attendee Satisfaction & Feedback'],fb_sub:['Kumpulkan ulasan, rating kepuasan, kritik, dan saran peserta acara.','Collect reviews, satisfaction ratings, and attendee suggestions.'],fb_btn:['Beri Ulasan','Give Review'],fb_rate_lbl:['Bagaimana kepuasan Anda terhadap acara ini?','How satisfied are you with this event?'],fb_anon_lbl:['Kirim secara Anonim (Sembunyikan identitas saya)','Submit as Anonymous (Hide my identity)'],fb_anon_hint:['Nama dan identitas Anda tidak akan ditampilkan kepada panitia.','Your name and identity will not be shown to organizers.'],fb_cat_lbl:['Aspek / Kategori Ulasan','Review Category / Aspect'],fb_comment_lbl:['Kritik, Saran & Ulasan Anda','Your Feedback, Criticisms & Suggestions'],fb_submit:['Kirim Feedback','Submit Feedback'],fb_thanks:['Terima kasih atas ulasan dan masukan Anda!','Thank you for your feedback!'],fb_avg:['Rata-rata Skor','Average Rating'],fb_total:['Total Ulasan','Total Reviews'],fb_anon_stat:['Ulasan Anonim','Anonymous Reviews']};
 let L=ls.g('lang')||((navigator.language||'id').startsWith('id')?'id':'en'),TH=ls.g('theme')||'system';
 const t=k=>D[k]?D[k][L==='id'?0:1]:k;
 const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -293,7 +295,7 @@ const ctl=()=>seg([['id','ID'],['en','EN']],L,'lang')+' '+seg([['light',IC.light
 const ini=n=>(n||'?').split(' ').map(x=>x[0]).slice(0,2).join('').toUpperCase();
 const avt=u=>`<div class="av">${u.picture?`<img src="${esc(u.picture)}" referrerpolicy="no-referrer" onerror="this.remove()">`:esc(ini(u.name))}</div>`;
 const ico=p=>'<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'+p+'</svg>';
-const ICN={ticket:'<path d="M2 9a3 3 0 0 1 0 6v2a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-2a3 3 0 0 1 0-6V7a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2z"/><path d="M13 5v2M13 11v2M13 17v2"/>',dash:'<rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/>',events:'<rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/>',orders:'<rect x="8" y="2" width="8" height="4" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2M9 12h6M9 16h4"/>',scan:'<path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2M7 12h10"/>',users:'<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.9M16 3.1a4 4 0 0 1 0 7.8"/>',user:'<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>',out:'<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/>',left:'<path d="M15 18l-6-6 6-6"/>',menu:'<path d="M3 6h18M3 12h18M3 18h18"/>',close:'<path d="M18 6L6 18M6 6l12 12"/>',inv:'<path d="M12 2l3 6.5 7 .9-5.2 4.8 1.4 7-6.2-3.5-6.2 3.5 1.4-7L2 9.4l7-.9z"/>',analytics:'<path d="M18 20V10M12 20V4M6 20v-6"/>',legal:'<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M8 13h8M8 17h6"/>'};
+const ICN={ticket:'<path d="M2 9a3 3 0 0 1 0 6v2a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-2a3 3 0 0 1 0-6V7a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2z"/><path d="M13 5v2M13 11v2M13 17v2"/>',dash:'<rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/>',events:'<rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/>',orders:'<rect x="8" y="2" width="8" height="4" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2M9 12h6M9 16h4"/>',scan:'<path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2M7 12h10"/>',users:'<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.9M16 3.1a4 4 0 0 1 0 7.8"/>',user:'<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>',out:'<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/>',left:'<path d="M15 18l-6-6 6-6"/>',menu:'<path d="M3 6h18M3 12h18M3 18h18"/>',close:'<path d="M18 6L6 18M6 6l12 12"/>',inv:'<path d="M12 2l3 6.5 7 .9-5.2 4.8 1.4 7-6.2-3.5-6.2 3.5 1.4-7L2 9.4l7-.9z"/>',analytics:'<path d="M18 20V10M12 20V4M6 20v-6"/>',legal:'<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M8 13h8M8 17h6"/>',doorprize:'<polyline points="20 12 20 22 4 22 4 12"/><rect x="2" y="7" width="20" height="5"/><line x1="12" y1="22" x2="12" y2="7"/><path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"/><path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"/>',feedback:'<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><line x1="9" y1="9" x2="15" y2="9"/><line x1="9" y1="13" x2="13" y2="13"/>'};
 const logo='<div class="logo"><i>'+ico(ICN.ticket)+'</i><span>ambiltiketnya<b>.online</b></span></div>';
 /* qr */
 function qr(x){if(typeof qrcode==='undefined')return '<p class="muted">QR...</p>';const q=qrcode(0,'M');q.addData(x);q.make();const n=q.getModuleCount();let p='';for(let r=0;r<n;r++)for(let c=0;c<n;c++)if(q.isDark(r,c))p+=`M${c} ${r}h1v1h-1z`;return `<svg viewBox="0 0 ${n} ${n}" shape-rendering="crispEdges"><path d="${p}" fill="#000"/></svg>`}
@@ -340,9 +342,12 @@ async function ticketView(code){
  $('#app').innerHTML=shell('<div class="tkh'+(isInv?' inv':isWlk?' wlk':'')+'">'+headBadge+'<h1>'+esc(r.name)+'</h1></div>'
   +(showQr?'<div class="tkq">'+recipientHtml+'<div class="qr">'+(typeof qrcode!=='undefined'?qr(r.code):'')+'</div><div class="mono">'+esc(r.code)+'</div><small>'+t('scanhint')+'</small></div>':'')
   +(r.status!=='OK'?'<div class="tkm">'+t('tk_'+r.status)+'</div>':'')
-  +'<div class="tkb"><div class="info">'+f(t('date'),fd(r.edate,{weekday:'long',day:'numeric',month:'long',year:'numeric'}))+f(t('time'),r.stime+' WIB')+f(t('place'),r.location)+f(t('qty'),r.qty+' '+t('tix'))+'</div></div>'+back)}
+  +'<div class="tkb"><div class="info">'+f(t('date'),fd(r.edate,{weekday:'long',day:'numeric',month:'long',year:'numeric'}))+f(t('time'),r.stime+' WIB')+f(t('place'),r.location)+f(t('qty'),r.qty+' '+t('tix'))+'</div>'
+  +'<div style="text-align:center;margin-top:14px"><button class="btn sm" data-act="fbOpenPublic" data-ev="'+esc(r.event_id)+'" data-code="'+esc(r.code)+'" data-name="'+esc(r.name)+'" style="border-radius:20px;padding:8px 18px;background:var(--in);border:1px solid var(--bd);color:var(--tx);font-weight:700">⭐ '+t('fb_btn')+' &amp; Survey</button></div></div>'+back)}
 async function boot(){applyTheme();const tkc=ticketParam();if(tkc)return ticketView(tkc);
  const qp=new URLSearchParams(location.search),gateEv=qp.get('gate'),gateKey=qp.get('k');
+ const stage=qp.get('stage');
+ if(stage==='doorprize'){applyTheme();const evId=qp.get('ev')||'';if(evId)S_dp.evId=evId;S.token=ls.g('tk')||'';if(!S.token)return gate();try{S.user=await api('me',{});S.mode='admin';S.view='doorprize';$('#app').innerHTML='<div style="min-height:100vh;background:#080b18;padding:20px" id="ac"></div>';doorprizeView($('#ac'));return}catch(x){return gate()}}
  if(gateEv&&gateKey){bz(1);try{const r=await pub('gateLogin',{eventId:gateEv,key:gateKey},t('loading'));bz(-1);S.token=r.session;ls.s('tk',r.session);ls.s('mode','admin');S.user=r.user||{id:'gate_volunteer',name:'Petugas Gerbang',role:'gate_staff',email:'gate_volunteer@ambiltiketnya.online'};S.mode='admin';S.view='scan';try{history.replaceState({},'',location.pathname)}catch(x){}cacheOfflineEvent(gateEv,true);call('init',S.token).then(res=>{if(res&&res.cfg)B=res.cfg}).catch(()=>{});renderAdmin();setTimeout(()=>{openScannerModal()},450);return}catch(e){bz(-1);const msg=(e&&e.message&&D['e_'+e.message])?t('e_'+e.message):errMsg(e);toast('Tautan Gate Pass tidak valid atau kedaluwarsa: '+msg,1)}}
  S.token=ls.g('tk')||'';bz(1);let r;const t0=performance.now();
  try{r=await call('init',S.token)}catch(e){bz(-1);return gate(e&&e.message==='NO_API'?'APP_API_URL belum diisi di config.js':t('e_E_GENERIC')+' (init)')}
@@ -445,16 +450,16 @@ function tixRow(o){return `<div class="card tk ${o.status==='cancelled'?'cancel'
 function passModal(o,msg){const ok=o.status==='confirmed',inv=o.kind==='invitation',wlk=o.kind==='walk_in';modal(`<button class="btn sm x noprint" data-act="cm">&#10005;</button><h2>${t(inv?'inv_pass':wlk?'walkin_pass':'pass')}</h2>${msg?`<p class="muted">${esc(msg)}</p>`:''}<div class="pass${inv?' inv':wlk?' wlk':''}">${inv?`<div class="inv-t">${t('inv_t')}</div><h3 style="margin:2px 0 6px">${esc(o.name)}</h3><div class="invto"><small>${t('inv_to')}</small><b>${esc(o.guest_name)}</b><span>${esc(o.guest_org)} &#183; ${o.qty} ${t('tix')}${o.guest_age?' &#183; '+esc(o.guest_age)+' '+t('years_old'):''}${o.guest_phone?' &#183; +'+esc(o.guest_phone):''}</span></div>`:wlk?`<div class="wlk-t">WALK-IN (DI TEMPAT)</div><h3 style="margin:2px 0 6px">${esc(o.name)}</h3><div class="invto"><small>PESERTA WALK-IN</small><b>${esc(o.guest_name||o.name)}</b><span>${esc(o.guest_org||o.church||'-')} &#183; ${o.qty} ${t('tix')}${o.guest_phone?' &#183; +'+esc(o.guest_phone):''}</span></div>`:`<div class="cat">${esc(o.order_code)} &#183; ${o.qty} ${t('tix')}</div><h3 style="margin:2px 0 10px">${esc(o.name)}</h3>`}
 ${ok?`<div class="pgrid"><div><div class="qr">${qr(o.ticket_code)}</div><div class="mono" style="text-align:center;margin-top:8px"><b>${esc(o.ticket_code)}</b><br><small class="muted">${t('scanhint')}</small></div></div><div class="info" style="margin:0"><div><small>${t('date')}</small><b>${fd(o.event_date,{weekday:'long',day:'numeric',month:'long',year:'numeric'})}</b></div><div><small>${t('time')}</small><b>${tm(o)}</b></div><div style="grid-column:1/-1"><small>${t('place')}</small><b>${esc(o.location)}</b></div></div></div>`:`<p><b>${t('pay')}</b></p><p style="white-space:pre-wrap">${esc(o.payment_instructions)}</p>`}
 ${(inv&&o.qty>1)?`<div class="ann inv-note" style="background:#fffbe6;border:1px solid #ffe58f;color:#874d00;font-size:12px;padding:10px 14px;border-radius:10px;margin-top:14px;line-height:1.5">&#9432; <b>Catatan:</b> Satu kode QR ini berlaku untuk <b>${o.qty} orang</b>. Mohon hadir dan masuk bersamaan di gerbang masuk karena tiket hanya dapat dipindai 1 kali.</div>`:wlk?`<div class="ann" style="background:#ecfdf5;border:1px solid #a7f3d0;color:#065f46;font-size:12px;padding:10px 14px;border-radius:10px;margin-top:14px;line-height:1.5">&#10003; <b>Walk-In Terverifikasi:</b> Tiket didaftarkan langsung di venue. ${o.checked_in>=o.qty?'Peserta telah berstatus Masuk (Check-In).':'Peserta siap masuk di gerbang.'}</div>`:(o.announcement&&ok?`<p class="ann" data-act="xdesc">&#128226; ${esc(o.announcement)}</p>`:'')}${(o.terms||(S.ev&&find(S.ev,o.event_id)&&find(S.ev,o.event_id).terms))?`<div style="margin-top:10px;text-align:right"><button class="lnk tcl" data-act="evTerms" data-id="${o.event_id}">${t('ev_terms')} &#8250;</button></div>`:''}</div>
-${ok?`<div class="pacts noprint">${(o.guest_phone||inv||(S.user&&S.user.whatsapp))?`<button class="btn wa" data-act="wa" data-id="${o.id}">${t('wa')}</button>`:''}<button class="btn" data-act="print" data-id="${o.id}">${t('print')}</button><button class="btn" data-act="dlpng" data-id="${o.id}">${t('png')}</button><button class="btn pri" data-act="dl" data-id="${o.id}">${t('pdf')}</button></div>`:''}`)}
+${ok?`<div class="pacts noprint">${(o.guest_phone||inv||(S.user&&S.user.whatsapp))?`<button class="btn wa" data-act="wa" data-id="${o.id}">${t('wa')}</button>`:''}<button class="btn" data-act="print" data-id="${o.id}">${t('print')}</button><button class="btn" data-act="dlpng" data-id="${o.id}">${t('png')}</button><button class="btn pri" data-act="dl" data-id="${o.id}">${t('pdf')}</button><button class="btn" data-act="fbOpenModal" data-id="${o.id}" data-ev="${o.event_id}" data-code="${o.ticket_code}" data-name="${esc(o.name)}" style="background:var(--in)">⭐ ${t('fb_btn')}</button></div>`:''}`)}
 /* ===== ADMIN ===== */
-function renderAdmin(){const nav=[['dash',1],['events',2],['orders',2],['scan',1],['analytics',2],['inv',2],['legal',2],['users',3]].filter(n=>rk()>=n[1]);if(!nav.find(n=>n[0]===S.view))S.view=nav[0][0];
+function renderAdmin(){const nav=[['dash',1],['events',2],['orders',2],['scan',1],['analytics',2],['doorprize',2],['feedback',2],['inv',2],['legal',2],['users',3]].filter(n=>rk()>=n[1]);if(!nav.find(n=>n[0]===S.view))S.view=nav[0][0];
  const sv=ls.g('sbcol'),col=sv==null?innerWidth<1100:sv==='1';
  const it=(on,ic,l,act,dv,x)=>'<button class="ni '+(on?'on ':'')+(x||'')+'" title="'+esc(l)+'" data-act="'+act+'"'+(dv?' data-v="'+dv+'"':'')+'>'+ico(ic)+'<span>'+l+'</span></button>';
  $('#app').innerHTML='<div class="app'+(col?' col':'')+'" id="shell"><aside class="sb"><div class="sb-top"><div class="logo"><i>'+ico(ICN.ticket)+'</i><span class="sb-txt">ambiltiketnya<b>.online</b></span></div><button class="ib sb-tg" data-act="sbtoggle" title="Menu">'+ico(ICN.left)+'</button><button class="ib sb-x" data-act="sbclose">'+ico(ICN.close)+'</button></div>'
  +'<nav class="sb-nav">'+nav.map(n=>it(S.view===n[0],ICN[n[0]],t('n_'+n[0]),'view',n[0])).join('')+'<div class="sb-sep"></div>'+it(0,ICN.user,t('asuser'),'mode','user')+'</nav>'
  +'<div class="sb-bot"><div class="uc">'+avt(S.user)+'<div class="sb-txt"><b>'+esc(S.user.name)+'</b><small>'+t('r_'+S.user.role)+'</small></div></div><div class="sb-full">'+ctl()+'</div><div class="sb-mini"><button class="ib" data-act="themecycle" title="'+t('theme')+'">'+IC[TH]+'</button><button class="ib" data-act="langtoggle">'+L.toUpperCase()+'</button></div>'+it(0,ICN.out,t('logout'),'logout','','dg')+'</div></aside><div class="sb-bg" data-act="sbclose"></div>'
  +'<div class="mw"><header class="mbar"><button class="ib" data-act="sbopen">'+ico(ICN.menu)+'</button><b>'+t('n_'+S.view)+'</b><span class="sp"></span>'+avt(S.user)+'</header><section class="card main"><h2 class="ptitle">'+t('n_'+S.view)+'</h2><div id="ac">'+skel(1)+'</div></section></div></div>';adminView()}
-async function adminView(){const c=$('#ac');try{({dash,events:evList,orders:ordView,scan:scanView,analytics:analyticsView,users:usrView,legal:legalView,inv:invView})[S.view](c)}catch(e){fail(e)}}
+async function adminView(){const c=$('#ac');try{({dash,events:evList,orders:ordView,scan:scanView,analytics:analyticsView,doorprize:doorprizeView,feedback:feedbackView,users:usrView,legal:legalView,inv:invView})[S.view](c)}catch(e){fail(e)}}
 async function dash(c){try{S.st=await api('stats')}catch(e){return fail(e)}paintDash()}
 function paintDash(){const c=$('#ac'),sel=S.sel||'',r=S.st.filter(x=>!sel||x.id===sel),sm=k=>r.reduce((a,x)=>a+x[k],0),bk=sm('booked'),ck=sm('checked'),q=sm('quota'),ac=r.filter(x=>x.is_active).length,mx=Math.max(1,...r.map(x=>x.booked));
  const st=(ic,v,l,s,p,col)=>`<div class="card stat"><div><b>${v}</b><small>${l}</small><br><small>${s}</small></div><div class="ring" style="--p:${p};--c:${col}"><span>${p}%</span></div></div>`;
@@ -563,6 +568,369 @@ function exportOrdersCsv(targetEventId){const evId=targetEventId||($('#of')&&$('
  const blob=new Blob([csvContent],{type:'text/csv;charset=utf-8;'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);
  const evName=(S.aev&&S.aev.find(x=>x.id===evId))?S.aev.find(x=>x.id===evId).name.replace(/[^a-zA-Z0-9]/g,'_'):'Semua_Acara';
  a.download='Laporan_Kehadiran_'+evName+'_'+new Date().toISOString().slice(0,10)+'.csv';document.body.appendChild(a);a.click();a.remove()}
+
+/* ===== AUDIO SFX & CONFETTI (Self-Contained) ===== */
+function playSfx(type) {
+  try {
+    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+    if (!AudioCtx) return;
+    const ctx = new AudioCtx();
+    if (type === 'tick') {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(520, ctx.currentTime);
+      gain.gain.setValueAtTime(0.06, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.04);
+      osc.connect(gain); gain.connect(ctx.destination);
+      osc.start(); osc.stop(ctx.currentTime + 0.04);
+    } else if (type === 'win') {
+      [523.25, 659.25, 783.99, 1046.50].forEach((freq, i) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(freq, ctx.currentTime + i * 0.11);
+        gain.gain.setValueAtTime(0.18, ctx.currentTime + i * 0.11);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + i * 0.11 + 0.65);
+        osc.connect(gain); gain.connect(ctx.destination);
+        osc.start(ctx.currentTime + i * 0.11);
+        osc.stop(ctx.currentTime + i * 0.11 + 0.65);
+      });
+    }
+  } catch(e) {}
+}
+
+function triggerConfetti(canvasId) {
+  const c = document.getElementById(canvasId || 'dp_confetti');
+  if (!c) return;
+  const ctx = c.getContext('2d');
+  c.width = c.parentElement.clientWidth || window.innerWidth;
+  c.height = c.parentElement.clientHeight || window.innerHeight;
+  const colors = ['#d4af37', '#f59e0b', '#3b82f6', '#10b981', '#ec4899', '#8b5cf6'];
+  const particles = Array.from({ length: 90 }, () => ({
+    x: c.width / 2 + (Math.random() - 0.5) * 80,
+    y: c.height / 2 - 20,
+    vx: (Math.random() - 0.5) * 16,
+    vy: -(Math.random() * 12 + 6),
+    size: Math.random() * 8 + 5,
+    color: colors[Math.floor(Math.random() * colors.length)],
+    rot: Math.random() * 360,
+    vrot: (Math.random() - 0.5) * 12,
+    alpha: 1
+  }));
+  let frames = 0;
+  function anim() {
+    ctx.clearRect(0, 0, c.width, c.height);
+    let alive = false;
+    particles.forEach(p => {
+      p.x += p.vx;
+      p.y += p.vy;
+      p.vy += 0.35;
+      p.vx *= 0.98;
+      p.rot += p.vrot;
+      if (frames > 40) p.alpha -= 0.015;
+      if (p.alpha > 0) {
+        alive = true;
+        ctx.save();
+        ctx.translate(p.x, p.y);
+        ctx.rotate((p.rot * Math.PI) / 180);
+        ctx.fillStyle = p.color;
+        ctx.globalAlpha = Math.max(0, p.alpha);
+        ctx.fillRect(-p.size / 2, -p.size / 2, p.size, p.size * 0.7);
+        ctx.restore();
+      }
+    });
+    frames++;
+    if (alive && frames < 140) requestAnimationFrame(anim);
+    else ctx.clearRect(0, 0, c.width, c.height);
+  }
+  requestAnimationFrame(anim);
+}
+
+/* ===== LIVE DOORPRIZE INTERACTIVE STAGE ===== */
+let S_dp = {
+  evId: '',
+  prize: 'Doorprize Utama',
+  candidates: [],
+  winners: [],
+  currentWinner: null,
+  isSpinning: false
+};
+
+async function dpLoadData() {
+  if (!S_dp.evId) return;
+  const res = await api('doorprizePool', { eventId: S_dp.evId });
+  S_dp.winners = res.winners || [];
+  const wonOrders = new Set(S_dp.winners.map(w => w.order_id).filter(Boolean));
+  const wonCodes = new Set(S_dp.winners.map(w => w.ticket_code));
+  S_dp.candidates = (res.candidates || []).filter(c => !wonOrders.has(c.order_id) && !wonCodes.has(c.ticket_code));
+}
+
+async function doorprizeView(c) {
+  c.innerHTML = '<div class="card" style="padding:20px;text-align:center"><div style="display:inline-block;animation:spin 1s linear infinite;font-size:24px">⏳</div><p class="muted" style="margin-top:10px">' + t('loading') + '</p></div>';
+  try {
+    if (!S.aev) S.aev = await api('adminEvents');
+    if (!S_dp.evId && S.aev && S.aev.length) S_dp.evId = S.aev[0].id;
+    await dpLoadData();
+    paintDoorprize(c);
+  } catch (e) { fail(e); }
+}
+
+function paintDoorprize(c) {
+  if (!c) c = $('#ac');
+  if (!c) return;
+  const evOpts = (S.aev || []).map(e => `<option value="${e.id}" ${e.id === S_dp.evId ? 'selected' : ''}>${esc(e.name)}</option>`).join('');
+  const candCount = S_dp.candidates.length;
+  const winCount = S_dp.winners.length;
+
+  c.innerHTML = `
+    <div class="bar2" style="display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px;margin-bottom:14px">
+      <div style="display:flex;align-items:center;gap:8px;flex:1;min-width:260px">
+        <label style="margin:0;font-weight:700">Acara:</label>
+        <select data-ch="dpEvSel" style="flex:1;max-width:320px">${evOpts}</select>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px">
+        <button class="btn sm" data-act="dpToggleFs">⛶ ${t('dp_fs_btn')}</button>
+        <button class="btn sm" data-act="dpRefresh">🔄 Refresh Pool</button>
+      </div>
+    </div>
+
+    <!-- STAGE CONTAINER -->
+    <div id="dp_stage_box" style="position:relative;background:radial-gradient(ellipse at top,#161d38 0%,#080b18 70%);border:1.5px solid rgba(212,175,55,.3);border-radius:22px;padding:32px 20px;text-align:center;color:#fff;overflow:hidden;box-shadow:0 14px 40px rgba(0,0,0,.6)">
+      <canvas id="dp_confetti" style="position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:10"></canvas>
+      
+      <div style="display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px;margin-bottom:24px;border-bottom:1px solid rgba(255,255,255,.1);padding-bottom:14px">
+        <div style="display:flex;align-items:center;gap:12px;text-align:left">
+          <div style="font-size:32px">🎁</div>
+          <div>
+            <div style="font-size:11px;color:#d4af37;letter-spacing:3px;font-weight:800;text-transform:uppercase">LIVE STAGE DRAW</div>
+            <input id="dp_prize_inp" value="${esc(S_dp.prize)}" placeholder="Nama Hadiah..." style="background:rgba(255,255,255,.08);border:1px solid rgba(212,175,55,.4);color:#fff;font-size:18px;font-weight:800;padding:6px 12px;border-radius:10px;max-width:280px">
+          </div>
+        </div>
+        <div style="display:flex;gap:10px">
+          <span style="background:rgba(16,185,129,.18);border:1px solid #10b981;color:#34d399;font-weight:700;font-size:13px;padding:6px 14px;border-radius:99px">
+            👥 ${t('dp_pool')}: <b>${candCount}</b> orang
+          </span>
+          <span style="background:rgba(212,175,55,.18);border:1px solid #d4af37;color:#f3dc8a;font-weight:700;font-size:13px;padding:6px 14px;border-radius:99px">
+            🏆 ${t('dp_winners_cnt')}: <b>${winCount}</b>
+          </span>
+        </div>
+      </div>
+
+      <div id="dp_roller_card" style="min-height:220px;display:flex;flex-direction:column;justify-content:center;align-items:center;background:rgba(0,0,0,.35);border:2px dashed rgba(212,175,55,.4);border-radius:20px;padding:26px 18px;margin:10px 0 24px;position:relative">
+        <div id="dp_cand_tag" style="font-size:12px;color:#d4af37;letter-spacing:4px;font-weight:800;text-transform:uppercase;margin-bottom:8px">LUCKY DRAW</div>
+        <div id="dp_cand_name" style="font-size:38px;font-weight:900;letter-spacing:1px;color:#ffffff;line-height:1.2;margin-bottom:6px;text-shadow:0 0 20px rgba(255,255,255,.3)">
+          ${candCount ? 'Siap Mengundi' : 'Belum Ada Peserta Hadir'}
+        </div>
+        <div id="dp_cand_org" style="font-size:16px;color:#cbd5e1;font-weight:600;min-height:24px">
+          ${candCount ? 'Klik tombol Putar Undian atau tekan Spasi' : 'Peserta harus check-in terlebih dahulu di gerbang'}
+        </div>
+        <div id="dp_cand_code" style="margin-top:12px;display:inline-block;padding:4px 16px;background:rgba(212,175,55,.2);border:1px solid #d4af37;border-radius:8px;font-family:monospace;font-size:16px;font-weight:800;color:#f3dc8a">
+          ${candCount ? 'TKT-????-??????' : '-'}
+        </div>
+      </div>
+
+      <div id="dp_actions" style="display:flex;gap:12px;justify-content:center;flex-wrap:wrap">
+        <button class="btn pri lg" id="dp_btn_spin" data-act="dpSpin" ${!candCount ? 'disabled' : ''} style="font-size:18px;font-weight:800;padding:14px 38px;border-radius:14px;background:linear-gradient(135deg,#d4af37,#b8921f);color:#080b18;box-shadow:0 6px 25px rgba(212,175,55,.4)">
+          ${t('dp_spin_btn')}
+        </button>
+      </div>
+    </div>
+
+    <!-- WINNERS HISTORY TABLE -->
+    <div class="card" style="padding:20px;margin-top:20px">
+      <div style="display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px;margin-bottom:14px">
+        <h3 style="margin:0">🏆 ${t('dp_history')} (${winCount})</h3>
+        ${winCount ? `<button class="btn sm" data-act="dpExportCsv">📥 Ekspor CSV</button><button class="btn sm dg" data-act="dpResetAll">⚠️ Reset Semua Pemenang</button>` : ''}
+      </div>
+      ${winCount ? `
+        <div class="t-wrap">
+          <table style="width:100%;font-size:13px">
+            <thead>
+              <tr style="text-align:left;border-bottom:1px solid var(--bd)">
+                <th style="padding:8px">No</th>
+                <th style="padding:8px">Hadiah</th>
+                <th style="padding:8px">Pemenang</th>
+                <th style="padding:8px">Asal Gereja / Instansi</th>
+                <th style="padding:8px">Kode Tiket</th>
+                <th style="padding:8px">Waktu Undian</th>
+                <th style="padding:8px;text-align:right">Aksi</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${S_dp.winners.map((w, idx) => `
+                <tr style="border-bottom:1px solid var(--bd)">
+                  <td style="padding:8px;font-weight:700">${idx + 1}</td>
+                  <td style="padding:8px"><span class="pill gd" style="font-weight:700">${esc(w.prize_name)}</span></td>
+                  <td style="padding:8px"><b>${esc(w.winner_name)}</b></td>
+                  <td style="padding:8px;color:var(--mu)">${esc(w.winner_org || '-')}</td>
+                  <td style="padding:8px;font-family:monospace;font-weight:700">${esc(w.ticket_code)}</td>
+                  <td style="padding:8px;font-size:11px;color:var(--mu)">${esc(w.drawn_at)}</td>
+                  <td style="padding:8px;text-align:right">
+                    <button class="btn sm dg" data-act="dpDelWin" data-id="${w.id}" title="Hapus agar bisa diundi kembali">&#10005; Hapus</button>
+                  </td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        </div>
+      ` : `<p class="muted" style="text-align:center;padding:18px 0">${t('none')}</p>`}
+    </div>
+  `;
+}
+
+/* ===== ATTENDEE FEEDBACK & SURVEY ===== */
+let S_fb = {
+  evId: '',
+  data: null
+};
+
+async function fbLoadData() {
+  const res = await api('feedbacksGet', { eventId: S_fb.evId });
+  S_fb.data = res;
+}
+
+async function feedbackView(c) {
+  c.innerHTML = '<div class="card" style="padding:20px;text-align:center"><div style="display:inline-block;animation:spin 1s linear infinite;font-size:24px">⏳</div><p class="muted" style="margin-top:10px">' + t('loading') + '</p></div>';
+  try {
+    if (!S.aev) S.aev = await api('adminEvents');
+    await fbLoadData();
+    paintFeedback(c);
+  } catch(e) { fail(e); }
+}
+
+function paintFeedback(c) {
+  if (!c) c = $('#ac');
+  if (!c) return;
+  const d = S_fb.data || { rows: [], total: 0, avg: 0, dist: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 }, anonCount: 0 };
+  const evOpts = '<option value="">Semua Acara</option>' + (S.aev || []).map(e => `<option value="${e.id}" ${e.id === S_fb.evId ? 'selected' : ''}>${esc(e.name)}</option>`).join('');
+  const anonPct = d.total ? Math.round((d.anonCount / d.total) * 100) : 0;
+
+  const starBars = [5, 4, 3, 2, 1].map(st => {
+    const cnt = d.dist[st] || 0;
+    const pct = d.total ? Math.round((cnt / d.total) * 100) : 0;
+    return `
+      <div style="display:flex;align-items:center;gap:8px;font-size:12px;margin-bottom:6px">
+        <span style="width:24px;font-weight:700">${st}★</span>
+        <div style="flex:1;height:8px;background:rgba(255,255,255,.1);border-radius:99px;overflow:hidden">
+          <div style="height:100%;width:${pct}%;background:linear-gradient(90deg,#f59e0b,#fbbf24);border-radius:99px"></div>
+        </div>
+        <span style="width:45px;text-align:right;color:var(--mu)">${cnt} (${pct}%)</span>
+      </div>
+    `;
+  }).join('');
+
+  c.innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:16px">
+      <div style="display:flex;align-items:center;gap:10px;flex:1;min-width:240px">
+        <label style="margin:0;font-weight:700">Acara:</label>
+        <select data-ch="fbEvSel" style="flex:1;max-width:320px">${evOpts}</select>
+      </div>
+      ${d.total ? `<button class="btn pri" data-act="fbExportCsv" style="padding:10px 18px;display:inline-flex;align-items:center;gap:8px"><span>📥</span> <b>Ekspor CSV</b></button>` : ''}
+    </div>
+
+    <div class="stats" style="grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-bottom:20px">
+      <div class="card stat" style="border-left:4px solid #f59e0b">
+        <div>
+          <b>${d.avg} / 5.0</b>
+          <small>${t('fb_avg')}</small><br>
+          <small style="color:#f59e0b">${'★'.repeat(Math.round(d.avg))}${'☆'.repeat(5 - Math.round(d.avg))}</small>
+        </div>
+        <div style="font-size:26px">⭐</div>
+      </div>
+      <div class="card stat" style="border-left:4px solid var(--ac)">
+        <div>
+          <b>${d.total}</b>
+          <small>${t('fb_total')}</small><br>
+          <small class="muted">Ulasan yang masuk</small>
+        </div>
+        <div style="font-size:26px">💬</div>
+      </div>
+      <div class="card stat" style="border-left:4px solid #8b5cf6">
+        <div>
+          <b>${d.anonCount} (${anonPct}%)</b>
+          <small>${t('fb_anon_stat')}</small><br>
+          <small class="muted">${d.total - d.anonCount} ulasan terbuka</small>
+        </div>
+        <div style="font-size:26px">🎭</div>
+      </div>
+    </div>
+
+    <div class="two" style="gap:16px;margin-bottom:20px">
+      <div class="card" style="padding:18px">
+        <h3 style="margin:0 0 12px;font-size:16px">📊 Distribusi Rating Bintang</h3>
+        ${starBars}
+      </div>
+      <div class="card" style="padding:18px;display:flex;flex-direction:column;justify-content:center;background:linear-gradient(135deg,rgba(212,175,55,.1),rgba(212,175,55,.02))">
+        <h3 style="margin:0 0 8px;font-size:16px">💡 Keterangan Survey</h3>
+        <p class="muted" style="margin:0 0 10px;font-size:13px;line-height:1.5">
+          Peserta dapat mengisi ulasan langsung melalui halaman e-tiket mereka atau melalui modal tiket di aplikasi. Peserta memiliki pilihan untuk mengirimkan ulasan secara <b>Anonim</b> atau menyertakan identitas mereka.
+        </p>
+      </div>
+    </div>
+
+    <div class="card" style="padding:20px">
+      <h3 style="margin:0 0 14px">💬 Feed Ulasan & Masukan Peserta (${d.total})</h3>
+      ${d.rows.length ? `
+        <div style="display:flex;flex-direction:column;gap:12px">
+          ${d.rows.map(r => `
+            <div style="background:var(--in);border:1px solid var(--bd);border-radius:14px;padding:16px">
+              <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px;margin-bottom:8px">
+                <div style="display:flex;align-items:center;gap:10px">
+                  <span style="color:#f59e0b;font-size:16px;letter-spacing:1px">${'★'.repeat(r.rating)}${'☆'.repeat(5 - r.rating)}</span>
+                  <span class="pill" style="font-size:11px;font-weight:700">${esc(r.category || 'Umum')}</span>
+                  ${r.is_anonymous ? `<span class="pill wn" style="font-size:11px;font-weight:700">🎭 Anonim</span>` : `<b>${esc(r.author_name)}</b> ${r.author_org ? `<span class="muted" style="font-size:12px">(${esc(r.author_org)})</span>` : ''}`}
+                </div>
+                <small class="muted" style="font-size:11px">${esc(r.created_at_fmt)} · ${esc(r.event_name)}</small>
+              </div>
+              <p style="margin:0;font-size:14px;line-height:1.5;color:var(--tx);white-space:pre-wrap">"${esc(r.comment || 'Tanpa komentar tertulis.')}"</p>
+            </div>
+          `).join('')}
+        </div>
+      ` : `<p class="muted" style="text-align:center;padding:24px 0">Belum ada ulasan yang masuk untuk acara ini.</p>`}
+    </div>
+  `;
+}
+
+/* Modal Form Pengisian Feedback */
+function feedbackModal({ eventId, orderId, code, eventName, isPublic }) {
+  window._fbStar = 5;
+  modal(`
+    <button class="btn sm x" data-act="cm">&#10005;</button>
+    <h2>⭐ ${t('fb_title')}</h2>
+    <p class="muted" style="margin:2px 0 14px">${esc(eventName || 'Acara')} ${code ? `· <span class="mono">${esc(code)}</span>` : ''}</p>
+    
+    <label style="font-weight:700;margin-bottom:6px;display:block">${t('fb_rate_lbl')}</label>
+    <div id="fb_star_picker" style="display:flex;gap:10px;font-size:32px;cursor:pointer;margin-bottom:14px;user-select:none">
+      ${[1, 2, 3, 4, 5].map(st => `<span data-act="fbSetStar" data-v="${st}" style="color:#f59e0b;transition:transform .12s">★</span>`).join('')}
+    </div>
+    
+    <div style="background:var(--in);border:1px solid var(--bd);border-radius:12px;padding:12px 14px;margin-bottom:14px">
+      <label style="display:flex;align-items:center;gap:10px;font-weight:700;cursor:pointer;margin:0">
+        <input type="checkbox" id="fb_is_anon" style="width:18px;height:18px;accent-color:var(--ac);cursor:pointer">
+        <span>🎭 ${t('fb_anon_lbl')}</span>
+      </label>
+      <small class="muted" style="display:block;margin-top:6px;line-height:1.4">${t('fb_anon_hint')}</small>
+    </div>
+
+    <label style="font-weight:700;margin-bottom:4px;display:block">${t('fb_cat_lbl')}</label>
+    <select id="fb_cat" style="margin-bottom:14px;width:100%">
+      <option value="Umum">✨ Keseluruhan Acara (Umum)</option>
+      <option value="Acara & Pembicara">🎤 Konten Acara & Pembicara</option>
+      <option value="Pelayanan Panitia">👥 Pelayanan Panitia & Usher</option>
+      <option value="Fasilitas & Venue">🏢 Fasilitas Venue & Tempat</option>
+      <option value="Sound & Multimedia">🎵 Sound, Musik & Multimedia</option>
+    </select>
+
+    <label style="font-weight:700;margin-bottom:4px;display:block">${t('fb_comment_lbl')}</label>
+    <textarea id="fb_comment" rows="3" placeholder="Tuliskan ulasan, kesan positif, atau masukan untuk perbaikan kami..." style="width:100%;box-sizing:border-box;margin-bottom:16px"></textarea>
+
+    <div class="acts">
+      <button class="btn pri" data-act="fbDoSubmit" data-ev="${esc(eventId || '')}" data-ord="${esc(orderId || '')}" data-code="${esc(code || '')}">🚀 ${t('fb_submit')}</button>
+      <button class="btn" data-act="cm">${t('close')}</button>
+    </div>
+  `);
+}
 
 /* ===== OFFLINE ENGINE ===== */
 function getOfflineStorage(){try{return JSON.parse(localStorage.getItem('atk_off_data')||'{}')}catch(e){return{}}}
@@ -1462,7 +1830,249 @@ const NL=String.fromCharCode(10),find=(a,id)=>a.find(x=>x.id===id),A={
   async gatelink(el){try{const base=(B&&B.siteUrl?String(B.siteUrl).trim().replace(/\/+$/,''):'https://ambiltiketnya.online');const r=await api('gateLink',{eventId:el.dataset.id,base:base},t('loading'));const fullUrl=r.url||(base.replace(/\/+$/,'')+'/?gate='+r.eventId+'&k='+r.key);modal('<button class="btn sm x" data-act="cm">&#10005;</button><h2>📋 '+t('gate_pass')+'</h2><p class="muted" style="margin:4px 0 12px">'+t('gate_pass_sub')+'</p><p style="margin:12px 0 6px"><b>'+esc(r.eventName)+'</b></p><div style="background:rgba(0,0,0,.25);border:1px solid var(--bd);padding:10px;border-radius:8px;word-break:break-all;font-size:12px;user-select:all" class="mono" id="gl_txt">'+esc(fullUrl)+'</div><div class="acts" style="margin-top:14px"><button class="btn pri" data-act="copyGateLink">📋 '+t('gate_copy')+'</button><button class="btn" data-act="cm">'+t('close')+'</button></div>')}catch(e){fail(e)}},
  copyGateLink(){const el=$('#gl_txt');if(!el)return;navigator.clipboard.writeText(el.textContent.trim()).then(()=>toast(t('gate_copied'),0)).catch(()=>toast('Gagal menyalin',1))},
  async cacheEv(){const sel=$('#off_ev_sel');if(sel&&sel.value)await cacheOfflineEvent(sel.value)},
- async syncoff(){await syncOfflineQueue()}};
+ async syncoff(){await syncOfflineQueue()},
+ fbOpenModal(el){
+  feedbackModal({
+   eventId: el.dataset.ev,
+   orderId: el.dataset.id,
+   code: el.dataset.code,
+   eventName: el.dataset.name,
+   isPublic: false
+  });
+ },
+ fbOpenPublic(el){
+  feedbackModal({
+   eventId: el.dataset.ev,
+   orderId: null,
+   code: el.dataset.code,
+   eventName: el.dataset.name,
+   isPublic: true
+  });
+ },
+ fbSetStar(el){
+  const v = parseInt(el.dataset.v, 10) || 5;
+  window._fbStar = v;
+  const picker = $('#fb_star_picker');
+  if (picker) {
+   picker.querySelectorAll('span').forEach((s, idx) => {
+    s.style.color = (idx < v) ? '#f59e0b' : 'var(--bd)';
+   });
+  }
+ },
+ async fbDoSubmit(el){
+  const eventId = el.dataset.ev;
+  const orderId = el.dataset.ord;
+  const code = el.dataset.code;
+  const rating = window._fbStar || 5;
+  const isAnon = $('#fb_is_anon') ? $('#fb_is_anon').checked : false;
+  const cat = $('#fb_cat') ? $('#fb_cat').value : 'Umum';
+  const comment = ($('#fb_comment') ? $('#fb_comment').value : '').trim();
+  if (!comment) return toast('Silakan tulis ulasan atau komentar Anda', 1);
+
+  try {
+   if (S.user) {
+    await api('feedbackSubmit', {
+     eventId: eventId,
+     orderId: orderId,
+     rating: rating,
+     category: cat,
+     comment: comment,
+     isAnonymous: isAnon
+    }, t('loading'));
+   } else {
+    await pub('feedbackPublic', {
+     eventId: eventId,
+     orderId: orderId,
+     ticketCode: code,
+     rating: rating,
+     category: cat,
+     comment: comment,
+     isAnonymous: isAnon
+    }, t('loading'));
+   }
+   closeModal();
+   toast(t('fb_thanks'), 0);
+   if (S.view === 'feedback') {
+    await fbLoadData();
+    paintFeedback();
+   }
+  } catch(e) {
+   fail(e);
+  }
+ },
+ fbExportCsv(){
+  const rows = (S_fb.data && S_fb.data.rows) || [];
+  if (!rows.length) return toast(t('none'), 1);
+  const headers = ['Waktu', 'Acara', 'Rating', 'Kategori', 'Anonim', 'Nama Peserta', 'Asal Gereja / Instansi', 'Komentar / Masukan'];
+  const data = rows.map(r => [
+   r.created_at_fmt || '',
+   r.event_name || '',
+   r.rating + ' Bintang',
+   r.category || 'Umum',
+   r.is_anonymous ? 'Ya (Anonim)' : 'Tidak',
+   r.is_anonymous ? 'Anonim' : (r.author_name || ''),
+   r.is_anonymous ? '-' : (r.author_org || ''),
+   (r.comment || '').replace(/"/g, '""')
+  ]);
+  const csv = '\uFEFF' + [headers].concat(data).map(arr => arr.map(c => '"' + String(c).replace(/"/g, '""') + '"').join(',')).join('\r\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'Feedback_Peserta_' + (S_fb.evId || 'Semua') + '_' + new Date().toISOString().slice(0,10) + '.csv';
+  document.body.appendChild(a); a.click(); a.remove();
+ },
+ dpToggleFs(){
+  const box = $('#dp_stage_box') || document.documentElement;
+  if (!document.fullscreenElement) {
+   if (box.requestFullscreen) box.requestFullscreen().catch(()=>{});
+  } else {
+   if (document.exitFullscreen) document.exitFullscreen().catch(()=>{});
+  }
+ },
+ async dpRefresh(){
+  try {
+   await dpLoadData();
+   paintDoorprize();
+   toast('Pool peserta diperbarui!', 0);
+  } catch(e) { fail(e); }
+ },
+ dpSpin(){
+  if (S_dp.isSpinning) return;
+  if (!S_dp.candidates || !S_dp.candidates.length) return toast(t('dp_empty_pool'), 1);
+  const prizeInp = $('#dp_prize_inp');
+  if (prizeInp && prizeInp.value.trim()) S_dp.prize = prizeInp.value.trim();
+  
+  S_dp.isSpinning = true;
+  const btn = $('#dp_btn_spin');
+  if (btn) { btn.disabled = true; btn.textContent = '🎲 ' + t('dp_spinning'); }
+  const tag = $('#dp_cand_tag'), nameEl = $('#dp_cand_name'), orgEl = $('#dp_cand_org'), codeEl = $('#dp_cand_code');
+  if (tag) tag.textContent = 'SEDANG DIACAK...';
+
+  let count = 0;
+  const totalSteps = 38;
+  let delay = 50;
+
+  function rollStep() {
+   const randCand = S_dp.candidates[Math.floor(Math.random() * S_dp.candidates.length)];
+   if (nameEl) {
+    nameEl.textContent = randCand.name || 'Peserta';
+    nameEl.style.color = '#ffffff';
+   }
+   if (orgEl) orgEl.textContent = randCand.church || randCand.guest_org || 'Hadir';
+   if (codeEl) codeEl.textContent = randCand.ticket_code || 'TKT-????';
+   playSfx('tick');
+
+   count++;
+   if (count < totalSteps) {
+    if (count > totalSteps - 12) delay += 28;
+    setTimeout(rollStep, delay);
+   } else {
+    const winner = S_dp.candidates[Math.floor(Math.random() * S_dp.candidates.length)];
+    S_dp.currentWinner = winner;
+    S_dp.isSpinning = false;
+
+    if (tag) tag.textContent = '🎉 ' + t('dp_congrats') + ' 🎉';
+    if (nameEl) {
+     nameEl.textContent = winner.name || 'Peserta';
+     nameEl.style.color = '#f3dc8a';
+    }
+    if (orgEl) orgEl.textContent = winner.church || winner.guest_org || '-';
+    if (codeEl) codeEl.textContent = winner.ticket_code;
+
+    playSfx('win');
+    triggerConfetti('dp_confetti');
+
+    const actBox = $('#dp_actions');
+    if (actBox) {
+     actBox.innerHTML = `
+      <button class="btn lg" data-act="dpConfirmWin" style="font-size:16px;font-weight:800;padding:12px 28px;background:linear-gradient(135deg,#10b981,#059669);color:#fff;box-shadow:0 6px 20px rgba(16,185,129,.4)">${t('dp_confirm_btn')}</button>
+      <button class="btn lg" data-act="dpRedraw" style="font-size:16px;font-weight:700;padding:12px 24px;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.25);color:#fff">🔄 ${t('dp_redraw_btn')}</button>
+     `;
+    }
+   }
+  }
+  rollStep();
+ },
+ dpRedraw(){
+  if (!S_dp.currentWinner) return;
+  toast('Undian diputar ulang...', 0);
+  S_dp.currentWinner = null;
+  const actBox = $('#dp_actions');
+  if (actBox) {
+   actBox.innerHTML = `
+    <button class="btn pri lg" id="dp_btn_spin" data-act="dpSpin" ${!S_dp.candidates.length ? 'disabled' : ''} style="font-size:18px;font-weight:800;padding:14px 38px;border-radius:14px;background:linear-gradient(135deg,#d4af37,#b8921f);color:#080b18;box-shadow:0 6px 25px rgba(212,175,55,.4)">
+     ${t('dp_spin_btn')}
+    </button>
+   `;
+  }
+  const nameEl = $('#dp_cand_name'), tag = $('#dp_cand_tag');
+  if (tag) tag.textContent = 'LUCKY DRAW';
+  if (nameEl) nameEl.style.color = '#ffffff';
+ },
+ async dpConfirmWin(){
+  if (!S_dp.currentWinner) return;
+  const cand = S_dp.currentWinner;
+  const prizeInp = $('#dp_prize_inp');
+  const prize = (prizeInp && prizeInp.value.trim()) || S_dp.prize || 'Doorprize Utama';
+  try {
+   await api('doorprizeSaveWinner', {
+    eventId: S_dp.evId,
+    prizeName: prize,
+    orderId: cand.order_id,
+    ticketCode: cand.ticket_code,
+    winnerName: cand.name,
+    winnerOrg: cand.church || cand.guest_org || ''
+   }, t('loading'));
+
+   toast('🎉 Pemenang berhasil disimpan: ' + cand.name, 0);
+   S_dp.currentWinner = null;
+   await dpLoadData();
+   paintDoorprize();
+  } catch(e) {
+   fail(e);
+  }
+ },
+ async dpDelWin(el){
+  if (!await ask('Hapus data pemenang ini? Peserta akan dikembalikan ke dalam pool undian.')) return;
+  try {
+   await api('doorprizeDeleteWinner', { id: el.dataset.id }, t('loading'));
+   toast('Pemenang dihapus dan dikembalikan ke pool.', 0);
+   await dpLoadData();
+   paintDoorprize();
+  } catch(e) {
+   fail(e);
+  }
+ },
+ async dpResetAll(){
+  if (!await ask('PERINGATAN: Apakah Anda yakin ingin mereset SEMUA daftar pemenang doorprize untuk acara ini? Semua data undian acara ini akan dihapus dan peserta dikembalikan ke pool.')) return;
+  try {
+   await api('doorprizeResetAll', { eventId: S_dp.evId }, t('loading'));
+   toast('Semua daftar pemenang telah direset.', 0);
+   await dpLoadData();
+   paintDoorprize();
+  } catch(e) {
+   fail(e);
+  }
+ },
+ dpExportCsv(){
+  if (!S_dp.winners || !S_dp.winners.length) return toast(t('none'), 1);
+  const headers = ['No', 'Hadiah', 'Nama Pemenang', 'Asal Gereja / Instansi', 'Kode Tiket', 'Waktu Undian'];
+  const rows = S_dp.winners.map((w, idx) => [
+   idx + 1,
+   w.prize_name || '',
+   w.winner_name || '',
+   w.winner_org || '-',
+   w.ticket_code || '',
+   w.drawn_at || ''
+  ]);
+  const csv = '\uFEFF' + [headers].concat(rows).map(arr => arr.map(c => '"' + String(c).replace(/"/g, '""') + '"').join(',')).join('\r\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'Pemenang_Doorprize_' + (S_dp.evId || 'Acara') + '_' + new Date().toISOString().slice(0,10) + '.csv';
+  document.body.appendChild(a); a.click(); a.remove();
+ }
+};
 window.addEventListener('online',()=>paintOfflineStatus());
 window.addEventListener('offline',()=>paintOfflineStatus());
 document.addEventListener('click',e=>{const el=e.target.closest('[data-act]');if(el&&A[el.dataset.act])A[el.dataset.act](el,e)});
@@ -1470,9 +2080,18 @@ document.addEventListener('input',e=>{if(e.target.id==='oq'){S.ordPage=1;paintOr
 document.addEventListener('keydown',e=>{if(e.key==='Enter'&&e.target&&e.target.id==='cipw'){const b=document.querySelector('[data-act=cisubmit]');b&&b.click()}});
 document.addEventListener('change',async e=>{const el=e.target,k=el.dataset.ch;if(!k)return;
  if(k==='ordsz'){ls.s('ordsz',el.value);S.ordPage=1;paintOrders()}else if(k==='usrsz'){ls.s('usrsz',el.value);S.usrPage=1;paintUsers()}else if(k==='sel'){S.sel=el.value;paintDash()}else if(k==='tgl'){try{await api('toggleEvent',{id:el.dataset.id,active:el.checked})}catch(x){el.checked=!el.checked;fail(x)}}
- else if(k==='role'){try{await api('setRole',{id:el.dataset.id,role:el.value});toast(t('saved'));const u=S.usr&&S.usr.find(x=>x.id===el.dataset.id);if(u)u.role=el.value}catch(x){fail(x);usrView($('#ac'))}}});
+ else if(k==='role'){try{await api('setRole',{id:el.dataset.id,role:el.value});toast(t('saved'));const u=S.usr&&S.usr.find(x=>x.id===el.dataset.id);if(u)u.role=el.value}catch(x){fail(x);usrView($('#ac'))}}
+ else if(k==='dpEvSel'){S_dp.evId=el.value;try{await dpLoadData();paintDoorprize()}catch(x){fail(x)}}
+ else if(k==='fbEvSel'){S_fb.evId=el.value;try{await fbLoadData();paintFeedback()}catch(x){fail(x)}}
+});
 document.addEventListener('change',e=>{if(e.target.id==='of'||e.target.id==='os'||e.target.id==='oem'||e.target.id==='okind')paintOrders();else if(e.target.id==='ur'){S.usrPage=1;paintUsers()}});
-document.addEventListener('keydown',e=>{if(e.key==='Enter'&&e.target.closest&&e.target.closest('.gate')&&e.target.tagName==='INPUT'){const b=document.querySelector('.gate button.pri');b&&b.click()}});
+document.addEventListener('keydown',e=>{
+ if(e.code==='Space'&&(S.view==='doorprize'||new URLSearchParams(location.search).get('stage')==='doorprize')){
+  if(['INPUT','TEXTAREA','SELECT'].includes(e.target.tagName))return;
+  e.preventDefault();if(A&&A.dpSpin)A.dpSpin();return;
+ }
+ if(e.key==='Enter'&&e.target.closest&&e.target.closest('.gate')&&e.target.tagName==='INPUT'){const b=document.querySelector('.gate button.pri');b&&b.click()}
+});
 boot();
 </script>
 <script>(function(){var el=document.getElementById('src'),src=el.textContent;

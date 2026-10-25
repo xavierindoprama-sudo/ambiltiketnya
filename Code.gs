@@ -33,7 +33,7 @@ function doGet(e) {
 /* ---------- API JSON untuk tampilan yang dihosting di luar Apps Script (mis. GitHub Pages) ----------
  * Klien memanggil POST ke alamat /exec dengan isi {"fn":"nama","args":[...]} (Content-Type: text/plain agar tanpa preflight CORS).
  * Hanya fungsi pada daftar putih di bawah yang bisa dipanggil; semuanya sama dengan yang dipakai google.script.run. */
-const API_FNS = { init: init, register: register, loginPw: loginPw, loginGoogle: loginGoogle, forgotRequest: forgotRequest, forgotReset: forgotReset, legalPublic: legalPublic, ticketPublic: ticketPublic, eventsPublic: eventsPublic, api: api, migrateOauth: migrateOauth, gateLogin: gateLogin };
+const API_FNS = { init: init, register: register, loginPw: loginPw, loginGoogle: loginGoogle, forgotRequest: forgotRequest, forgotReset: forgotReset, legalPublic: legalPublic, ticketPublic: ticketPublic, eventsPublic: eventsPublic, feedbackPublic: feedbackPublic, api: api, migrateOauth: migrateOauth, gateLogin: gateLogin };
 function jsonOut(o) { return ContentService.createTextOutput(JSON.stringify(o === undefined ? null : o)).setMimeType(ContentService.MimeType.JSON); }
 function doPost(e) {
   let out;
@@ -544,7 +544,13 @@ const ACTIONS = {
   resetPw:     { min: 3, fn: (u, p) => { if (p.id === u.id) throw new Error('SELF'); const temp = rnd(10); setPassword(p.id, temp); return { temp: temp }; } },
   setRole:     { min: 3, fn: (u, p) => {
     if (!(p.role in RANK)) throw new Error('BAD_ROLE'); if (p.id === u.id) throw new Error('SELF');
-    q(`UPDATE users SET role=$2 WHERE id=$1::uuid RETURNING id`, [p.id, p.role]); return true; } }
+    q(`UPDATE users SET role=$2 WHERE id=$1::uuid RETURNING id`, [p.id, p.role]); return true; } },
+  feedbackSubmit: { min: 0, fn: feedbackSubmit },
+  feedbacksGet:    { min: 2, fn: feedbacksGet },
+  doorprizePool:   { min: 2, fn: doorprizePool },
+  doorprizeSaveWinner: { min: 2, fn: doorprizeSaveWinner },
+  doorprizeDeleteWinner: { min: 2, fn: doorprizeDeleteWinner },
+  doorprizeResetAll: { min: 2, fn: doorprizeResetAll }
 };
 function api(token, action, p) {
   try {
@@ -1568,4 +1574,75 @@ function migrateOauth() {
     }
   });
   return results;
+}
+
+/* ---------- Survey Kepuasan & Feedback Peserta ---------- */
+function feedbackPublic(p) { return pubRun(feedbackPublicImpl, p); }
+function feedbackPublicImpl(p) {
+  const code = String(p && p.code || '').trim().toUpperCase();
+  const eventId = String(p && p.eventId || '').trim();
+  const rating = Math.min(Math.max(parseInt(p && p.rating, 10) || 5, 1), 5);
+  const category = String(p && p.category || 'Umum').trim() || 'Umum';
+  const comment = String(p && p.comment || '').trim();
+  const isAnon = !!(p && p.isAnonymous);
+  let targetEventId = eventId, targetOrderId = null, gName = '', gOrg = '';
+  if (code) {
+    const ord = q(`SELECT o.id, o.event_id, CASE WHEN o.kind IN ('invitation','walk_in') THEN o.guest_name ELSE u.name END AS name, CASE WHEN o.kind IN ('invitation','walk_in') THEN o.guest_org ELSE u.church END AS org FROM orders o LEFT JOIN users u ON u.id=o.user_id WHERE o.ticket_code=$1`, [code])[0];
+    if (ord) { targetOrderId = ord.id; targetEventId = ord.event_id; gName = ord.name || ''; gOrg = ord.org || ''; }
+  }
+  if (!targetEventId) throw new Error('EVENT_NOT_FOUND');
+  q(`INSERT INTO event_feedbacks(event_id, order_id, ticket_code, guest_name, guest_org, is_anonymous, rating, category, comment) VALUES($1::uuid, $2, $3, $4, $5, $6, $7, $8, $9)`, [targetEventId, targetOrderId, code, isAnon ? '' : gName, isAnon ? '' : gOrg, isAnon, rating, category, comment]);
+  return { success: true };
+}
+function feedbackSubmit(u, p) {
+  const eventId = String(p.eventId || '').trim();
+  const orderId = p.orderId || null;
+  const rating = Math.min(Math.max(parseInt(p.rating, 10) || 5, 1), 5);
+  const category = String(p.category || 'Umum').trim() || 'Umum';
+  const comment = String(p.comment || '').trim();
+  const isAnon = !!p.isAnonymous;
+  const code = String(p.code || '').trim().toUpperCase();
+  q(`INSERT INTO event_feedbacks(event_id, order_id, user_id, ticket_code, guest_name, guest_org, is_anonymous, rating, category, comment) VALUES($1::uuid, $2, $3::uuid, $4, $5, $6, $7, $8, $9, $10)`, [eventId, orderId, u.id, code, isAnon ? '' : u.name, isAnon ? '' : u.church, isAnon, rating, category, comment]);
+  return { success: true };
+}
+function feedbacksGet(u, p) {
+  const evId = String(p.eventId || '').trim();
+  let sql = `SELECT f.id, f.event_id, e.name AS event_name, f.rating, f.category, f.comment, f.is_anonymous, CASE WHEN f.is_anonymous THEN 'Anonim' ELSE coalesce(nullif(f.guest_name,''),'Peserta') END AS author_name, CASE WHEN f.is_anonymous THEN '' ELSE f.guest_org END AS author_org, to_char(f.created_at AT TIME ZONE 'Asia/Jakarta','YYYY-MM-DD HH24:MI') AS created_at_fmt FROM event_feedbacks f JOIN events e ON e.id=f.event_id`;
+  const qArgs = [];
+  if (evId) { sql += ` WHERE f.event_id=$1::uuid`; qArgs.push(evId); }
+  sql += ` ORDER BY f.created_at DESC LIMIT 300`;
+  const rows = q(sql, qArgs);
+  const total = rows.length;
+  const sumRating = rows.reduce((acc, r) => acc + (r.rating || 0), 0);
+  const avg = total ? Math.round((sumRating / total) * 10) / 10 : 0;
+  const dist = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
+  let anonCount = 0;
+  rows.forEach(r => { if (dist[r.rating] !== undefined) dist[r.rating]++; if (r.is_anonymous) anonCount++; });
+  return { rows: rows, total: total, avg: avg, dist: dist, anonCount: anonCount };
+}
+
+/* ---------- Live Doorprize ---------- */
+function doorprizePool(u, p) {
+  const evId = String(p.eventId || '').trim();
+  if (!evId) throw new Error('EVENT_REQUIRED');
+  const candidates = q(`SELECT o.id AS order_id, o.ticket_code, CASE WHEN o.kind IN ('invitation','walk_in') THEN o.guest_name ELSE u.name END AS name, CASE WHEN o.kind IN ('invitation','walk_in') THEN o.guest_org ELSE u.church END AS org, to_char(o.checked_in_at AT TIME ZONE 'Asia/Jakarta','HH24:MI:SS') AS checkin_time FROM orders o LEFT JOIN users u ON u.id = o.user_id WHERE o.event_id = $1::uuid AND o.status = 'confirmed' AND o.checked_in >= 1 ORDER BY o.checked_in_at DESC`, [evId]);
+  const winners = q(`SELECT id, order_id, ticket_code, winner_name, winner_org, prize_name, to_char(drawn_at AT TIME ZONE 'Asia/Jakarta','YYYY-MM-DD HH24:MI:SS') AS drawn_at FROM doorprize_winners WHERE event_id=$1::uuid ORDER BY drawn_at DESC`, [evId]);
+  return { candidates: candidates, winners: winners };
+}
+function doorprizeSaveWinner(u, p) {
+  const evId = String(p.eventId || '').trim(), ordId = p.orderId || null, code = String(p.ticketCode || '').trim(), name = String(p.winnerName || '').trim(), org = String(p.winnerOrg || '').trim(), prize = String(p.prizeName || 'Doorprize').trim();
+  if (!evId || !name) throw new Error('BAD_DATA');
+  const r = q(`INSERT INTO doorprize_winners(event_id, order_id, ticket_code, winner_name, winner_org, prize_name) VALUES($1::uuid, $2, $3, $4, $5, $6) RETURNING id`, [evId, ordId, code, name, org, prize]);
+  return { id: r[0].id };
+}
+function doorprizeDeleteWinner(u, p) {
+  const id = String(p.id || '').trim();
+  q(`DELETE FROM doorprize_winners WHERE id=$1::uuid`, [id]);
+  return true;
+}
+function doorprizeResetAll(u, p) {
+  const evId = String(p.eventId || '').trim();
+  q(`DELETE FROM doorprize_winners WHERE event_id=$1::uuid`, [evId]);
+  return true;
+}
 }

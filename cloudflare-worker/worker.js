@@ -251,10 +251,45 @@ async function sendEmail(env, { to, subject, htmlBody, name = 'AmbilTiketnya' })
 
 // Legal docs defaults
 const LEGAL = {
-  syarat: { title: 'Syarat dan Ketentuan', text: '## 1. Ketentuan Umum\\n- Dengan memesan tiket di {ORG}, peserta menyetujui seluruh ketentuan yang berlaku.\\n\\n## 2. Tiket & Masuk\\n- E-tiket resmi wajib ditunjukkan saat check-in di gerbang.' },
-  privasi: { title: 'Kebijakan Privasi', text: '## 1. Pengumpulan Data\\n- Kami mengumpulkan nama, email, dan WhatsApp semata-mata untuk penerbitan tiket dan verifikasi acara.' },
-  cookie: { title: 'Kebijakan Cookie', text: '## 1. Cookie Teknis\\n- Kami hanya menyimpan token sesi di peramban Anda untuk keperluan autentikasi masuk.' }
+  syarat: { title: 'Syarat dan Ketentuan', text: '## 1. Ketentuan Umum\n- Dengan memesan tiket di {ORG}, peserta menyetujui seluruh ketentuan yang berlaku.\n\n## 2. Tiket & Masuk\n- E-tiket resmi wajib ditunjukkan saat check-in di gerbang.' },
+  privasi: { title: 'Kebijakan Privasi', text: '## 1. Pengumpulan Data\n- Kami mengumpulkan nama, email, dan WhatsApp semata-mata untuk penerbitan tiket dan verifikasi acara.' },
+  cookie: { title: 'Kebijakan Cookie', text: '## 1. Cookie Teknis\n- Kami hanya menyimpan token sesi di peramban Anda untuk keperluan autentikasi masuk.' }
 };
+
+async function ensureFeatureTables(env) {
+  try {
+    await neonQuery(env, `
+      CREATE TABLE IF NOT EXISTS event_feedbacks (
+        id           uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+        event_id     uuid NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+        order_id     uuid REFERENCES orders(id) ON DELETE SET NULL,
+        user_id      uuid REFERENCES users(id) ON DELETE SET NULL,
+        ticket_code  text DEFAULT '',
+        guest_name   text DEFAULT '',
+        guest_org    text DEFAULT '',
+        is_anonymous boolean NOT NULL DEFAULT false,
+        rating       int NOT NULL CHECK (rating BETWEEN 1 AND 5),
+        category     text NOT NULL DEFAULT 'Umum',
+        comment      text NOT NULL DEFAULT '',
+        created_at   timestamptz NOT NULL DEFAULT now()
+      );
+      CREATE INDEX IF NOT EXISTS event_feedbacks_ev_idx ON event_feedbacks (event_id, created_at DESC);
+      CREATE TABLE IF NOT EXISTS doorprize_winners (
+        id           uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+        event_id     uuid NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+        order_id     uuid REFERENCES orders(id) ON DELETE CASCADE,
+        ticket_code  text NOT NULL,
+        winner_name  text NOT NULL,
+        winner_org   text DEFAULT '',
+        prize_name   text NOT NULL,
+        drawn_at     timestamptz NOT NULL DEFAULT now()
+      );
+      CREATE INDEX IF NOT EXISTS doorprize_winners_ev_idx ON doorprize_winners (event_id, drawn_at DESC);
+    `);
+  } catch (e) {
+    console.error('ensureFeatureTables error:', e);
+  }
+}
 
 export default {
   async fetch(request, env, ctx) {
@@ -454,6 +489,41 @@ export default {
         const r = (await neonQuery(env, `SELECT value, to_char(updated_at AT TIME ZONE 'Asia/Jakarta','YYYY-MM-DD') AS d FROM settings WHERE key=$1`, ['legal_' + key]))[0];
         const def = LEGAL[key] || { title: 'Informasi Hukum', text: '' };
         return json({ ok: true, data: { title: def.title, updated: r ? r.d : '2026-10-18', html: `<p style="white-space:pre-wrap">${r ? r.value : def.text}</p>` } });
+      }
+
+      if (fn === 'feedbackPublic') {
+        const [p] = args;
+        const code = String(p && p.code || '').trim().toUpperCase();
+        const eventId = String(p && p.eventId || '').trim();
+        const rating = Math.min(Math.max(parseInt(p && p.rating, 10) || 5, 1), 5);
+        const category = String(p && p.category || 'Umum').trim() || 'Umum';
+        const comment = String(p && p.comment || '').trim();
+        const isAnon = !!(p && p.isAnonymous);
+
+        let targetEventId = eventId;
+        let targetOrderId = null;
+        let gName = '';
+        let gOrg = '';
+
+        if (code) {
+          const ord = (await neonQuery(env, `SELECT o.id, o.event_id,
+            CASE WHEN o.kind IN ('invitation','walk_in') THEN o.guest_name ELSE u.name END AS name,
+            CASE WHEN o.kind IN ('invitation','walk_in') THEN o.guest_org ELSE u.church END AS org
+            FROM orders o LEFT JOIN users u ON u.id=o.user_id WHERE o.ticket_code=$1`, [code]))[0];
+          if (ord) {
+            targetOrderId = ord.id;
+            targetEventId = ord.event_id;
+            gName = ord.name || '';
+            gOrg = ord.org || '';
+          }
+        }
+        if (!targetEventId) throw new Error('EVENT_NOT_FOUND');
+
+        await ensureFeatureTables(env);
+        await neonQuery(env, `INSERT INTO event_feedbacks(event_id, order_id, ticket_code, guest_name, guest_org, is_anonymous, rating, category, comment)
+          VALUES($1::uuid, $2, $3, $4, $5, $6, $7, $8, $9)`,
+          [targetEventId, targetOrderId, code, isAnon ? '' : gName, isAnon ? '' : gOrg, isAnon, rating, category, comment]);
+        return json({ ok: true, data: { success: true } });
       }
 
       // DISPATCHER API TEROTORISASI
@@ -874,6 +944,105 @@ export default {
             } catch (x) { break; }
           }
           return json({ ok: true, data: { sent, remaining: Math.max(0, list.length - sent) } });
+        }
+
+        if (action === 'feedbackSubmit') {
+          const eventId = String(params.eventId || '').trim();
+          const orderId = params.orderId || null;
+          const rating = Math.min(Math.max(parseInt(params.rating, 10) || 5, 1), 5);
+          const category = String(params.category || 'Umum').trim() || 'Umum';
+          const comment = String(params.comment || '').trim();
+          const isAnon = !!params.isAnonymous;
+          const code = String(params.code || '').trim().toUpperCase();
+
+          await ensureFeatureTables(env);
+          await neonQuery(env, `INSERT INTO event_feedbacks(event_id, order_id, user_id, ticket_code, guest_name, guest_org, is_anonymous, rating, category, comment)
+            VALUES($1::uuid, $2, $3::uuid, $4, $5, $6, $7, $8, $9, $10)`,
+            [eventId, orderId, u.id, code, isAnon ? '' : u.name, isAnon ? '' : u.church, isAnon, rating, category, comment]);
+          return json({ ok: true, data: { success: true } });
+        }
+
+        if (action === 'feedbacksGet') {
+          needRole(2);
+          await ensureFeatureTables(env);
+          const evId = String(params.eventId || '').trim();
+          let sql = `SELECT f.id, f.event_id, e.name AS event_name, f.rating, f.category, f.comment, f.is_anonymous,
+            CASE WHEN f.is_anonymous THEN 'Anonim' ELSE coalesce(nullif(f.guest_name,''),'Peserta') END AS author_name,
+            CASE WHEN f.is_anonymous THEN '' ELSE f.guest_org END AS author_org,
+            to_char(f.created_at AT TIME ZONE 'Asia/Jakarta','YYYY-MM-DD HH24:MI') AS created_at_fmt
+            FROM event_feedbacks f JOIN events e ON e.id=f.event_id`;
+          const qArgs = [];
+          if (evId) {
+            sql += ` WHERE f.event_id=$1::uuid`;
+            qArgs.push(evId);
+          }
+          sql += ` ORDER BY f.created_at DESC LIMIT 300`;
+          const rows = await neonQuery(env, sql, qArgs);
+
+          const total = rows.length;
+          const sumRating = rows.reduce((acc, r) => acc + (r.rating || 0), 0);
+          const avg = total ? Math.round((sumRating / total) * 10) / 10 : 0;
+          const dist = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
+          let anonCount = 0;
+          rows.forEach(r => {
+            if (dist[r.rating] !== undefined) dist[r.rating]++;
+            if (r.is_anonymous) anonCount++;
+          });
+          return json({ ok: true, data: { rows, total, avg, dist, anonCount } });
+        }
+
+        if (action === 'doorprizePool') {
+          needRole(2);
+          const evId = String(params.eventId || '').trim();
+          if (!evId) throw new Error('EVENT_REQUIRED');
+          await ensureFeatureTables(env);
+
+          const candidates = await neonQuery(env, `
+            SELECT o.id AS order_id, o.ticket_code,
+              CASE WHEN o.kind IN ('invitation','walk_in') THEN o.guest_name ELSE u.name END AS name,
+              CASE WHEN o.kind IN ('invitation','walk_in') THEN o.guest_org ELSE u.church END AS org,
+              to_char(o.checked_in_at AT TIME ZONE 'Asia/Jakarta','HH24:MI:SS') AS checkin_time
+            FROM orders o
+            LEFT JOIN users u ON u.id = o.user_id
+            WHERE o.event_id = $1::uuid AND o.status = 'confirmed' AND o.checked_in >= 1
+            ORDER BY o.checked_in_at DESC
+          `, [evId]);
+
+          const winners = await neonQuery(env, `SELECT id, order_id, ticket_code, winner_name, winner_org, prize_name, to_char(drawn_at AT TIME ZONE 'Asia/Jakarta','YYYY-MM-DD HH24:MI:SS') AS drawn_at FROM doorprize_winners WHERE event_id=$1::uuid ORDER BY drawn_at DESC`, [evId]);
+
+          return json({ ok: true, data: { candidates, winners } });
+        }
+
+        if (action === 'doorprizeSaveWinner') {
+          needRole(2);
+          const evId = String(params.eventId || '').trim();
+          const ordId = params.orderId || null;
+          const code = String(params.ticketCode || '').trim();
+          const name = String(params.winnerName || '').trim();
+          const org = String(params.winnerOrg || '').trim();
+          const prize = String(params.prizeName || 'Doorprize').trim();
+          if (!evId || !name) throw new Error('BAD_DATA');
+          await ensureFeatureTables(env);
+
+          const r = await neonQuery(env, `INSERT INTO doorprize_winners(event_id, order_id, ticket_code, winner_name, winner_org, prize_name)
+            VALUES($1::uuid, $2, $3, $4, $5, $6) RETURNING id`, [evId, ordId, code, name, org, prize]);
+          return json({ ok: true, data: { id: r[0].id } });
+        }
+
+        if (action === 'doorprizeDeleteWinner') {
+          needRole(2);
+          const id = String(params.id || '').trim();
+          await ensureFeatureTables(env);
+          await neonQuery(env, `DELETE FROM doorprize_winners WHERE id=$1::uuid`, [id]);
+          return json({ ok: true, data: true });
+        }
+
+        if (action === 'doorprizeResetAll') {
+          needRole(2);
+          const evId = String(params.eventId || '').trim();
+          await ensureFeatureTables(env);
+          await neonQuery(env, `DELETE FROM doorprize_winners WHERE event_id=$1::uuid`, [evId]);
+          return json({ ok: true, data: true });
         }
 
         return errJson('NOT_FOUND', 404);
