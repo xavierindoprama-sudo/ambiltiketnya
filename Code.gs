@@ -33,7 +33,7 @@ function doGet(e) {
 /* ---------- API JSON untuk tampilan yang dihosting di luar Apps Script (mis. GitHub Pages) ----------
  * Klien memanggil POST ke alamat /exec dengan isi {"fn":"nama","args":[...]} (Content-Type: text/plain agar tanpa preflight CORS).
  * Hanya fungsi pada daftar putih di bawah yang bisa dipanggil; semuanya sama dengan yang dipakai google.script.run. */
-const API_FNS = { init: init, register: register, loginPw: loginPw, loginGoogle: loginGoogle, forgotRequest: forgotRequest, forgotReset: forgotReset, legalPublic: legalPublic, ticketPublic: ticketPublic, eventsPublic: eventsPublic, feedbackPublic: feedbackPublic, api: api, migrateOauth: migrateOauth, gateLogin: gateLogin };
+const API_FNS = { init: init, register: register, loginPw: loginPw, loginGoogle: loginGoogle, forgotRequest: forgotRequest, forgotReset: forgotReset, legalPublic: legalPublic, ticketPublic: ticketPublic, eventsPublic: eventsPublic, feedbackPublic: feedbackPublic, surveyInfo: surveyInfo, surveyStagePoll: surveyStagePoll, api: api, migrateOauth: migrateOauth, gateLogin: gateLogin };
 function jsonOut(o) { return ContentService.createTextOutput(JSON.stringify(o === undefined ? null : o)).setMimeType(ContentService.MimeType.JSON); }
 function doPost(e) {
   let out;
@@ -1577,6 +1577,31 @@ function migrateOauth() {
 }
 
 /* ---------- Survey Kepuasan & Feedback Peserta ---------- */
+function surveyInfo(p) { return pubRun(surveyInfoImpl, p); }
+function surveyInfoImpl(p) {
+  const evId = String(p && p.eventId || '').trim();
+  const fid = String(p && p.feedbackId || '').trim();
+  if (!evId) throw new Error('EVENT_NOT_FOUND');
+  const ev = q(`SELECT id, name, banner_url, event_date::text AS edate, to_char(start_time,'HH24:MI') AS stime, location FROM events WHERE id=$1::uuid`, [evId])[0];
+  if (!ev) throw new Error('EVENT_NOT_FOUND');
+  let myFeedback = null;
+  if (fid) {
+    myFeedback = q(`SELECT id, rating AS rating_overall, coalesce(rating_content,5) AS rating_content, coalesce(rating_service,5) AS rating_service, coalesce(rating_venue,5) AS rating_venue, coalesce(rating_sound,5) AS rating_sound, aspects, comment, is_anonymous, guest_name, guest_org FROM event_feedbacks WHERE id=$1::uuid AND event_id=$2::uuid`, [fid, evId])[0] || null;
+  }
+  const cnt = q(`SELECT count(*)::int AS count FROM event_feedbacks WHERE event_id=$1::uuid`, [evId])[0];
+  return { event: ev, count: cnt ? cnt.count : 0, myFeedback: myFeedback };
+}
+
+function surveyStagePoll(p) { return pubRun(surveyStagePollImpl, p); }
+function surveyStagePollImpl(p) {
+  const evId = String(p && p.eventId || '').trim();
+  if (!evId) throw new Error('EVENT_NOT_FOUND');
+  const ev = q(`SELECT id, name, banner_url, event_date::text AS edate FROM events WHERE id=$1::uuid`, [evId])[0];
+  if (!ev) throw new Error('EVENT_NOT_FOUND');
+  const stat = q(`SELECT count(*)::int AS count, coalesce(round(avg(rating)::numeric,1),0)::float AS avg FROM event_feedbacks WHERE event_id=$1::uuid`, [evId])[0];
+  return { event: ev, count: stat ? stat.count : 0, avg: stat ? stat.avg : 0 };
+}
+
 function feedbackPublic(p) { return pubRun(feedbackPublicImpl, p); }
 function feedbackPublicImpl(p) {
   const code = String(p && p.code || '').trim().toUpperCase();
@@ -1597,8 +1622,16 @@ function feedbackPublicImpl(p) {
     if (ord) { targetOrderId = ord.id; targetEventId = ord.event_id; gName = ord.name || ''; gOrg = ord.org || ''; }
   }
   if (!targetEventId) throw new Error('EVENT_NOT_FOUND');
-  q(`INSERT INTO event_feedbacks(event_id, order_id, ticket_code, guest_name, guest_org, is_anonymous, rating, rating_content, rating_service, rating_venue, rating_sound, aspects, category, comment) VALUES($1::uuid, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12::jsonb, $13, $14)`, [targetEventId, targetOrderId, code, isAnon ? '' : gName, isAnon ? '' : gOrg, isAnon, rOverall, rContent, rService, rVenue, rSound, aspectsJson, category, comment]);
-  return { success: true };
+
+  // Edit existing feedback if feedbackId provided
+  if (p && p.feedbackId) {
+    const fid = String(p.feedbackId).trim();
+    const upd = q(`UPDATE event_feedbacks SET rating=$1, rating_content=$2, rating_service=$3, rating_venue=$4, rating_sound=$5, aspects=$6::jsonb, is_anonymous=$7, guest_name=$8, guest_org=$9, comment=$10, created_at=now() WHERE id=$11::uuid AND event_id=$12::uuid RETURNING id`, [rOverall, rContent, rService, rVenue, rSound, aspectsJson, isAnon, isAnon ? '' : (gName || (p.guestName || '')), isAnon ? '' : (gOrg || (p.guestOrg || '')), comment, fid, targetEventId]);
+    if (upd.length) return { success: true, id: upd[0].id, updated: true };
+  }
+
+  const ins = q(`INSERT INTO event_feedbacks(event_id, order_id, ticket_code, guest_name, guest_org, is_anonymous, rating, rating_content, rating_service, rating_venue, rating_sound, aspects, category, comment) VALUES($1::uuid, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12::jsonb, $13, $14) RETURNING id`, [targetEventId, targetOrderId, code, isAnon ? '' : (gName || (p && p.guestName || '')), isAnon ? '' : (gOrg || (p && p.guestOrg || '')), isAnon, rOverall, rContent, rService, rVenue, rSound, aspectsJson, category, comment]);
+  return { success: true, id: ins[0].id };
 }
 function feedbackSubmit(u, p) {
   const eventId = String(p.eventId || '').trim();

@@ -347,6 +347,9 @@ async function ticketView(code){
 async function boot(){applyTheme();const tkc=ticketParam();if(tkc)return ticketView(tkc);
  const qp=new URLSearchParams(location.search),gateEv=qp.get('gate'),gateKey=qp.get('k');
  const stage=qp.get('stage');
+ if(stage==='survey'){return surveyStageView(qp.get('ev')||'');}
+ const surveyEv=qp.get('survey')||qp.get('fb');
+ if(surveyEv){return publicSurveyView(surveyEv);}
  if(stage==='doorprize'){applyTheme();const evId=qp.get('ev')||'';if(evId)S_dp.evId=evId;S.token=ls.g('tk')||'';if(!S.token)return gate();try{S.user=await api('me',{});S.mode='admin';S.view='doorprize';$('#app').innerHTML='<div style="min-height:100vh;background:#080b18;padding:20px" id="ac"></div>';doorprizeView($('#ac'));return}catch(x){return gate()}}
  if(gateEv&&gateKey){bz(1);try{const r=await pub('gateLogin',{eventId:gateEv,key:gateKey},t('loading'));bz(-1);S.token=r.session;ls.s('tk',r.session);ls.s('mode','admin');S.user=r.user||{id:'gate_volunteer',name:'Petugas Gerbang',role:'gate_staff',email:'gate_volunteer@ambiltiketnya.online'};S.mode='admin';S.view='scan';try{history.replaceState({},'',location.pathname)}catch(x){}cacheOfflineEvent(gateEv,true);call('init',S.token).then(res=>{if(res&&res.cfg)B=res.cfg}).catch(()=>{});renderAdmin();setTimeout(()=>{openScannerModal()},450);return}catch(e){bz(-1);const msg=(e&&e.message&&D['e_'+e.message])?t('e_'+e.message):errMsg(e);toast('Tautan Gate Pass tidak valid atau kedaluwarsa: '+msg,1)}}
  S.token=ls.g('tk')||'';bz(1);let r;const t0=performance.now();
@@ -849,7 +852,10 @@ function paintFeedback(c) {
         <label style="margin:0;font-weight:700">Acara:</label>
         <select data-ch="fbEvSel" style="flex:1;max-width:320px">${evOpts}</select>
       </div>
-      ${d.total ? `<button class="btn pri" data-act="fbExportCsv" style="padding:10px 18px;display:inline-flex;align-items:center;gap:8px"><span>📥</span> <b>Ekspor CSV</b></button>` : ''}
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+        ${S_fb.evId ? `<button class="btn sm" data-act="fbOpenStage" style="display:inline-flex;align-items:center;gap:6px;background:linear-gradient(135deg,#6366f1,#4f46e5);color:#fff;font-weight:700">📽️ Layar Videotron QR</button>` : ''}
+        ${d.total ? `<button class="btn pri" data-act="fbExportCsv" style="padding:10px 18px;display:inline-flex;align-items:center;gap:8px"><span>📥</span> <b>Ekspor CSV</b></button>` : ''}
+      </div>
     </div>
 
     <!-- STATS KPI -->
@@ -1028,6 +1034,210 @@ function feedbackModal({ eventId, orderId, code, eventName, isPublic }) {
       <button class="btn" data-act="cm">${t('close')}</button>
     </div>
   `);
+}
+
+/* ===== HALAMAN SURVEY PUBLIK (TANPA LOGIN + BISA EDIT) ===== */
+async function publicSurveyView(evId) {
+  applyTheme();
+  const savedFid = localStorage.getItem('atk_fb_' + evId) || '';
+  $('#app').innerHTML = `
+    <div style="min-height:100vh;display:flex;justify-content:center;align-items:flex-start;padding:24px 16px;background:var(--bg)">
+      <div class="card" style="max-width:540px;width:100%;padding:26px 20px;border-radius:20px;box-shadow:0 12px 36px rgba(0,0,0,.15);position:relative" id="survey_box">
+        <canvas id="survey_confetti" style="position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:20"></canvas>
+        <div style="text-align:center;padding:30px 0"><div style="display:inline-block;animation:spin 1s linear infinite;font-size:26px">⏳</div><p class="muted" style="margin-top:10px">${t('loading')}</p></div>
+      </div>
+    </div>
+  `;
+
+  let info;
+  try {
+    info = await pub('surveyInfo', { eventId: evId, feedbackId: savedFid });
+  } catch (e) {
+    $('#survey_box').innerHTML = `
+      <div style="text-align:center;padding:20px">
+        <div style="font-size:36px">⚠️</div>
+        <h3 style="margin:10px 0 6px">Acara Tidak Ditemukan</h3>
+        <p class="muted" style="font-size:13px">Tautan survei tidak valid atau acara belum aktif.</p>
+        <a href="/" class="btn pri sm" style="margin-top:14px;display:inline-block">Kembali ke Beranda</a>
+      </div>
+    `;
+    return;
+  }
+
+  const ev = info.event;
+  const myFb = info.myFeedback;
+  window._fbAspects = (myFb && myFb.aspects) ? myFb.aspects : {
+    overall: (myFb && myFb.rating_overall) || 5,
+    content: (myFb && myFb.rating_content) || 5,
+    service: (myFb && myFb.rating_service) || 5,
+    venue:   (myFb && myFb.rating_venue) || 5,
+    sound:   (myFb && myFb.rating_sound) || 5
+  };
+
+  function renderSurveyForm(isEditing) {
+    const isEdit = isEditing !== undefined ? isEditing : !!myFb;
+    const box = $('#survey_box');
+    if (!box) return;
+
+    box.innerHTML = `
+      <div style="text-align:center;margin-bottom:18px">
+        ${ev.banner_url ? `<img src="${esc(ev.banner_url)}" style="max-height:110px;width:100%;object-fit:cover;border-radius:12px;margin-bottom:12px">` : ''}
+        <span class="pill ok" style="font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;margin-bottom:6px">⭐ SURVEY KEPUASAN PESERTA</span>
+        <h2 style="margin:6px 0 4px;font-size:22px">${esc(ev.name)}</h2>
+        <p class="muted" style="font-size:12px;margin:0">Mohon luangkan waktu 1 menit untuk menilai pengalaman Anda.</p>
+      </div>
+
+      ${isEdit ? `
+        <div style="background:rgba(59,130,246,.12);border:1px solid #3b82f6;border-radius:12px;padding:10px 14px;margin-bottom:16px;font-size:12px;color:var(--tx);display:flex;align-items:center;gap:8px">
+          <span>ℹ️</span>
+          <div><b>Mode Edit Ulasan:</b> Anda sedang memperbarui ulasan yang sebelumnya telah Anda kirim.</div>
+        </div>
+      ` : ''}
+
+      <div style="background:var(--in);border:1px solid var(--bd);border-radius:16px;padding:8px 14px;margin-bottom:18px">
+        ${FB_ASPECTS.map((a, i) => `
+          <div style="display:flex;justify-content:space-between;align-items:center;padding:12px 0;${i < FB_ASPECTS.length - 1 ? 'border-bottom:1px solid var(--bd);' : ''}gap:10px">
+            <div style="flex:1;min-width:0">
+              <div style="font-weight:700;font-size:13px">${a.label}</div>
+              <small class="muted" style="font-size:11px;display:block;line-height:1.3">${a.desc}</small>
+            </div>
+            <div class="fb-stars" data-asp="${a.key}" style="display:flex;gap:4px;font-size:24px;cursor:pointer;user-select:none;flex-shrink:0">
+              ${[1, 2, 3, 4, 5].map(st => `<span data-act="fbSetAspectStar" data-asp="${a.key}" data-v="${st}" style="color:${st <= (window._fbAspects[a.key] || 5) ? '#f59e0b' : 'var(--bd)'};transition:transform .12s">★</span>`).join('')}
+            </div>
+          </div>
+        `).join('')}
+      </div>
+
+      <!-- ANON TOGGLE & IDENTITAS -->
+      <div style="background:var(--in);border:1px solid var(--bd);border-radius:14px;padding:14px;margin-bottom:16px">
+        <label style="display:flex;align-items:center;gap:10px;font-weight:700;cursor:pointer;margin:0">
+          <input type="checkbox" id="pub_fb_anon" ${(!myFb || myFb.is_anonymous) ? 'checked' : ''} style="width:18px;height:18px;accent-color:var(--ac);cursor:pointer">
+          <span>🎭 Kirim secara Anonim (Sembunyikan Identitas)</span>
+        </label>
+        <small class="muted" style="display:block;margin-top:6px;line-height:1.4">Identitas Anda tidak akan ditampilkan kepada panitia.</small>
+
+        <div id="pub_fb_identity" style="margin-top:12px;display:${(!myFb || myFb.is_anonymous) ? 'none' : 'grid'};grid-template-columns:1fr;gap:10px">
+          <div>
+            <label style="font-size:12px;font-weight:700;margin-bottom:4px;display:block">Nama Lengkap (Opsional)</label>
+            <input id="pub_fb_name" value="${esc((myFb && myFb.guest_name) || '')}" placeholder="Nama Anda" style="width:100%;box-sizing:border-box">
+          </div>
+          <div>
+            <label style="font-size:12px;font-weight:700;margin-bottom:4px;display:block">Asal Gereja / Komunitas (Opsional)</label>
+            <input id="pub_fb_org" value="${esc((myFb && myFb.guest_org) || '')}" placeholder="Nama gereja atau instansi" style="width:100%;box-sizing:border-box">
+          </div>
+        </div>
+      </div>
+
+      <label style="font-weight:700;margin-bottom:4px;display:block">Kritik, Saran & Masukan Anda (Opsional)</label>
+      <textarea id="pub_fb_comment" rows="3" placeholder="Tuliskan kesan atau masukan berharga Anda untuk acara ini..." style="width:100%;box-sizing:border-box;margin-bottom:20px">${esc((myFb && myFb.comment) || '')}</textarea>
+
+      <button class="btn pri lg" id="btn_pub_submit" data-act="pubSurveySubmit" data-ev="${esc(evId)}" data-fid="${esc((myFb && myFb.id) || savedFid)}" style="width:100%;font-size:16px;font-weight:800;padding:14px;border-radius:12px;box-shadow:0 6px 20px rgba(99,102,241,.3)">
+        ${isEdit ? '💾 Perbarui Ulasan Saya' : '🚀 Kirim Ulasan Saya'}
+      </button>
+
+      <div style="text-align:center;margin-top:14px">
+        <small class="muted">ambiltiketnya.online · One Stop Event Platform</small>
+      </div>
+    `;
+
+    const anonBox = $('#pub_fb_anon');
+    if (anonBox) {
+      anonBox.onchange = e => {
+        const idBox = $('#pub_fb_identity');
+        if (idBox) idBox.style.display = e.target.checked ? 'none' : 'grid';
+      };
+    }
+  }
+
+  window._renderSurveyForm = renderSurveyForm;
+  renderSurveyForm();
+}
+
+/* ===== LAYAR VIDEOTRON / PROJEKTOR STAGE SURVEY ===== */
+let _surveyPollTimer = null;
+async function surveyStageView(evId) {
+  if (_surveyPollTimer) { clearInterval(_surveyPollTimer); _surveyPollTimer = null; }
+  applyTheme();
+  const base = (B && B.siteUrl ? String(B.siteUrl).trim().replace(/\/+$/, '') : 'https://ambiltiketnya.online');
+  const surveyUrl = base + '/?survey=' + encodeURIComponent(evId);
+
+  $('#app').innerHTML = `
+    <div id="survey_stage_wrap" style="min-height:100vh;background:radial-gradient(ellipse at center,#1e1b4b 0%,#09090b 80%);color:#fff;display:flex;flex-direction:column;justify-content:space-between;padding:32px 24px;box-sizing:border-box;position:relative;overflow:hidden">
+      <!-- TOP BAR -->
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;z-index:2">
+        <div style="display:flex;align-items:center;gap:10px">
+          <span style="font-size:28px">⭐</span>
+          <div>
+            <div style="font-size:12px;letter-spacing:3px;font-weight:800;color:#f59e0b;text-transform:uppercase">LIVE EVENT FEEDBACK</div>
+            <div id="st_ev_name" style="font-size:18px;font-weight:800;color:#fff">Memuat Acara...</div>
+          </div>
+        </div>
+        <div style="display:flex;gap:10px;align-items:center">
+          <button class="btn sm" data-act="stToggleFs" style="background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.2);color:#fff">⛶ Layar Penuh</button>
+          <a href="/" class="btn sm" style="background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);color:#cbd5e1">✕ Tutup</a>
+        </div>
+      </div>
+
+      <!-- CENTER STAGE (2 COLS) -->
+      <div style="flex:1;display:flex;align-items:center;justify-content:center;margin:30px 0;z-index:2">
+        <div style="display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:40px;max-width:1100px;width:100%">
+          
+          <!-- QR CODE BOX -->
+          <div style="background:#ffffff;border:4px solid #f59e0b;border-radius:28px;padding:22px;text-align:center;box-shadow:0 0 50px rgba(245,158,11,.35);max-width:320px;width:100%">
+            <div style="width:260px;height:260px;margin:0 auto;display:flex;align-items:center;justify-content:center" id="st_qr_box">
+              ${qr(surveyUrl)}
+            </div>
+            <div style="margin-top:14px;color:#09090b">
+              <b style="font-size:15px;display:block">SCAN DENGAN KAMERA HP</b>
+              <small style="color:#64748b;font-size:12px">Buka kamera HP Anda &amp; arahkan ke QR Code</small>
+            </div>
+          </div>
+
+          <!-- INSTRUCTION & LIVE STATS -->
+          <div style="flex:1;min-width:300px;max-width:540px;text-align:left">
+            <span class="pill gd" style="font-size:12px;font-weight:800;letter-spacing:2px;text-transform:uppercase;margin-bottom:12px;display:inline-block">📱 SURVEY 1 MENIT · TANPA LOGIN</span>
+            <h1 style="font-size:clamp(30px, 4vw, 50px);font-weight:900;line-height:1.15;margin:8px 0 16px;color:#ffffff;text-shadow:0 4px 20px rgba(0,0,0,.6)">
+              Bagaimana Pengalaman Anda Hari Ini?
+            </h1>
+            <p style="color:#cbd5e1;font-size:16px;line-height:1.5;margin:0 0 24px">
+              Silakan luangkan waktu <b>1 menit</b> untuk memberikan ulasan &amp; masukan pada 5 aspek acara melalui smartphone Anda.
+            </p>
+
+            <div style="background:rgba(255,255,255,.06);border:1.5px solid rgba(255,255,255,.15);border-radius:20px;padding:18px 24px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:16px">
+              <div>
+                <small style="color:#94a3b8;font-size:12px;font-weight:700;letter-spacing:1px;text-transform:uppercase">ULASAN MASUK (REAL-TIME)</small>
+                <div style="display:flex;align-items:baseline;gap:8px;margin-top:4px">
+                  <span id="st_cnt_val" style="font-size:48px;font-weight:900;color:#10b981;line-height:1">0</span>
+                  <span style="color:#cbd5e1;font-size:15px;font-weight:600">Peserta Telah Mengisi</span>
+                </div>
+              </div>
+              <div style="display:flex;align-items:center;gap:8px;background:rgba(16,185,129,.15);border:1px solid #10b981;padding:6px 14px;border-radius:99px">
+                <span style="display:inline-block;width:10px;height:10px;border-radius:99px;background:#10b981;box-shadow:0 0 10px #10b981"></span>
+                <span style="font-size:12px;font-weight:800;color:#34d399">LIVE UPDATE</span>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- FOOTER -->
+      <div style="text-align:center;color:#64748b;font-size:12px;z-index:2">
+        ambiltiketnya.online · Layar Panggung Videotron Interaktif
+      </div>
+    </div>
+  `;
+
+  async function poll() {
+    try {
+      const res = await pub('surveyStagePoll', { eventId: evId });
+      if (res && res.event && $('#st_ev_name')) $('#st_ev_name').textContent = res.event.name;
+      if (res && $('#st_cnt_val')) $('#st_cnt_val').textContent = res.count || 0;
+    } catch(e) {}
+  }
+
+  await poll();
+  _surveyPollTimer = setInterval(poll, 4000);
 }
 
 /* ===== OFFLINE ENGINE ===== */
@@ -2003,7 +2213,56 @@ const NL=String.fromCharCode(10),find=(a,id)=>a.find(x=>x.id===id),A={
    fail(e);
   }
  },
- fbExportCsv(){
+  fbOpenStage(){
+   if(!S_fb.evId)return toast('Pilih acara terlebih dahulu',1);
+   window.open('?stage=survey&ev='+encodeURIComponent(S_fb.evId),'_blank');
+  },
+  stToggleFs(){
+   const el=$('#survey_stage_wrap')||document.documentElement;
+   if(!document.fullscreenElement){if(el.requestFullscreen)el.requestFullscreen().catch(()=>{});}
+   else{if(document.exitFullscreen)document.exitFullscreen().catch(()=>{});}
+  },
+  async pubSurveySubmit(el){
+   const evId=el.dataset.ev,fid=el.dataset.fid||'';
+   const ratings=window._fbAspects||{overall:5,content:5,service:5,venue:5,sound:5};
+   const isAnon=$('#pub_fb_anon')?$('#pub_fb_anon').checked:true;
+   const gName=($('#pub_fb_name')?$('#pub_fb_name').value:'').trim();
+   const gOrg=($('#pub_fb_org')?$('#pub_fb_org').value:'').trim();
+   const comment=($('#pub_fb_comment')?$('#pub_fb_comment').value:'').trim();
+
+   try{
+    const res=await pub('feedbackPublic',{
+     eventId:evId,feedbackId:fid,ratings:ratings,rating:ratings.overall||5,
+     isAnonymous:isAnon,guestName:gName,guestOrg:gOrg,comment:comment
+    },t('loading'));
+
+    if(res&&res.id){localStorage.setItem('atk_fb_'+evId,res.id);}
+    triggerConfetti('survey_confetti');
+    const box=$('#survey_box');
+    if(box){
+     box.innerHTML=`
+      <div style="text-align:center;padding:20px 8px">
+       <div style="font-size:54px;margin-bottom:8px">🎉</div>
+       <span class="pill ok" style="font-size:12px;font-weight:800;letter-spacing:1px;margin-bottom:12px">✓ TERIMA KASIH BANYAK!</span>
+       <h2 style="margin:10px 0 8px;font-size:24px">Ulasan Anda Berhasil Disimpan</h2>
+       <p class="muted" style="font-size:14px;line-height:1.6;margin:0 0 24px">
+        Masukan dan penilaian Anda sangat berharga bagi kami untuk terus meningkatkan kualitas dan pelayanan acara selanjutnya.
+       </p>
+       <div style="display:flex;flex-direction:column;gap:10px;max-width:320px;margin:0 auto">
+        <button class="btn" onclick="window._renderSurveyForm&&window._renderSurveyForm(true)" style="padding:12px;font-weight:700;border-radius:10px">
+         ✏️ Ubah / Edit Ulasan Saya
+        </button>
+        <a href="/" class="btn pri" style="padding:12px;font-weight:700;border-radius:10px;text-align:center">
+         🏠 Buka ambiltiketnya.online
+        </a>
+       </div>
+      </div>
+     `;
+    }
+    toast('Terima kasih atas ulasan Anda! ⭐',0);
+   }catch(e){fail(e)}
+  },
+  fbExportCsv(){
   const rows = (S_fb.data && S_fb.data.rows) || [];
   if (!rows.length) return toast(t('none'), 1);
   const headers = ['Waktu', 'Acara', 'Skor Keseluruhan', 'Konten & Pengisi Acara', 'Pelayanan Panitia', 'Fasilitas Venue', 'Sound & Multimedia', 'Anonim', 'Nama Peserta', 'Asal Gereja / Instansi', 'Komentar / Masukan'];
