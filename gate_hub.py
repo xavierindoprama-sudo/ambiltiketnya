@@ -99,6 +99,22 @@ def get_api_url():
             pass
     return api_url
 
+def call_cloudflare_api(token, action, params=None):
+    """Memanggil endpoint Cloudflare Worker dengan format RPC dan User-Agent yang aman dari blokir Cloudflare WAF."""
+    api_url = get_api_url()
+    headers = {
+        'Content-Type': 'text/plain;charset=utf-8',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36'
+    }
+    payload = {
+        'fn': 'api',
+        'args': [token, action, params or {}]
+    }
+    req = urllib.request.Request(api_url, data=json.dumps(payload).encode('utf-8'), headers=headers)
+    with urllib.request.urlopen(req, timeout=25) as resp:
+        return json.loads(resp.read().decode('utf-8'))
+
+
 
 def get_local_ip():
     """Mendeteksi IP LAN lokal laptop (misal 192.168.x.x atau 10.x.x.x)"""
@@ -457,7 +473,6 @@ class GateHubHandler(SimpleHTTPRequestHandler):
 
     def handle_list_events(self, body):
         token = str(body.get('token') or '').strip()
-        api_url = get_api_url()
         if not token:
             conn = sqlite3.connect(DB_FILE)
             c = conn.cursor()
@@ -467,17 +482,14 @@ class GateHubHandler(SimpleHTTPRequestHandler):
             if row and row[0]:
                 token = row[0].strip()
 
-        req_data = json.dumps({'action': 'adminEvents', 'token': token}).encode('utf-8')
-        req = urllib.request.Request(api_url, data=req_data, headers={'Content-Type': 'text/plain'})
         try:
-            with urllib.request.urlopen(req, timeout=15) as resp:
-                res_json = json.loads(resp.read().decode('utf-8'))
-                if res_json.get('ok'):
-                    events = res_json.get('data') or []
-                    simplified = [{'id': e.get('id'), 'name': e.get('name'), 'sold': e.get('sold', 0)} for e in events]
-                    self.send_json({'ok': True, 'events': simplified})
-                else:
-                    self.send_json({'ok': False, 'error': res_json.get('error', 'Token tidak valid')})
+            res_json = call_cloudflare_api(token, 'adminEvents', {})
+            if res_json.get('ok'):
+                events = res_json.get('data') or []
+                simplified = [{'id': e.get('id'), 'name': e.get('name'), 'sold': e.get('sold', 0)} for e in events]
+                self.send_json({'ok': True, 'events': simplified})
+            else:
+                self.send_json({'ok': False, 'error': res_json.get('error', 'Token tidak valid')})
         except Exception as e:
             self.send_json({'ok': False, 'error': str(e)})
 
@@ -514,7 +526,6 @@ class GateHubHandler(SimpleHTTPRequestHandler):
     def handle_download_cloud(self, body):
         token = str(body.get('token') or '').strip()
         event_id = str(body.get('eventId') or '').strip()
-        api_url = get_api_url()
         if not token:
             conn = sqlite3.connect(DB_FILE)
             c = conn.cursor()
@@ -524,47 +535,37 @@ class GateHubHandler(SimpleHTTPRequestHandler):
             if row and row[0]:
                 token = row[0].strip()
 
-        req_data = json.dumps({
-            'action': 'offlineManifest',
-            'token': token,
-            'eventId': event_id
-        }).encode('utf-8')
-
-        req = urllib.request.Request(api_url, data=req_data, headers={'Content-Type': 'text/plain'})
         try:
-            with urllib.request.urlopen(req, timeout=20) as resp:
-                res_json = json.loads(resp.read().decode('utf-8'))
-                if not res_json.get('ok'):
-                    self.send_json({'ok': False, 'error': res_json.get('error', 'Gagal dari server')})
-                    return
-                data = res_json.get('data', {})
-                ev_id = data.get('eventId', '')
-                ev_name = data.get('eventName', '')
-                tickets = data.get('tickets', [])
+            res_json = call_cloudflare_api(token, 'offlineManifest', {'eventId': event_id})
+            if not res_json.get('ok'):
+                self.send_json({'ok': False, 'error': res_json.get('error', 'Gagal dari server')})
+                return
+            data = res_json.get('data', {})
+            ev_id = data.get('eventId', '')
+            ev_name = data.get('eventName', '')
+            tickets = data.get('tickets', [])
 
-                conn = sqlite3.connect(DB_FILE)
-                c = conn.cursor()
-                c.execute('DELETE FROM events')
-                c.execute('INSERT INTO events(id, name, downloaded_at, total_tickets) VALUES(?, ?, ?, ?)',
-                          (ev_id, ev_name, datetime.now().isoformat(), len(tickets)))
+            conn = sqlite3.connect(DB_FILE)
+            c = conn.cursor()
+            c.execute('DELETE FROM events')
+            c.execute('INSERT INTO events(id, name, downloaded_at, total_tickets) VALUES(?, ?, ?, ?)',
+                      (ev_id, ev_name, datetime.now().isoformat(), len(tickets)))
 
-                c.execute('DELETE FROM tickets')
-                for t in tickets:
-                    c.execute('''
-                        INSERT OR REPLACE INTO tickets(code, event_id, name, church, age, qty, checked_in, status, kind)
-                        VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    ''', (t.get('code'), ev_id, t.get('name'), t.get('church'), t.get('age'), t.get('qty', 1), t.get('checked', 0), t.get('status', 'confirmed'), t.get('kind', 'regular')))
-                conn.commit()
-                conn.close()
+            c.execute('DELETE FROM tickets')
+            for t in tickets:
+                c.execute('''
+                    INSERT OR REPLACE INTO tickets(code, event_id, name, church, age, qty, checked_in, status, kind)
+                    VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ''', (t.get('code'), ev_id, t.get('name'), t.get('church'), t.get('age'), t.get('qty', 1), t.get('checked', 0), t.get('status', 'confirmed'), t.get('kind', 'regular')))
+            conn.commit()
+            conn.close()
 
-                self.send_json({'ok': True, 'eventName': ev_name, 'count': len(tickets)})
+            self.send_json({'ok': True, 'eventName': ev_name, 'count': len(tickets)})
         except Exception as e:
             self.send_json({'ok': False, 'error': str(e)})
 
     def handle_sync_cloud(self, body):
         token = str(body.get('token') or '').strip()
-        api_url = get_api_url()
-
         conn = sqlite3.connect(DB_FILE)
         c = conn.cursor()
         if not token:
@@ -577,6 +578,7 @@ class GateHubHandler(SimpleHTTPRequestHandler):
             conn.close()
             self.send_json({'ok': False, 'needToken': True, 'error': 'Token Admin belum tersimpan. Silakan masukkan token terlebih dahulu.'})
             return
+
         c.execute('SELECT code, checked_in_at, checked_in_gate FROM tickets WHERE checked_in > 0')
         checked_rows = c.fetchall()
         conn.close()
@@ -587,24 +589,15 @@ class GateHubHandler(SimpleHTTPRequestHandler):
 
         checkins = [{'code': r[0], 'at': r[1] or datetime.now().isoformat()} for r in checked_rows]
 
-        req_data = json.dumps({
-            'action': 'syncOfflineCheckins',
-            'token': token,
-            'checkins': checkins
-        }).encode('utf-8')
-
-        req = urllib.request.Request(api_url, data=req_data, headers={'Content-Type': 'text/plain'})
         try:
-            with urllib.request.urlopen(req, timeout=25) as resp:
-                res_json = json.loads(resp.read().decode('utf-8'))
-                if res_json.get('ok'):
-                    synced_cnt = res_json.get('data', {}).get('synced', len(checkins))
-                    self.send_json({'ok': True, 'synced': synced_cnt})
-                else:
-                    self.send_json({'ok': False, 'error': res_json.get('error', 'Gagal sinkron')})
+            res_json = call_cloudflare_api(token, 'syncOfflineCheckins', {'checkins': checkins})
+            if res_json.get('ok'):
+                synced_cnt = res_json.get('data', {}).get('synced', len(checkins))
+                self.send_json({'ok': True, 'synced': synced_cnt})
+            else:
+                self.send_json({'ok': False, 'error': res_json.get('error', 'Gagal sinkron')})
         except Exception as e:
             self.send_json({'ok': False, 'error': str(e)})
-
 
     def handle_get_tickets(self):
         conn = sqlite3.connect(DB_FILE)
