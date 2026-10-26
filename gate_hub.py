@@ -7,6 +7,17 @@ tanpa koneksi internet luar via Wi-Fi Router lokal.
 
 import sys
 import os
+if sys.stdout and hasattr(sys.stdout, 'reconfigure'):
+    try:
+        sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+    except Exception:
+        pass
+if sys.stderr and hasattr(sys.stderr, 'reconfigure'):
+    try:
+        sys.stderr.reconfigure(encoding='utf-8', errors='replace')
+    except Exception:
+        pass
+
 import re
 import json
 import sqlite3
@@ -149,7 +160,7 @@ body{margin:0;padding:20px;background:var(--bg);color:var(--txt);font-family:sys
 .res-USED{background:rgba(245,158,11,.2);color:var(--wn)}
 .res-ERROR{background:rgba(239,68,68,.2);color:var(--er)}
 </style>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
+<script src="/qrcode.min.js"></script>
 </head>
 <body>
 <div class="container">
@@ -268,11 +279,25 @@ async function loadInfo() {
     document.getElementById('scan_url_txt').textContent = d.scanUrl;
 
     // Render QR Code
+    const qrWrap = document.getElementById('qr_wrap');
     if (typeof qrcode !== 'undefined') {
-      const qr = qrcode(0, 'M');
-      qr.addData(d.scanUrl);
-      qr.make();
-      document.getElementById('qr_wrap').innerHTML = qr.createImgTag(5);
+      try {
+        const qr = qrcode(0, 'M');
+        qr.addData(d.scanUrl);
+        qr.make();
+        const n = qr.getModuleCount();
+        let p = '';
+        for (let r = 0; r < n; r++) {
+          for (let c = 0; c < n; c++) {
+            if (qr.isDark(r, c)) p += `M${c} ${r}h1v1h-1z`;
+          }
+        }
+        qrWrap.innerHTML = `<svg viewBox="0 0 ${n} ${n}" width="160" height="160" shape-rendering="crispEdges" style="display:block;margin:0 auto"><path d="${p}" fill="#000"/></svg>`;
+      } catch(e) {
+        qrWrap.innerHTML = `<a href="${d.scanUrl}" target="_blank" style="font-size:12px;color:#2563eb;word-break:break-all">${d.scanUrl}</a>`;
+      }
+    } else {
+      qrWrap.innerHTML = `<a href="${d.scanUrl}" target="_blank" style="font-size:12px;color:#2563eb;word-break:break-all">${d.scanUrl}</a>`;
     }
   } catch(e) {}
 }
@@ -829,16 +854,16 @@ def run_server():
     ip = get_local_ip()
     server = ThreadingHTTPServer(('0.0.0.0', PORT), GateHubHandler)
     print("=" * 65)
-    print("🚀 AMBILTIKETNYA - LOCAL GATE HUB (POSKO GERBANG LOKAL)")
+    print(">> AMBILTIKETNYA - LOCAL GATE HUB (POSKO GERBANG LOKAL)")
     print("=" * 65)
-    print(f"📡 IP LAN Laptop     : http://{ip}:{PORT}")
-    print(f"📲 URL Scan Petugas : http://{ip}:{PORT}/scan.html")
-    print(f"🖥️ Dashboard Posko   : http://localhost:{PORT}")
+    print(f">> IP LAN Laptop     : http://{ip}:{PORT}")
+    print(f">> URL Scan Petugas : http://{ip}:{PORT}/scan.html")
+    print(f">> Dashboard Posko   : http://localhost:{PORT}")
     print("=" * 65)
     print("Petunjuk:")
-    print(f"1. Pastikan 10 HP Petugas terhubung ke Wi-Fi yang sama.")
+    print("1. Pastikan HP Petugas terhubung ke Wi-Fi yang sama.")
     print(f"2. Buka http://localhost:{PORT} di laptop ini untuk melihat dashboard.")
-    print(f"3. Scan QR code di layar laptop dengan kamera HP petugas.")
+    print("3. Scan QR code di layar laptop dengan kamera HP petugas.")
     print("Tekan Ctrl+C untuk menghentikan server.")
     print("=" * 65)
     try:

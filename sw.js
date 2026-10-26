@@ -1,11 +1,12 @@
-// AmbilTiketnya Service Worker - v83
-const CACHE = 'atk-v83';
+// AmbilTiketnya Service Worker - v84
+const CACHE = 'atk-v84';
 const STATIC = [
   './',
   './index.html',
   './config.js',
   './scan.html',
   './offline.html',
+  './qrcode.min.js',
   './favicon.svg',
   './favicon.png',
   './favicon.ico',
