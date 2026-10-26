@@ -6085,12 +6085,12 @@ Tulis dengan gaya bahasa yang profesional, tajam, bernas, dan memotivasi panitia
         });
 
         const timeSlotsText = sortedSlots.map(s => `  * Jam ${s} WIB: ${timeBuckets[s]} orang check-in`).join('\n');
-        const topChurchesText = sortedChurches.slice(0, 10).map((c, i) => `  ${i + 1}. ${c[0]}: ${c[1]} orang (${Math.round((c[1]/totalBooked)*100)}%)`).join('\n');
+        const rawChurchesList = sortedChurches.slice(0, 150).map(([c, cnt]) => `- "${c}": ${cnt} jemaat`).join('\n');
         const ageText = Object.entries(ageBuckets).filter(x => x[1] > 0).map(([k, v]) => `  * ${ageLabels[k]}: ${v} orang (${Math.round((v/totalAgeCount)*100)}%)`).join('\n');
         const guestbookSamples = activeOrders.filter(o => o.guestbook_message && o.guestbook_message.trim()).slice(0, 15).map((o, i) => `  ${i + 1}. "${o.guestbook_message.trim()}"`).join('\n');
 
-        const prompt = `Anda adalah seorang Ahli Strategi Manajemen Acara & Konsultan Analisis Data Audiens (Event Intelligence & Operations Specialist) terkemuka.
-Tugas Anda adalah melakukan analisis mendalam, komprehensif, operasional, dan strategis terhadap laporan data kehadiran dan demografi acara berikut:
+        const prompt = `Anda adalah seorang Konsultan Ahli Strategi Manajemen Acara & Spesialis Analisis Data Audiens & Ekumenis (Event Intelligence & Church Demographics Specialist) terkemuka.
+Tugas Anda adalah melakukan analisis mendalam, komprehensif, operasional, dan strategis terhadap data kehadiran dan demografi acara berikut, DENGAN FOKUS UTAMA pada normalisasi, deduplikasi semantik, dan analisis demografi gereja/komunitas asal peserta:
 
 ### DATA LAPORAN & KEHADIRAN ACARA:
 - Nama Acara: ${evName}
@@ -6100,13 +6100,16 @@ Tugas Anda adalah melakukan analisis mendalam, komprehensif, operasional, dan st
 - Puncak Arus Check-in: ${peakSlot ? `${peakSlot} WIB (${peakCount} orang)` : 'Belum terdata'}
 - Sebaran Waktu Check-In:
 ${timeSlotsText || '- (Belum ada data waktu check-in)'}
-- Demografi Komunitas / Gereja Asal:
-  * Total Komunitas Terdata: ${sortedChurches.length} gereja/komunitas
-  * Top 5 Komunitas Terbanyak:
-${topChurchesText || '- (Belum ada data komunitas)'}
-- Demografi Kelompok Usia Peserta:
+
+### DATA MENTAH ASAL GEREJA / KOMUNITAS PESERTA (${sortedChurches.length} variasi nama tertulis):
+Peserta mengisi nama asal gereja mereka secara bebas, sehingga banyak nama gereja yang SAMA namun ditulis dengan ejaan, singkatan, akronim, penambahan cabang/daerah, atau format yang BERBEDA (misalnya: "GBI Rock", "Rock", "GBI R.O.C.K", "Tiberias", "Gereja Tiberias Indonesia", "GTI", "JPCC", "Jakarta Praise Community Church", "HKBP Sudirman", "HKBP", dsb).
+
+Berikut adalah seluruh daftar nama gereja mentah yang diinput beserta jumlah jemaatnya:
+${rawChurchesList || '- (Tidak ada data gereja tertulis)'}
+
+### DATA DEMOGRAFI KELOMPOK USIA PESERTA:
 ${ageText || '- (Belum ada data usia)'}
-${guestbookSamples ? `\n- Sampel Ucapan / Catatan Buku Tamu Peserta:\n${guestbookSamples}` : ''}
+${guestbookSamples ? `\n### SAMPEL BUKU TAMU / UCAPAN PESERTA:\n${guestbookSamples}` : ''}
 
 ---
 ### FORMAT LAPORAN ANALISIS EKSEKUTIF YANG HARUS ANDA SUSUN:
@@ -6117,20 +6120,31 @@ Susun laporan dalam Bahasa Indonesia profesional, bernas, berwawasan tajam, deng
 - Cantumkan **"Attendance Health Score"** (misal: **"Sangat Sukses (90-100%)"**, **"Optimal & Solid"**, atau **"Perlu Strategi Konversi Lebih Baik"**).
 - Berikan ulasan singkat mengenai efektivitas konversi pemesanan ke kehadiran riil.
 
-## ⏱️ 2. Analisis Arus Kedatangan & Efisiensi Alur Check-in
+## ⛪ 2. Analisis Mendalam Demografi Gereja, Normalisasi & Deduplikasi Entitas
+*(FOKUS UTAMA & WAJIB LENGKAP)*
+- **Estimasi Jumlah Gereja Unik Sebenarnya**:
+  Lakukan deduplikasi semantik dan berikan angka perkiraan riil (misal: *"Meskipun terdata ${sortedChurches.length} variasi nama tertulis, setelah dilakukan normalisasi dan pengelompokan entitas oleh AI, diperkirakan peserta mewakili sekitar ~X gereja / sinode unik"*). Jelaskan alasan penggabungannya secara objektif.
+- **Tabel Pemetaan & Normalisasi Nama Gereja**:
+  Buat tabel Markdown yang merangkum hasil pengelompokan nama gereja yang terdeteksi sama/terafiliasi:
+  | Gereja Standar / Terkonsolidasi | Variasi Nama Input Peserta | Total Jemaat Gabungan | Estimasi % Audiens |
+- **Spektrum Aliran & Rumpun Denominasi**:
+  Petakan sebaran peserta ke dalam rumpun tradisi gereja (Kharismatik / Pentakosta, Protestan Klasik / Arus Utama / PGI, Injili / Reformed, Katolik, Komunitas Independen / Para-Church). Berikan persentase estimasi masing-masing rumpun.
+- **Wawasan Jangkauan Ekumenis**:
+  Evaluasi seberapa luas jangkauan lintas sinode acara ini dan apakah acara berhasil menjadi wadah kesatuan ekumenis yang inklusif atau terkonsentrasi pada komunitas tertentu.
+
+## ⏱️ 3. Analisis Arus Kedatangan & Efisiensi Alur Check-in
 - Analisis pola kedatangan peserta (apakah menumpuk mendekati acara dimulai, tersebar merata, atau terlambat).
 - Evaluasi titik kritis beban antrean (*bottleneck*) di gerbang/meja registrasi dan kapasitas petugas usher/pindai QR.
 
-## 👥 3. Karakteristik & Segmentasi Audiens
-- Bedah komposisi komunitas/gereja yang hadir (seberapa luas jangkauan acara, dominasi komunitas tuan rumah vs tamu).
+## 👥 4. Karakteristik Demografi Usia Audiens
 - Analisis segmentasi usia audiens dan relevansi acara terhadap kelompok demografi yang mendominasi.
 
-## 📉 4. Diagnosis No-Show & Faktor Retensi
+## 📉 5. Diagnosis No-Show & Faktor Retensi
 - Berikan analisis kritis terhadap potensi penyebab ${noShow} peserta batal hadir (${100 - rate}% no-show rate).
 - Strategi pencegahan atau komitmen kehadiran (misal: automated reminder via WhatsApp, sistem deposit/komitmen, batas waktu klaim tiket).
 
-## 🚀 5. Rekomendasi Taktis & Strategis Acara Selanjutnya
-- Berikan 4-5 poin rekomendasi operasional yang terukur untuk panitia (penjadwalan registrasi, penataan jalur masuk, strategi promosi ke segmen usia tertentu, dan kemitraan antar komunitas).
+## 🚀 6. Rekomendasi Taktis & Strategis Acara Selanjutnya
+- Berikan 4-5 poin rekomendasi operasional yang terukur untuk panitia (penjadwalan registrasi, penataan jalur masuk, strategi promosi ke segmen usia tertentu, dan kemitraan antar komunitas/sinode).
 
 Tulis secara elegan, objektif, tajam, dan berorientasi pada peningkatan kualitas operasional acara masa depan.`;
 
@@ -6233,7 +6247,7 @@ Tulis secara elegan, objektif, tajam, dan berorientasi pada peningkatan kualitas
         </div>
         <div style="background:rgba(255,255,255,.05);padding:8px 12px;border-radius:10px;border:1px solid var(--bd);text-align:center">
           <small class="muted">Komunitas</small>
-          <div style="font-weight:700;font-size:16px;color:#8b5cf6">${sortedChurches.length} gereja</div>
+          <div style="font-weight:700;font-size:16px;color:#8b5cf6">${sortedChurches.length} variasi nama</div>
         </div>
       </div>
 
