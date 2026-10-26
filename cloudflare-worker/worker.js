@@ -1824,6 +1824,75 @@ export default {
           return json({ ok: true, data: { promoted: success, failed: fail } });
         }
 
+        if (action === 'invitationBatchImport') {
+          needRole(2);
+          const target = String(params.target || 'issued');
+          const eventId = params.eventId;
+          const rows = Array.isArray(params.rows) ? params.rows : [];
+          if (!eventId) throw new Error('MISSING_EVENT_ID');
+          if (!rows.length) throw new Error('NO_DATA');
+
+          const ev = (await neonQuery(env, `SELECT name, quota, (quota - coalesce((SELECT sum(qty) FROM orders WHERE event_id=events.id AND status<>'cancelled'),0))::int AS remaining FROM events WHERE id=$1::uuid`, [eventId]))[0];
+          if (!ev) throw new Error('NOT_FOUND');
+
+          const prefix = (ev.name.replace(/[^A-Za-z]/g, '').slice(0, 4).toUpperCase() || 'EVNT');
+          let success = 0, failed = 0;
+          const errors = [];
+
+          for (let i = 0; i < rows.length; i++) {
+            const item = rows[i];
+            const name = String(item.name || '').trim();
+            const org = String(item.org || '').trim();
+            const qty = Math.max(1, parseInt(item.qty, 10) || 1);
+            const phone = item.phone ? normPhone(item.phone) : null;
+            const age = item.age ? parseInt(item.age, 10) : null;
+
+            if (!name || name.length < 2) {
+              failed++;
+              errors.push(`Baris ${i + 1}: Nama tidak valid`);
+              continue;
+            }
+            if (!org || org.length < 2) {
+              failed++;
+              errors.push(`Baris ${i + 1} (${name}): Instansi/Gereja tidak valid`);
+              continue;
+            }
+            if (!phone) {
+              failed++;
+              errors.push(`Baris ${i + 1} (${name}): Nomor WhatsApp tidak valid`);
+              continue;
+            }
+
+            try {
+              if (target === 'waiting') {
+                await neonQuery(env, `INSERT INTO invitation_waiting_list(event_id, created_by, guest_name, guest_org, guest_phone, guest_age, qty, status, created_at)
+                  VALUES($1::uuid, $2::uuid, $3, $4, $5, $6, $7, 'waiting', now())`,
+                  [eventId, u.id, name, org, phone, age, qty]);
+                success++;
+              } else {
+                const tCode = 'TKT-' + prefix + '-' + rnd(6);
+                const oCode = rnd(8);
+                const r = await neonQuery(env, `INSERT INTO orders(order_code,ticket_code,user_id,event_id,qty,total,status,kind,guest_name,guest_org,guest_phone,guest_age)
+                  SELECT $1,$2,$3::uuid,e.id,$4::int,0,'confirmed','invitation',$6::text,$7::text,$8::text,$9::int FROM events e WHERE e.id=$5::uuid
+                   AND (SELECT coalesce(sum(qty),0) FROM orders WHERE event_id=e.id AND status<>'cancelled') + $4::int <= e.quota
+                  RETURNING id`, [oCode, tCode, u.id, qty, eventId, name, org, phone, age]);
+
+                if (r && r.length) {
+                  success++;
+                } else {
+                  failed++;
+                  errors.push(`Baris ${i + 1} (${name}): Kuota acara tidak mencukupi`);
+                }
+              }
+            } catch (err) {
+              failed++;
+              errors.push(`Baris ${i + 1} (${name}): ${err.message || 'Gagal menyimpan'}`);
+            }
+          }
+
+          return json({ ok: true, data: { total: rows.length, success, failed, errors } });
+        }
+
         if (action === 'walkinCreate') {
           needRole(1);
           const name = String(params.name || '').trim();

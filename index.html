@@ -212,6 +212,7 @@ window.addEventListener('error',function(e){show((e.message||'error')+' @'+e.lin
 <script async src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jsQR/1.4.0/jsQR.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script id="src" type="text/plain">
 let B={};const $=s=>document.querySelector(s);window.$=$;
 const ls={g:k=>{try{return localStorage.getItem(k)}catch(e){return null}},s:(k,v)=>{try{localStorage.setItem(k,v)}catch(e){}},d:k=>{try{localStorage.removeItem(k)}catch(e){}},r:k=>{try{localStorage.removeItem(k)}catch(e){}}};
@@ -3294,6 +3295,191 @@ async function invView(c){
  }catch(e){return fail(e)}
  mergeInvTix();paintInv();
 }
+
+function ensureXLSX(){
+ return new Promise((resolve,reject)=>{
+  if(window.XLSX)return resolve(window.XLSX);
+  const s=document.createElement('script');
+  s.src='https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+  s.onload=()=>resolve(window.XLSX);
+  s.onerror=()=>reject(new Error('Gagal memuat pustaka XLSX dari CDN'));
+  document.head.appendChild(s);
+ });
+}
+function parseCSVToRows(text){
+ if(!text)return [];
+ const lines=text.split(/\r\n|\n|\r/).filter(l=>l.trim().length>0);
+ if(!lines.length)return [];
+ const first=lines[0];
+ const semiCount=(first.match(/;/g)||[]).length;
+ const commaCount=(first.match(/,/g)||[]).length;
+ const tabCount=(first.match(/\t/g)||[]).length;
+ let delim=',';
+ if(semiCount>commaCount&&semiCount>tabCount)delim=';';
+ else if(tabCount>commaCount&&tabCount>semiCount)delim='\t';
+ const rows=[];
+ for(const line of lines){
+  const row=[];
+  let inQuotes=false,field='';
+  for(let i=0;i<line.length;i++){
+   const c=line[i];
+   if(c==='"'){
+    if(inQuotes&&line[i+1]==='"'){field+='"';i++}
+    else{inQuotes=!inQuotes}
+   }else if(c===delim&&!inQuotes){
+    row.push(field.trim());field=''
+   }else{field+=c}
+  }
+  row.push(field.trim());
+  rows.push(row);
+ }
+ return rows;
+}
+function normalizeImportData(raw){
+ if(!Array.isArray(raw)||!raw.length)return [];
+ const result=[];
+ if(Array.isArray(raw[0])){
+  let startIdx=0;
+  const firstRowStr=raw[0].map(x=>String(x).toLowerCase()).join(' ');
+  if(/(nama|name|tamu|guest|wa|telepon|hp|instansi|gereja)/.test(firstRowStr))startIdx=1;
+  for(let i=startIdx;i<raw.length;i++){
+   const r=raw[i];
+   if(!r||!r.length||!r.some(x=>String(x).trim()))continue;
+   result.push({rawName:r[0]||'',rawOrg:r[1]||'',rawPhone:r[2]||'',rawQty:r[3]||1,rawAge:r[4]||''});
+  }
+ }else{
+  for(const obj of raw){
+   const keys=Object.keys(obj);
+   if(!keys.length)continue;
+   const kName=keys.find(k=>/(nama|name|tamu|guest|peserta|pic|penerima)/i.test(k));
+   const kOrg=keys.find(k=>/(instansi|gereja|lembaga|organisasi|perusahaan|komunitas|org|church|company)/i.test(k));
+   const kPhone=keys.find(k=>/(wa|whatsapp|telepon|telp|phone|hp|handphone|kontak|nomor)/i.test(k));
+   const kQty=keys.find(k=>/(jumlah|qty|tiket|kuota|pax|ticket)/i.test(k));
+   const kAge=keys.find(k=>/(usia|umur|age)/i.test(k));
+   const rawName=(kName?obj[kName]:obj[keys[0]])||'';
+   const rawOrg=(kOrg?obj[kOrg]:obj[keys[1]])||'';
+   const rawPhone=(kPhone?obj[kPhone]:obj[keys[2]])||'';
+   const rawQty=(kQty?obj[kQty]:obj[keys[3]])||1;
+   const rawAge=(kAge?obj[kAge]:obj[keys[4]])||'';
+   if(!String(rawName).trim()&&!String(rawOrg).trim()&&!String(rawPhone).trim())continue;
+   if(String(rawName).trim().toLowerCase()==='nama'||String(rawName).trim().toLowerCase()==='nama lengkap')continue;
+   result.push({rawName,rawOrg,rawPhone,rawQty,rawAge});
+  }
+ }
+ return result.map((item,idx)=>{
+  const name=String(item.rawName||'').trim();
+  const org=String(item.rawOrg||'').trim();
+  const phone=normPhone(item.rawPhone);
+  const qty=Math.max(1,parseInt(item.rawQty,10)||1);
+  const age=item.rawAge?(parseInt(item.rawAge,10)||null):null;
+  const errors=[];
+  if(!name||name.length<2)errors.push('Nama min 2 huruf');
+  if(!org||org.length<2)errors.push('Instansi/Gereja min 2 huruf');
+  if(!phone)errors.push('No WhatsApp tidak valid (contoh 0812...)');
+  return {
+   index:idx+1,name,org,
+   phone:phone||String(item.rawPhone||'').trim(),
+   phoneClean:phone,qty,age,
+   valid:errors.length===0,
+   errorMsg:errors.join(', ')
+  };
+ });
+}
+window.handleImportFileSelect=function(e){
+ if(e.target&&e.target.files&&e.target.files.length){
+  handleImportFile(e.target.files[0]);
+ }
+};
+window.handleImportFile=async function(file){
+ if(!file)return;
+ const ext=(file.name.split('.').pop()||'').toLowerCase();
+ if(!['xlsx','xls','csv'].includes(ext))return toast('Format file harus .xlsx, .xls, atau .csv',1);
+ const pBox=$('#imp_preview_box');
+ if(pBox){
+  pBox.style.display='block';
+  pBox.innerHTML='<div style="text-align:center;padding:16px;color:var(--mu)">⏳ Membaca dan memproses file <b>'+esc(file.name)+'</b>...</div>';
+ }
+ try{
+  let rows=[];
+  if(ext==='csv'){
+   const text=await file.text();
+   const rawRows=parseCSVToRows(text);
+   rows=normalizeImportData(rawRows);
+  }else{
+   await ensureXLSX();
+   const buf=await file.arrayBuffer();
+   const wb=window.XLSX.read(new Uint8Array(buf),{type:'array'});
+   const firstSheet=wb.Sheets[wb.SheetNames[0]];
+   const rawObjs=window.XLSX.utils.sheet_to_json(firstSheet,{defval:''});
+   rows=normalizeImportData(rawObjs);
+  }
+  if(!rows.length){
+   if(pBox)pBox.innerHTML='<div class="card" style="padding:14px;border-color:var(--dg);color:var(--dg);text-align:center">File kosong atau kolom data tidak dapat dikenali.</div>';
+   return;
+  }
+  window.S_invImp=window.S_invImp||{};
+  window.S_invImp.rows=rows;
+  window.S_invImp.fileName=file.name;
+  window.renderImportPreview();
+ }catch(err){
+  console.error('Import parse error:',err);
+  if(pBox)pBox.innerHTML='<div class="card" style="padding:14px;border-color:var(--dg);color:var(--dg)">Gagal membaca file: '+esc(err.message||'Format tidak didukung')+'</div>';
+ }
+};
+window.renderImportPreview=function(){
+ const pBox=$('#imp_preview_box'),btn=$('#imp_submit_btn');
+ if(!pBox)return;
+ const imp=window.S_invImp;
+ if(!imp||!imp.rows||!imp.rows.length){
+  pBox.style.display='none';
+  if(btn)btn.disabled=true;
+  return;
+ }
+ const rows=imp.rows;
+ const validRows=rows.filter(r=>r.valid);
+ const invalidRows=rows.filter(r=>!r.valid);
+ const totalQty=validRows.reduce((a,r)=>a+r.qty,0);
+ const evId=imp.eventId||($('#imp_ev')?$('#imp_ev').value:'');
+ const chosenEv=(S.aev||[]).find(e=>String(e.id)===String(evId));
+ const remQuota=chosenEv?Math.max(0,chosenEv.quota-chosenEv.sold):0;
+ const isIssued=imp.target==='issued';
+ let quotaWarning='';
+ if(isIssued&&chosenEv&&totalQty>remQuota){
+  quotaWarning='<div class="card" style="padding:10px 14px;margin-bottom:12px;background:rgba(255,165,0,.1);border-left:4px solid var(--wn);color:var(--wn);font-size:13px">⚠️ <b>Perhatian Kuota:</b> Total tiket yang diminta (<b>'+totalQty+' tiket</b>) melebihi sisa kuota acara saat ini ('+remQuota+' tiket). Anda dapat tetap mengimpor (yang tidak kebagian tiket otomatis gagal) atau ganti tujuan ke <b>Waiting List</b>.</div>';
+ }
+ const previewList=rows.slice(0,10);
+ const tableRows=previewList.map(r=>'<tr>'
+  +'<td style="font-size:11px" class="mono">'+r.index+'</td>'
+  +'<td><b>'+esc(r.name)+'</b></td>'
+  +'<td><small class="muted">'+esc(r.org)+'</small></td>'
+  +'<td class="mono" style="font-size:12px">'+esc(r.phoneClean||r.phone)+'</td>'
+  +'<td><b>'+r.qty+'</b></td>'
+  +'<td>'+(r.age?esc(r.age)+' thn':'-')+'</td>'
+  +'<td>'+(r.valid?'<span class="pill ok" style="font-size:11px">✓ Siap</span>':'<span class="pill dg" style="font-size:11px" title="'+esc(r.errorMsg)+'">❌ '+esc(r.errorMsg)+'</span>')+'</td>'
+ +'</tr>').join('');
+ pBox.style.display='block';
+ pBox.innerHTML=quotaWarning
+  +'<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:10px">'
+   +'<div style="font-size:13px">'
+    +'📄 File: <b>'+esc(imp.fileName)+'</b> · Total: <b>'+rows.length+'</b> baris '
+    +'<span class="pill ok" style="margin-left:6px;font-size:11px">✓ '+validRows.length+' valid</span>'
+    +(invalidRows.length?'<span class="pill dg" style="margin-left:4px;font-size:11px">⚠️ '+invalidRows.length+' invalid</span>':'')
+   +'</div>'
+   +'<div style="font-size:12px;color:var(--mu)">Total Tiket Valid: <b>'+totalQty+' pax</b></div>'
+  +'</div>'
+  +'<div class="tw" style="max-height:220px;overflow-y:auto;border:1px solid var(--bd);border-radius:6px">'
+   +'<table class="rt" style="font-size:12px;margin:0">'
+    +'<thead><tr><th>#</th><th>Nama</th><th>Instansi / Gereja</th><th>WhatsApp</th><th>Jml</th><th>Usia</th><th>Status</th></tr></thead>'
+    +'<tbody>'+tableRows+'</tbody>'
+   +'</table>'
+  +'</div>'
+  +(rows.length>10?'<div style="font-size:11px;color:var(--mu);text-align:center;margin-top:6px">Menampilkan 10 dari '+rows.length+' baris...</div>':'');
+ if(btn){
+  btn.disabled=validRows.length===0;
+  btn.textContent='🚀 Mulai Impor ('+validRows.length+' Data Valid)';
+ }
+};
+
 function mergeInvTix(){const ids={};S.inv.forEach(i=>ids[i.id]=1);S.tix=(S.tix||[]).filter(x=>!ids[x.id]).concat(S.inv)}
 function paintInv(){
  const c=$('#ac'),keep=$('#ivev')?$('#ivev').value:'';
@@ -3320,9 +3506,14 @@ function paintInv(){
  const curTab=S.invSubTab||'issued';
  const filteredInv=curEvId?(S.inv||[]).filter(o=>String(o.event_id||'').toLowerCase()===String(curEvId).toLowerCase()):(S.inv||[]);
  const filteredWait=curEvId?(S.waitList||[]).filter(w=>String(w.event_id||'').toLowerCase()===String(curEvId).toLowerCase()):(S.waitList||[]);
- const subNav=`<div style="display:flex;gap:10px;margin-bottom:14px;border-bottom:1px solid var(--bd);padding-bottom:10px">
-  <button class="btn ${curTab==='issued'?'pri':'sm'}" data-act="invSubTab" data-v="issued" style="font-weight:700">📋 ${t('inv_tab_issued')} (${filteredInv.length})</button>
-  <button class="btn ${curTab==='waiting'?'pri':'sm'}" data-act="invSubTab" data-v="waiting" style="font-weight:700">⏳ ${t('inv_tab_wait')} ${filteredWait.length?`<span class="pill wn" style="font-size:11px;margin-left:4px;vertical-align:middle">${filteredWait.length}</span>`:''}</button>
+ const subNav=`<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:14px;border-bottom:1px solid var(--bd);padding-bottom:10px">
+  <div style="display:flex;gap:10px">
+   <button class="btn ${curTab==='issued'?'pri':'sm'}" data-act="invSubTab" data-v="issued" style="font-weight:700">📋 ${t('inv_tab_issued')} (${filteredInv.length})</button>
+   <button class="btn ${curTab==='waiting'?'pri':'sm'}" data-act="invSubTab" data-v="waiting" style="font-weight:700">⏳ ${t('inv_tab_wait')} ${filteredWait.length?`<span class="pill wn" style="font-size:11px;margin-left:4px;vertical-align:middle">${filteredWait.length}</span>`:''}</button>
+  </div>
+  <div>
+   <button class="btn sm" data-act="invImportModal" style="font-weight:700;display:inline-flex;align-items:center;gap:6px;border-color:var(--ac);color:var(--ac)"><span style="font-size:14px">📊</span> Impor Excel / CSV</button>
+  </div>
  </div>`;
 
  let bodyHtml='';
@@ -3371,7 +3562,7 @@ function paintInv(){
     <div><label>${t('inv_qty')}</label><input id="wtq" type="number" min="1" max="${maxQty}" value="1"></div>
    </div>
    <div class="acts">
-    <button class="btn pri" data-act="waitAdd" style="flex:none">${t('wait_add_btn')}</button>
+    <button class="btn pri" data-act="waitAdd" style="flex:none">${t('wait_add_btn')}</button><button class="btn" data-act="invImportModal" data-target="waiting" style="display:inline-flex;align-items:center;gap:6px">📊 Impor Massal Excel</button>
    </div>
   </div>
 
@@ -3390,7 +3581,7 @@ function paintInv(){
    return `<tr><td data-l="${t('inv_who')}"><b>${esc(o.guest_name)}</b><br><small class="muted">${esc(o.guest_org)}</small>${metaStr}</td><td data-l="${t('c_event')}">${esc(o.name)}</td><td data-l="${t('c_qty')}">${o.qty}</td><td data-l="${t('c_status')}">${stPill(o.status)}</td><td data-l="${t('c_chk')}" class="mono">${o.checked_in}/${o.qty}</td><td><div class="acts" style="margin:0;justify-content:flex-end;gap:4px"><button class="btn sm" data-act="invopen" data-id="${o.id}">${t('view')}</button><button class="btn sm" data-act="invLink" data-id="${o.id}" style="border-color:#d4af37;color:#d4af37" title="Buka Landing Page Undangan Digital">✉️ Undangan</button><button class="btn sm" data-act="copyInvLink" data-id="${o.id}" title="Salin Link Undangan">📋 Salin</button>${o.status==='confirmed'?`<button class="btn sm wa" data-act="waInv" data-id="${o.id}" title="Kirim Undangan Digital lewat WhatsApp">💬 WhatsApp</button>`:''}${o.status!=='cancelled'&&canEdit()?`<button class="btn sm dg" data-act="cxl" data-id="${o.id}">${t('cancel')}</button>`:''}</div></td></tr>`;
   }).join('');
 
-  bodyHtml=`<div class="card" style="padding:16px;margin:8px 0 18px;border-color:#d4af37"><h3>${t('inv_title')}</h3><div class="fg" style="margin-top:6px"><div style="grid-column:1/-1"><label>${t('inv_event')}</label><select id="ivev">${opts}</select></div><div><label>${t('inv_name')}</label><input id="ivnm" autocomplete="off" placeholder="Nama tamu / PIC"></div><div><label>${t('inv_org')}</label><input id="ivog" autocomplete="off" placeholder="Instansi / Gereja"></div><div id="ivag_wrap" style="${needAge?'':'display:none'}"><label>${t('inv_age')}</label><input id="ivag" type="number" min="1" max="120" autocomplete="off"></div><div><label>${t('inv_phone')}</label><input id="ivph" type="tel" placeholder="0812xxxxxxxx (WhatsApp Aktif)" autocomplete="off" required></div><div><label>${t('inv_qty')}</label><input id="ivq" type="number" min="1" max="${maxQty}" value="1"><small class="muted" style="display:block;margin-top:3px">${t('inv_max_hint')} ${maxQty} ${t('tix')}</small></div></div><div class="acts"><button class="btn pri" data-act="invmake" style="flex:none">${t('inv_make')}</button></div></div>
+  bodyHtml=`<div class="card" style="padding:16px;margin:8px 0 18px;border-color:#d4af37"><h3>${t('inv_title')}</h3><div class="fg" style="margin-top:6px"><div style="grid-column:1/-1"><label>${t('inv_event')}</label><select id="ivev">${opts}</select></div><div><label>${t('inv_name')}</label><input id="ivnm" autocomplete="off" placeholder="Nama tamu / PIC"></div><div><label>${t('inv_org')}</label><input id="ivog" autocomplete="off" placeholder="Instansi / Gereja"></div><div id="ivag_wrap" style="${needAge?'':'display:none'}"><label>${t('inv_age')}</label><input id="ivag" type="number" min="1" max="120" autocomplete="off"></div><div><label>${t('inv_phone')}</label><input id="ivph" type="tel" placeholder="0812xxxxxxxx (WhatsApp Aktif)" autocomplete="off" required></div><div><label>${t('inv_qty')}</label><input id="ivq" type="number" min="1" max="${maxQty}" value="1"><small class="muted" style="display:block;margin-top:3px">${t('inv_max_hint')} ${maxQty} ${t('tix')}</small></div></div><div class="acts"><button class="btn pri" data-act="invmake" style="flex:none">${t('inv_make')}</button><button class="btn" data-act="invImportModal" data-target="issued" style="display:inline-flex;align-items:center;gap:6px">📊 Impor Massal Excel</button></div></div>
   <h3>${t('inv_list')} ${curEv?`— ${esc(curEv.name)} `:''}(${filteredInv.length})</h3>${filteredInv.length?`<div class="tw"><table class="rt"><tr><th>${t('inv_who')}</th><th>${t('c_event')}</th><th>${t('c_qty')}</th><th>${t('c_status')}</th><th>${t('c_chk')}</th><th></th></tr>${rows}</table></div>`:`<p class="muted" style="padding:20px;text-align:center">Belum ada undangan yang diterbitkan${curEv?` untuk acara ${esc(curEv.name)}`:''}.</p>`}`;
  }
 
@@ -5324,7 +5515,177 @@ const NL=String.fromCharCode(10),find=(a,id)=>a.find(x=>x.id===id),A={
   },
  clearCurEv(){setCurEvId('');renderAdmin();toast('Menampilkan data semua acara',0)},
  focusEv(el){const evId=el.dataset.id;setCurEvId(evId);const ev=S.aev&&S.aev.find(e=>e.id===evId);S.view='orders';renderAdmin();toast('Mengelola acara: '+(ev?ev.name:''),0)},
- invopen(el){const o=S.inv.find(x=>x.id===el.dataset.id);if(o)passModal(o)},
+
+  invImportModal(el){
+   const defaultTarget=(el&&el.dataset&&el.dataset.target)||(S.invSubTab==='waiting'?'waiting':'issued');
+   const curEvId=getCurEvId();
+   const keep=($('#ivev')?$('#ivev').value:($('#wtev')?$('#wtev').value:''));
+   const selEvId=keep||curEvId||(S.aev&&S.aev[0]&&S.aev[0].id)||'';
+   window.S_invImp={target:defaultTarget,eventId:selEvId,rows:[],fileName:'',running:false};
+   const evOpts=(S.aev||[]).map(e=>{
+    const rem=Math.max(0,e.quota-e.sold);
+    return '<option value="'+e.id+'" '+(e.id===selEvId?'selected':'')+'>'+esc(e.name)+' — Sisa Kuota: '+rem+'</option>';
+   }).join('');
+   const html='<button class="btn sm x" data-act="cm">&#10005;</button>'
+    +'<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">'
+     +'<span style="font-size:26px">📊</span>'
+     +'<div><h2 style="margin:0">Impor Undangan & Waiting List</h2><small class="muted">Unggah file Excel (.xlsx, .xls) atau CSV (.csv) untuk impor data massal</small></div>'
+    +'</div>'
+    +'<div class="card" style="padding:14px;background:var(--bg);margin:14px 0 16px;border-left:4px solid var(--ac)">'
+     +'<div style="display:flex;gap:16px;flex-wrap:wrap">'
+      +'<div style="flex:1;min-width:200px">'
+       +'<label style="font-weight:700">Tujuan Impor</label>'
+       +'<div style="display:flex;gap:14px;margin-top:6px">'
+        +'<label style="display:inline-flex;align-items:center;gap:6px;cursor:pointer;font-weight:normal">'
+         +'<input type="radio" name="imp_target" value="issued" '+(defaultTarget==='issued'?'checked':'')+' onchange="S_invImp.target=this.value;renderImportPreview()">'
+         +'<b>📋 Undangan Terbit (Tiket/QR)</b>'
+        +'</label>'
+        +'<label style="display:inline-flex;align-items:center;gap:6px;cursor:pointer;font-weight:normal">'
+         +'<input type="radio" name="imp_target" value="waiting" '+(defaultTarget==='waiting'?'checked':'')+' onchange="S_invImp.target=this.value;renderImportPreview()">'
+         +'<b>⏳ Waiting List (Daftar Tunggu)</b>'
+        +'</label>'
+       +'</div>'
+      +'</div>'
+      +'<div style="flex:1;min-width:240px">'
+       +'<label style="font-weight:700">Pilih Acara</label>'
+       +'<select id="imp_ev" style="margin-top:4px" onchange="S_invImp.eventId=this.value;renderImportPreview()">'+evOpts+'</select>'
+      +'</div>'
+     +'</div>'
+    +'</div>'
+    +'<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:12px;padding:8px 12px;background:rgba(255,255,255,.02);border:1px dashed var(--bd);border-radius:8px">'
+     +'<div style="font-size:13px;color:var(--mu)">💡 <b>Format File:</b> Gunakan template agar nama kolom otomatis terdeteksi.</div>'
+     +'<div style="display:flex;gap:6px">'
+      +'<button class="btn sm" data-act="dlInvTemplate" data-type="xlsx" style="font-weight:700;display:inline-flex;align-items:center;gap:4px">📥 Format Excel (.xlsx)</button>'
+      +'<button class="btn sm" data-act="dlInvTemplate" data-type="csv" style="display:inline-flex;align-items:center;gap:4px">📄 Format CSV</button>'
+     +'</div>'
+    +'</div>'
+    +'<input type="file" id="imp_file_input" accept=".xlsx,.xls,.csv" style="display:none" onchange="handleImportFileSelect(event)">'
+    +'<div id="imp_dropzone" style="border:2px dashed var(--bd);border-radius:10px;padding:26px 16px;text-align:center;cursor:pointer;background:var(--card);transition:all .2s" onclick="$(\'#imp_file_input\').click()">'
+     +'<div style="font-size:36px;margin-bottom:6px">📂</div>'
+     +'<div style="font-weight:700;font-size:15px">Klik untuk memilih file Excel / CSV</div>'
+     +'<div style="font-size:12px;color:var(--mu);margin-top:4px">atau seret (drag & drop) file .xlsx, .xls, .csv ke area ini</div>'
+    +'</div>'
+    +'<div id="imp_preview_box" style="margin-top:16px;display:none"></div>'
+    +'<div id="imp_progress_box" style="margin-top:14px;display:none">'
+     +'<div style="height:10px;background:var(--bd);border-radius:5px;overflow:hidden">'
+      +'<div id="imp_progress_bar" style="height:100%;width:0%;background:var(--ac);transition:width .2s"></div>'
+     +'</div>'
+     +'<div id="imp_progress_text" style="font-size:12px;color:var(--mu);text-align:center;margin-top:6px">Mengimpor data...</div>'
+    +'</div>'
+    +'<div class="acts" style="margin-top:20px">'
+     +'<button class="btn pri" id="imp_submit_btn" data-act="execInvImport" disabled>🚀 Mulai Impor Data</button>'
+     +'<button class="btn" data-act="cm">Batal</button>'
+    +'</div>';
+   modal(html);
+   setTimeout(()=>{
+    const dz=$('#imp_dropzone');
+    if(!dz)return;
+    ['dragenter','dragover'].forEach(n=>dz.addEventListener(n,e=>{e.preventDefault();dz.style.borderColor='var(--ac)';dz.style.background='rgba(255,255,255,0.06)'}));
+    ['dragleave','drop'].forEach(n=>dz.addEventListener(n,e=>{e.preventDefault();dz.style.borderColor='var(--bd)';dz.style.background='var(--card)'}));
+    dz.addEventListener('drop',e=>{
+     e.preventDefault();
+     if(e.dataTransfer&&e.dataTransfer.files&&e.dataTransfer.files.length){
+      handleImportFile(e.dataTransfer.files[0]);
+     }
+    });
+   },50);
+  },
+  async dlInvTemplate(el){
+   const type=(el&&el.dataset&&el.dataset.type)||'xlsx';
+   const sampleData=[
+    ['Nama Lengkap','Instansi / Gereja','Nomor WhatsApp','Jumlah Tiket','Usia'],
+    ['Bpk. Yohanes Siregar','GKI Diponegoro','081234567890',2,45],
+    ['Ibu Maria Theresia','HKBP Sudirman','081987654321',1,38],
+    ['Sdr. David Santoso','Gereja Bethel Indonesia','085612345678',3,25]
+   ];
+   if(type==='xlsx'){
+    try{
+     await ensureXLSX();
+     const ws=window.XLSX.utils.aoa_to_sheet(sampleData);
+     ws['!cols']=[{wch:26},{wch:28},{wch:18},{wch:14},{wch:10}];
+     const wb=window.XLSX.utils.book_new();
+     window.XLSX.utils.book_append_sheet(wb,ws,'Format Undangan');
+     window.XLSX.writeFile(wb,'Format_Impor_Undangan.xlsx');
+     toast('Format Excel (.xlsx) berhasil diunduh',0);
+    }catch(err){
+     console.error('Download XLSX error, fallback to CSV:',err);
+     A.dlInvTemplate({dataset:{type:'csv'}});
+    }
+   }else{
+    const csv='\uFEFF'+sampleData.map(r=>r.map(c=>'"'+String(c).replace(/"/g,'""')+'"').join(',')).join('\r\n');
+    const blob=new Blob([csv],{type:'text/csv;charset=utf-8;'});
+    const a=document.createElement('a');
+    a.href=URL.createObjectURL(blob);
+    a.download='Format_Impor_Undangan.csv';
+    document.body.appendChild(a);a.click();a.remove();
+    toast('Format CSV berhasil diunduh',0);
+   }
+  },
+  async execInvImport(){
+   const imp=window.S_invImp;
+   if(!imp||!imp.rows||!imp.rows.length)return toast('Pilih file terlebih dahulu',1);
+   const validRows=imp.rows.filter(r=>r.valid);
+   if(!validRows.length)return toast('Tidak ada data valid untuk diimpor',1);
+   const evId=imp.eventId||($('#imp_ev')?$('#imp_ev').value:'');
+   if(!evId)return toast('Pilih acara terlebih dahulu',1);
+   const target=imp.target||'issued';
+   const targetLabel=target==='issued'?'Undangan Terbit':'Waiting List';
+   if(!await ask('Mulai impor '+validRows.length+' data ke '+targetLabel+'?'))return;
+   imp.running=true;
+   const btn=$('#imp_submit_btn');
+   if(btn){btn.disabled=true;btn.textContent='⏳ Mengimpor...'}
+   const pBox=$('#imp_progress_box'),pBar=$('#imp_progress_bar'),pTxt=$('#imp_progress_text');
+   if(pBox)pBox.style.display='block';
+   try{
+    if(pBar)pBar.style.width='30%';
+    if(pTxt)pTxt.textContent='Mengirim '+validRows.length+' data ke server...';
+    const res=await api('invitationBatchImport',{
+     target:target,
+     eventId:evId,
+     rows:validRows.map(r=>({name:r.name,org:r.org,phone:r.phoneClean,qty:r.qty,age:r.age}))
+    });
+    if(pBar)pBar.style.width='100%';
+    if(pTxt)pTxt.textContent='Selesai!';
+    toast('✅ Berhasil mengimpor '+res.success+' data ke '+targetLabel+'!'+(res.failed?' ('+res.failed+' gagal / kuota habis)':''),0);
+    const r=await Promise.all([
+     api('adminEvents'),
+     api('invitations'),
+     api('waitingList').catch(()=>[]),
+     api('getInvConfig').catch(()=>({maxQty:50}))
+    ]);
+    S.aev=r[0];S.inv=r[1];S.waitList=r[2]||[];S.invCfg=r[3]||{maxQty:50};
+    mergeInvTix();
+    paintInv();
+    cm();
+   }catch(err){
+    console.warn('Batch import error, fallback to sequential loop:',err);
+    let success=0,failed=0;
+    for(let i=0;i<validRows.length;i++){
+     const item=validRows[i];
+     const pct=Math.round(((i+1)/validRows.length)*100);
+     if(pBar)pBar.style.width=pct+'%';
+     if(pTxt)pTxt.textContent='Memproses '+(i+1)+' dari '+validRows.length+' ('+item.name+')...';
+     try{
+      if(target==='waiting'){
+       await api('waitingCreate',{eventId:evId,name:item.name,org:item.org,qty:item.qty,phone:item.phoneClean,age:item.age});
+      }else{
+       await api('invitationCreate',{eventId:evId,name:item.name,org:item.org,qty:item.qty,phone:item.phoneClean,age:item.age});
+      }
+      success++;
+     }catch(e){failed++}
+    }
+    toast('✅ Selesai: '+success+' data berhasil diimpor ('+failed+' gagal).',0);
+    const r=await Promise.all([api('adminEvents'),api('invitations'),api('waitingList').catch(()=>[])]);
+    S.aev=r[0];S.inv=r[1];S.waitList=r[2]||[];
+    mergeInvTix();
+    paintInv();
+    cm();
+   }finally{
+    imp.running=false;
+   }
+  },
+
+  invopen(el){const o=S.inv.find(x=>x.id===el.dataset.id);if(o)passModal(o)},
  invLink(el){
   const o=S.inv.find(x=>x.id===el.dataset.id)||(S.ord&&S.ord.find(x=>x.id===el.dataset.id));
   if(!o)return;
