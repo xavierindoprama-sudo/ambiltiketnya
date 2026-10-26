@@ -570,7 +570,7 @@ function renderAdmin(){
 
  $('#app').innerHTML='<div class="app'+(col?' col':'')+'" id="shell"><aside class="sb"><div class="sb-top"><div class="logo"><i>'+ico(ICN.ticket)+'</i><span class="sb-txt">ambiltiketnya<b>.online</b></span></div><button class="ib sb-tg" data-act="sbtoggle" title="Menu">'+ico(ICN.left)+'</button><button class="ib sb-x" data-act="sbclose">'+ico(ICN.close)+'</button></div>'
  +'<nav class="sb-nav">'+nav.map(n=>it(S.view===n[0],ICN[n[0]],n[0]==='orders'?ordersNavLabel:t('n_'+n[0]),'view',n[0])).join('')+'<div class="sb-sep"></div>'+it(0,ICN.user,t('asuser'),'mode','user')+'</nav>'
- +'<div class="sb-bot"><div class="uc">'+avt(S.user)+'<div class="sb-txt"><b>'+esc(S.user.name)+'</b><small>'+t('r_'+S.user.role)+'</small></div></div><div class="sb-full">'+ctl()+'</div><div class="sb-mini"><button class="ib" data-act="themecycle" title="'+t('theme')+'">'+IC[TH]+'</button><button class="ib" data-act="langtoggle">'+L.toUpperCase()+'</button></div>'+it(0,ICN.out,t('logout'),'logout','','dg')+'</div></aside><div class="sb-bg" data-act="sbclose"></div>'
+ +'<div class="sb-bot"><div class="uc">'+avt(S.user)+'<div class="sb-txt"><b>'+esc(S.user.name)+'</b><small>'+t('r_'+S.user.role)+'</small></div></div><div class="sb-full">'+ctl()+'<button class="btn sm" data-act="aiSettingsModal" style="width:100%;margin-top:8px;display:flex;align-items:center;justify-content:center;gap:6px;font-size:12px;font-weight:700;background:rgba(139,92,246,.12);border:1px solid rgba(139,92,246,.35);color:#c7d2fe"><span>✨</span> <span>Pengaturan AI Key</span></button></div><div class="sb-mini"><button class="ib" data-act="themecycle" title="'+t('theme')+'">'+IC[TH]+'</button><button class="ib" data-act="langtoggle">'+L.toUpperCase()+'</button></div>'+it(0,ICN.out,t('logout'),'logout','','dg')+'</div></aside><div class="sb-bg" data-act="sbclose"></div>'
  +'<div class="mw"><header class="mbar"><button class="ib" data-act="sbopen">'+ico(ICN.menu)+'</button><b>'+pageTitle+'</b><span class="sp"></span>'+avt(S.user)+'</header><section class="card main"><h2 class="ptitle">'+pageTitle+'</h2>'+evContextBar+'<div id="ac">'+skel(1)+'</div></section></div></div>';adminView()}
 async function adminView(){
   const c=$('#ac');
@@ -1239,6 +1239,22 @@ const FB_ASPECTS = [
   { key: 'sound',   label: '🎵 Sound, Musik & Multimedia', desc: 'Kualitas audio sound system, musik, lighting & visual screen' }
 ];
 
+function md2html(md) {
+  if (!md) return '';
+  let h = esc(md);
+  h = h.replace(/^### (.*$)/gim, '<h4 style="margin:16px 0 6px;color:#818cf8;font-size:15px">$1</h4>');
+  h = h.replace(/^## (.*$)/gim, '<h3 style="margin:20px 0 8px;color:#a5b4fc;font-size:17px;border-bottom:1px solid rgba(255,255,255,.08);padding-bottom:6px">$1</h3>');
+  h = h.replace(/^# (.*$)/gim, '<h2 style="margin:22px 0 10px;font-size:19px">$1</h2>');
+  h = h.replace(/\*\*(.*?)\*\*/g, '<b>$1</b>');
+  h = h.replace(/\*(.*?)\*/g, '<i>$1</i>');
+  h = h.replace(/^> (.*$)/gim, '<blockquote style="border-left:3px solid #8b5cf6;margin:10px 0;padding:6px 12px;background:rgba(139,92,246,.08);border-radius:0 8px 8px 0">$1</blockquote>');
+  h = h.replace(/^\s*[-*]\s+(.*$)/gim, '<div style="margin:4px 0 4px 12px;display:flex;align-items:flex-start;gap:6px"><span>•</span><div>$1</div></div>');
+  h = h.replace(/^\s*(\d+)\.\s+(.*$)/gim, '<div style="margin:4px 0 4px 12px;display:flex;align-items:flex-start;gap:6px"><b>$1.</b><div>$2</div></div>');
+  h = h.replace(/\n\n+/g, '<br><br>');
+  h = h.replace(/\n/g, '<br>');
+  return h;
+}
+
 function paintFeedback(c) {
   if (!c) c = $('#ac');
   if (!c) return;
@@ -1272,6 +1288,8 @@ function paintFeedback(c) {
         </button>
       </div>
       <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+        <button class="btn pri" data-act="fbAiAnalyze" style="background:linear-gradient(135deg,#8b5cf6,#6366f1);color:#fff;font-weight:700;display:inline-flex;align-items:center;gap:6px;box-shadow:0 4px 14px rgba(139,92,246,.25);padding:8px 14px"><span>✨</span> <b>Ulasan AI Komprehensif</b></button>
+        <button class="btn sm" data-act="aiSettingsModal" title="Pengaturan Google Gemini API Key" style="display:inline-flex;align-items:center;gap:4px;font-weight:600"><span>⚙️</span> <span>AI Key</span></button>
         ${S_fb.evId ? `<button class="btn sm" data-act="fbOpenStage" style="display:inline-flex;align-items:center;gap:6px;background:linear-gradient(135deg,#6366f1,#4f46e5);color:#fff;font-weight:700">📽️ Layar Videotron QR</button>` : ''}
         ${d.total ? `<button class="btn pri" data-act="fbExportCsv" style="padding:10px 18px;display:inline-flex;align-items:center;gap:8px"><span>📥</span> <b>Ekspor CSV</b></button>` : ''}
       </div>
@@ -5592,6 +5610,178 @@ const NL=String.fromCharCode(10),find=(a,id)=>a.find(x=>x.id===id),A={
   a.download = 'Survey_MultiAspek_' + (S_fb.evId || 'Semua') + '_' + new Date().toISOString().slice(0,10) + '.csv';
   document.body.appendChild(a); a.click(); a.remove();
  },
+  async aiSettingsModal() {
+    let maskedKey = '', hasKey = false, src = 'none';
+    try {
+      const res = await api('getAiSettings');
+      hasKey = res.hasKey;
+      maskedKey = res.maskedKey || '';
+      src = res.source;
+    } catch(e) {}
+    const localKey = ls.g('atk_gemini_key') || '';
+    if (!hasKey && localKey) {
+      hasKey = true;
+      maskedKey = localKey.slice(0, 7) + '...' + localKey.slice(-4);
+    }
+    const statusPill = hasKey 
+      ? `<span class="pill ok" style="font-weight:700">✓ Terhubung (${esc(maskedKey)})</span>` 
+      : `<span class="pill wn" style="font-weight:700">⚠️ Belum Dikonfigurasi</span>`;
+
+    modal(`
+      <button class="btn sm x" data-act="cm">&#10005;</button>
+      <h2>⚙️ Pengaturan Google Gemini AI</h2>
+      <p class="muted" style="margin:4px 0 12px;font-size:13px">
+        Integrasikan Google Gemini AI untuk mengaktifkan analisis otomatis data survey kepuasan, deteksi keluhan kritis, dan perumusan rekomendasi evaluasi acara.
+      </p>
+
+      <div style="background:var(--in);border:1px solid var(--bd);border-radius:12px;padding:12px 14px;margin-bottom:14px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+        <span style="font-size:13px;font-weight:600">Status Integrasi:</span>
+        <div>${statusPill}</div>
+      </div>
+
+      <!-- Tombol Link Google AI Studio Langsung -->
+      <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer" style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 16px;background:linear-gradient(135deg,#1e1b4b,#312e81);border:1.5px solid #6366f1;color:#fff;border-radius:12px;text-decoration:none;margin-bottom:14px;box-shadow:0 4px 14px rgba(99,102,241,.25);transition:transform .12s">
+        <div style="display:flex;align-items:center;gap:10px">
+          <span style="font-size:24px">✨</span>
+          <div style="text-align:left">
+            <div style="font-size:14px;font-weight:800;color:#c7d2fe">Dapatkan Gemini API Key Gratis ↗</div>
+            <div style="font-size:11px;color:#a5b4fc;margin-top:2px">Buka Google AI Studio (Gratis menggunakan akun Google)</div>
+          </div>
+        </div>
+        <span style="font-size:18px">🚀</span>
+      </a>
+
+      <div style="background:rgba(255,255,255,.03);border:1px solid var(--bd);border-radius:10px;padding:10px 12px;font-size:12px;line-height:1.5;margin-bottom:14px;color:var(--mu)">
+        <b>Cara Mendapatkan API Key:</b><br>
+        1. Klik tombol ungu di atas untuk menuju situs resmi <b>Google AI Studio</b>.<br>
+        2. Masuk dengan akun Google Anda, lalu klik tombol <b>"+ Create API Key"</b>.<br>
+        3. Salin (*copy*) kunci yang muncul (awalan <code>AIzaSy...</code>), lalu tempelkan pada kolom di bawah ini.
+      </div>
+
+      <label style="font-weight:700;font-size:13px;display:block;margin-bottom:4px">Google Gemini API Key:</label>
+      <div style="display:flex;gap:6px;margin-bottom:8px">
+        <input id="gemini_key_inp" type="password" placeholder="Tempel API Key di sini (AIzaSy...)" value="${esc(localKey)}" autocomplete="off" style="font-family:monospace;letter-spacing:1px;flex:1">
+        <button class="btn sm" data-act="toggleAiKeyVis" title="Lihat / Sembunyikan API Key" style="flex:none;padding:0 12px">👁️</button>
+      </div>
+      <p id="ai_test_status" style="font-size:12px;margin:4px 0 12px;min-height:18px"></p>
+
+      <div class="acts" style="margin-top:14px;justify-content:space-between">
+        <button class="btn sm" data-act="testAiKey" style="display:inline-flex;align-items:center;gap:5px">⚡ Uji Koneksi AI</button>
+        <div style="display:flex;gap:6px">
+          <button class="btn" data-act="cm">${t('close')}</button>
+          <button class="btn pri" data-act="saveAiKey">💾 Simpan API Key</button>
+        </div>
+      </div>
+    `);
+  },
+
+  toggleAiKeyVis() {
+    const inp = $('#gemini_key_inp');
+    if (!inp) return;
+    inp.type = inp.type === 'password' ? 'text' : 'password';
+  },
+
+  async saveAiKey() {
+    const inp = $('#gemini_key_inp');
+    const val = inp ? inp.value.trim() : '';
+    try {
+      await api('saveAiSettings', { geminiApiKey: val }, t('loading'));
+      if (val) ls.s('atk_gemini_key', val);
+      else ls.r('atk_gemini_key');
+      toast('API Key Google Gemini berhasil disimpan! ✨', 0);
+      cm();
+    } catch(e) { fail(e); }
+  },
+
+  async testAiKey() {
+    const inp = $('#gemini_key_inp');
+    const key = inp ? inp.value.trim() : (ls.g('atk_gemini_key') || '');
+    const st = $('#ai_test_status');
+    if (!key) {
+      if (st) st.innerHTML = '<span style="color:var(--er)">Masukkan API Key terlebih dahulu.</span>';
+      return;
+    }
+    if (st) st.innerHTML = '<span style="color:var(--wn)">⏳ Menguji koneksi ke Google Gemini AI...</span>';
+    try {
+      const res = await api('testAiKey', { geminiApiKey: key }, t('loading'));
+      if (st) st.innerHTML = `<span style="color:var(--ok);font-weight:700">✓ Terhubung Berhasil! (Model: ${esc(res.model)})</span><br><small class="muted">Balasan AI: "${esc(res.reply)}"</small>`;
+      toast('Uji koneksi AI sukses! 🚀', 0);
+    } catch(e) {
+      if (st) st.innerHTML = `<span style="color:var(--er);font-weight:700">✗ Gagal: ${esc(errMsg(e))}</span>`;
+    }
+  },
+
+  async fbAiAnalyze() {
+    const d = S_fb.data;
+    if (!d || !d.total) {
+      return toast('Belum ada data ulasan peserta untuk dianalisis.', 1);
+    }
+
+    modal(`
+      <div style="text-align:center;padding:36px 20px">
+        <div style="font-size:42px;margin-bottom:12px;animation:spin 2s linear infinite">✨</div>
+        <h3 style="margin:0 0 8px">Menghubungi Google Gemini AI...</h3>
+        <p class="muted" style="margin:0 auto 16px;max-width:380px;font-size:13px;line-height:1.5">
+          Sedang menganalisis <b>${d.total} ulasan</b> peserta, mengkalkulasi kepuasan multi-aspek, dan menyusun laporan evaluasi resmi...
+        </p>
+        <div style="height:6px;width:240px;background:rgba(255,255,255,.1);border-radius:99px;margin:0 auto;overflow:hidden">
+          <div style="height:100%;width:70%;background:linear-gradient(90deg,#8b5cf6,#6366f1);border-radius:99px;animation:pulse 1s infinite alternate"></div>
+        </div>
+      </div>
+    `);
+
+    try {
+      const localKey = ls.g('atk_gemini_key') || '';
+      const res = await api('feedbackAiAnalyze', { eventId: S_fb.evId, geminiApiKey: localKey });
+      const evName = res.eventName || (S_fb.evId ? 'Acara Terpilih' : 'Semua Acara');
+      window._lastAiAnalysis = res.analysis;
+
+      modal(`
+        <button class="btn sm x" data-act="cm">&#10005;</button>
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px">
+          <span style="font-size:24px">✨</span>
+          <div>
+            <h2 style="margin:0;font-size:18px">Ulasan AI Komprehensif</h2>
+            <small class="muted">${esc(evName)} · ${res.totalFeedback} Responden · Model: ${esc(res.model || 'Gemini Flash')}</small>
+          </div>
+        </div>
+
+        <div style="max-height:65vh;overflow-y:auto;padding:14px;background:var(--in);border:1px solid var(--bd);border-radius:12px;margin:14px 0;line-height:1.6;font-size:14px" id="ai_report_body">
+          ${md2html(res.analysis)}
+        </div>
+
+        <div class="acts" style="justify-content:space-between;flex-wrap:wrap;gap:8px">
+          <div style="display:flex;gap:6px">
+            <button class="btn ok" data-act="copyAiReport" style="font-weight:700">📋 Salin Laporan AI</button>
+            <button class="btn" data-act="fbAiAnalyze">🔄 Analisis Ulang</button>
+          </div>
+          <div style="display:flex;gap:6px">
+            <button class="btn sm" data-act="aiSettingsModal">⚙️ AI Key</button>
+            <button class="btn" data-act="cm">${t('close')}</button>
+          </div>
+        </div>
+      `);
+    } catch(e) {
+      if (String(e.message || '').includes('API_KEY_REQUIRED')) {
+        toast('Google Gemini API Key belum disetel. Silakan masukkan API Key Anda.', 1);
+        A.aiSettingsModal();
+      } else {
+        fail(e);
+      }
+    }
+  },
+
+  async copyAiReport() {
+    const text = window._lastAiAnalysis || '';
+    if (!text) return toast('Tidak ada teks laporan untuk disalin.', 1);
+    try {
+      await navigator.clipboard.writeText(text);
+      toast('Laporan evaluasi AI berhasil disalin ke clipboard! 📋', 0);
+    } catch(e) {
+      toast('Gagal menyalin secara otomatis.', 1);
+    }
+  },
+
  dpToggleFs(){
   const box = $('#dp_stage_box') || document.documentElement;
   if (!document.fullscreenElement) {

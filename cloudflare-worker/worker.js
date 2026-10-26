@@ -421,7 +421,12 @@ async function ensureFeatureTables(env, force = false) {
     `ALTER TABLE orders ADD COLUMN IF NOT EXISTS plus_one_count int NOT NULL DEFAULT 0`,
     `ALTER TABLE orders ADD COLUMN IF NOT EXISTS guestbook_message text NOT NULL DEFAULT ''`,
     `ALTER TABLE orders ADD COLUMN IF NOT EXISTS table_assignment text NOT NULL DEFAULT ''`,
-    `CREATE INDEX IF NOT EXISTS orders_guestbook_idx ON orders(event_id, created_at DESC) WHERE guestbook_message <> ''`
+    `CREATE INDEX IF NOT EXISTS orders_guestbook_idx ON orders(event_id, created_at DESC) WHERE guestbook_message <> ''`,
+    `CREATE TABLE IF NOT EXISTS system_settings (
+      key text PRIMARY KEY,
+      value text NOT NULL DEFAULT '',
+      updated_at timestamptz NOT NULL DEFAULT now()
+    )`
   ];
   for (const sql of ddlStatements) {
     try {
@@ -431,6 +436,52 @@ async function ensureFeatureTables(env, force = false) {
     }
   }
   _tablesEnsured = true;
+}
+
+async function getSystemSetting(env, key) {
+  try {
+    const rows = await neonQuery(env, `SELECT value FROM system_settings WHERE key = $1`, [key]);
+    return rows.length ? rows[0].value : null;
+  } catch (e) {
+    return null;
+  }
+}
+
+async function setSystemSetting(env, key, value) {
+  await neonQuery(env, `INSERT INTO system_settings(key, value, updated_at) VALUES($1, $2, now())
+    ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()`, [key, String(value || '')]);
+}
+
+async function callGemini(apiKey, prompt) {
+  const models = ['gemini-2.5-flash', 'gemini-1.5-flash', 'gemini-2.0-flash'];
+  let lastErr = null;
+  for (const model of models) {
+    try {
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }],
+          generationConfig: {
+            temperature: 0.4,
+            maxOutputTokens: 3500
+          }
+        })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+        if (text) return { text, model };
+      } else {
+        const errJson = await res.json().catch(() => ({}));
+        lastErr = errJson?.error?.message || `HTTP ${res.status}: ${res.statusText}`;
+      }
+    } catch (e) {
+      lastErr = e.message;
+    }
+  }
+  throw new Error(lastErr || 'Gagal menghubungi Google Gemini API');
 }
 
 const DEFAULT_CHECKPOINTS = [
@@ -2183,6 +2234,183 @@ export default {
           await ensureFeatureTables(env);
           await neonQuery(env, `DELETE FROM event_feedbacks WHERE id=$1::uuid`, [id]);
           return json({ ok: true, data: true });
+        }
+
+        if (action === 'getAiSettings') {
+          needRole(2);
+          await ensureFeatureTables(env);
+          const dbKey = await getSystemSetting(env, 'gemini_api_key');
+          const finalKey = (dbKey || env.GEMINI_API_KEY || '').trim();
+          const masked = finalKey ? (finalKey.slice(0, 7) + '...' + finalKey.slice(-4)) : '';
+          return json({
+            ok: true,
+            data: {
+              hasKey: !!finalKey,
+              maskedKey: masked,
+              source: dbKey ? 'database' : (env.GEMINI_API_KEY ? 'env' : 'none')
+            }
+          });
+        }
+
+        if (action === 'saveAiSettings') {
+          needRole(2);
+          await ensureFeatureTables(env);
+          const key = String(params.geminiApiKey || '').trim();
+          if (key) {
+            await setSystemSetting(env, 'gemini_api_key', key);
+          } else {
+            await neonQuery(env, `DELETE FROM system_settings WHERE key = 'gemini_api_key'`);
+          }
+          return json({ ok: true, data: { saved: true, hasKey: !!key } });
+        }
+
+        if (action === 'testAiKey') {
+          needRole(2);
+          await ensureFeatureTables(env);
+          let key = String(params.geminiApiKey || '').trim();
+          if (!key) {
+            key = (await getSystemSetting(env, 'gemini_api_key')) || (env.GEMINI_API_KEY || '').trim();
+          }
+          if (!key) throw new Error('API_KEY_REQUIRED');
+          const testRes = await callGemini(key, 'Halo! Konfirmasi koneksi dengan membalas: "Koneksi Google Gemini AI Berhasil Aktif!" dalam 1 kalimat pendek.');
+          return json({ ok: true, data: { success: true, model: testRes.model, reply: testRes.text } });
+        }
+
+        if (action === 'getFeedbackAiAnalysis') {
+          needRole(2);
+          await ensureFeatureTables(env);
+          const evId = String(params.eventId || '').trim();
+          const cacheKey = 'ai_feedback_analysis_' + (evId || 'global');
+          const raw = await getSystemSetting(env, cacheKey);
+          let cached = null;
+          if (raw) {
+            try { cached = JSON.parse(raw); } catch (e) {}
+          }
+          return json({ ok: true, data: cached });
+        }
+
+        if (action === 'feedbackAiAnalyze') {
+          needRole(2);
+          await ensureFeatureTables(env);
+          let key = String(params.geminiApiKey || '').trim();
+          if (!key) {
+            key = (await getSystemSetting(env, 'gemini_api_key')) || (env.GEMINI_API_KEY || '').trim();
+          }
+          if (!key) throw new Error('API_KEY_REQUIRED');
+
+          const evId = String(params.eventId || '').trim();
+          let evName = 'Semua Acara (Global)';
+          if (evId) {
+            const evRow = (await neonQuery(env, `SELECT name FROM events WHERE id=$1::uuid`, [evId]))[0];
+            if (evRow) evName = evRow.name;
+          }
+
+          let sql = `SELECT f.rating AS rating_overall,
+            coalesce(f.rating_content, 5) AS rating_content,
+            coalesce(f.rating_service, 5) AS rating_service,
+            coalesce(f.rating_venue, 5) AS rating_venue,
+            coalesce(f.rating_sound, 5) AS rating_sound,
+            f.comment, f.is_anonymous, e.name AS event_name
+            FROM event_feedbacks f JOIN events e ON e.id=f.event_id`;
+          const qArgs = [];
+          if (evId) {
+            sql += ` WHERE f.event_id=$1::uuid`;
+            qArgs.push(evId);
+          }
+          sql += ` ORDER BY f.created_at DESC LIMIT 200`;
+          const rows = await neonQuery(env, sql, qArgs);
+
+          if (!rows.length) {
+            throw new Error('NO_FEEDBACK_DATA');
+          }
+
+          const total = rows.length;
+          const sumOverall = rows.reduce((acc, r) => acc + (r.rating_overall || 5), 0);
+          const sumContent = rows.reduce((acc, r) => acc + (r.rating_content || 5), 0);
+          const sumService = rows.reduce((acc, r) => acc + (r.rating_service || 5), 0);
+          const sumVenue   = rows.reduce((acc, r) => acc + (r.rating_venue || 5), 0);
+          const sumSound   = rows.reduce((acc, r) => acc + (r.rating_sound || 5), 0);
+
+          const avgOverall = Math.round((sumOverall / total) * 10) / 10;
+          const avgContent = Math.round((sumContent / total) * 10) / 10;
+          const avgService = Math.round((sumService / total) * 10) / 10;
+          const avgVenue   = Math.round((sumVenue / total) * 10) / 10;
+          const avgSound   = Math.round((sumSound / total) * 10) / 10;
+
+          const dist = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
+          let anonCount = 0;
+          rows.forEach(r => {
+            const rt = r.rating_overall || 5;
+            if (dist[rt] !== undefined) dist[rt]++;
+            if (r.is_anonymous) anonCount++;
+          });
+
+          const textComments = rows
+            .filter(r => r.comment && r.comment.trim() && r.comment.trim() !== 'Tanpa catatan tambahan.')
+            .slice(0, 70)
+            .map((r, i) => `${i + 1}. [Skor ${r.rating_overall}★ | Konten ${r.rating_content}★ | Panitia ${r.rating_service}★ | Venue ${r.rating_venue}★ | Sound ${r.rating_sound}★]: "${r.comment.trim()}"`)
+            .join('\n');
+
+          const prompt = `Anda adalah seorang Konsultan Evaluasi & Spesialis Mutu Acara (Event Quality & Experience Specialist) berpengalaman tinggi.
+Tugas Anda adalah melakukan analisis mendalam, objektif, tajam, dan menyusun laporan evaluasi resmi yang bernas berdasarkan data survey kepuasan peserta berikut:
+
+### DATA SURVEI ACARA:
+- Nama Acara: ${evName}
+- Total Responden: ${total} peserta (${anonCount} anonim, ${total - anonCount} terbuka)
+- Rata-Rata Penilaian (Skala 1.0 - 5.0):
+  * Kepuasan Keseluruhan: ${avgOverall} / 5.0
+  * Konten & Pengisi Acara / Pembicara: ${avgContent} / 5.0
+  * Pelayanan Panitia & Usher: ${avgService} / 5.0
+  * Fasilitas & Kenyamanan Venue: ${avgVenue} / 5.0
+  * Sound System, Musik & Multimedia: ${avgSound} / 5.0
+- Distribusi Rating Keseluruhan:
+  * 5 Bintang: ${dist[5]} (${Math.round((dist[5]/total)*100)}%)
+  * 4 Bintang: ${dist[4]} (${Math.round((dist[4]/total)*100)}%)
+  * 3 Bintang: ${dist[3]} (${Math.round((dist[3]/total)*100)}%)
+  * 2 Bintang: ${dist[2]} (${Math.round((dist[2]/total)*100)}%)
+  * 1 Bintang: ${dist[1]} (${Math.round((dist[1]/total)*100)}%)
+
+### DAFTAR KOMENTAR & MASUKAN ASLI DARI PESERTA:
+${textComments || '(Tidak ada komentar teks tertulis, analisis didasarkan pada distribusi kuantitatif skor)'}
+
+---
+### FORMAT LAPORAN YANG HARUS ANDA SUSUN:
+Susun laporan dalam Bahasa Indonesia profesional, terstruktur rapi, menggunakan format Markdown standar:
+
+## 📋 1. Ringkasan Eksekutif (Executive Summary)
+- Berikan sintesis singkat (2-3 paragraf) mengenai gambaran umum sentimen audiens dan kesuksesan acara.
+- Cantumkan label Indeks Kepuasan: (misal: **"Sangat Memuaskan (Outstanding)"**, **"Baik & Positif"**, atau **"Butuh Perhatian Khusus"**).
+
+## 🌟 2. Kekuatan Utama Acara (Top Highlights)
+- Sebutkan 3-5 poin keunggulan yang paling diapresiasi dan berkesan bagi audiens berdasarkan data dan komentar.
+
+## ⚠️ 3. Keluhan Utama & Titik Kritis (Key Pain Points)
+- Rangkum masalah, kendala, atau hal-hal yang paling banyak disorot/dikeluhkan oleh peserta (jujur dan apa adanya tanpa ditutup-tutupi).
+
+## 🎯 4. Evaluasi Mendalam per Aspek Acara
+Berikan catatan evaluatif kualitatif untuk masing-masing:
+- **Konten & Pembicara / Pengisi Acara** (Skor: ${avgContent}/5.0)
+- **Pelayanan Panitia, Usher & Alur Masuk** (Skor: ${avgService}/5.0)
+- **Fasilitas Venue, Ruangan & Suhu/Kenyamanan** (Skor: ${avgVenue}/5.0)
+- **Sound System, Musik & Multimedia** (Skor: ${avgSound}/5.0)
+
+## 💡 5. Rekomendasi Aksi Konkret (Actionable Next Steps)
+- Berikan 4-6 poin rekomendasi praktis, terukur, dan berurutan prioritas yang harus dilakukan tim panitia untuk penyelenggaraan acara berikutnya.
+
+Tulis dengan gaya bahasa yang profesional, tajam, bernas, dan memotivasi panitia untuk terus berkembang.`;
+
+          const aiRes = await callGemini(key, prompt);
+          const cacheKey = 'ai_feedback_analysis_' + (evId || 'global');
+          const cacheData = {
+            analysis: aiRes.text,
+            model: aiRes.model,
+            eventName: evName,
+            totalFeedback: total,
+            generatedAt: new Date().toISOString()
+          };
+          await setSystemSetting(env, cacheKey, JSON.stringify(cacheData));
+
+          return json({ ok: true, data: cacheData });
         }
 
         if (action === 'assignTable') {
