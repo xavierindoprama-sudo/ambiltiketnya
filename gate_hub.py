@@ -7,6 +7,7 @@ tanpa koneksi internet luar via Wi-Fi Router lokal.
 
 import sys
 import os
+import re
 import json
 import sqlite3
 import socket
@@ -19,6 +20,22 @@ from datetime import datetime
 
 PORT = 8080
 DB_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'gate_hub.db')
+
+def get_api_url():
+    """Membaca APP_API_URL dari config.js jika tersedia."""
+    api_url = "https://ambiltiketnya-api.pram.workers.dev"
+    config_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'config.js')
+    if os.path.exists(config_path):
+        try:
+            with open(config_path, 'r', encoding='utf-8') as f:
+                cf_text = f.read()
+                m = re.search(r'APP_API_URL\s*=\s*[\'\"]([^\'\"]+)[\'\"]', cf_text)
+                if m:
+                    api_url = m.group(1).strip()
+        except Exception:
+            pass
+    return api_url
+
 
 def get_local_ip():
     """Mendeteksi IP LAN lokal laptop (misal 192.168.x.x atau 10.x.x.x)"""
@@ -689,14 +706,7 @@ class GateHubHandler(SimpleHTTPRequestHandler):
 
     def handle_list_events(self, body):
         token = str(body.get('token') or '').strip()
-        api_url = "https://ambiltiketnya-api.pram.workers.dev"
-        config_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'config.js')
-        if os.path.exists(config_path):
-            with open(config_path, 'r', encoding='utf-8') as f:
-                cf_text = f.read()
-                m = re.search(r'APP_API_URL\s*=\s*['"]([^'"]+)['"]', cf_text)
-                if m:
-                    api_url = m.group(1)
+        api_url = get_api_url()
 
         req_data = json.dumps({'action': 'adminEvents', 'token': token}).encode('utf-8')
         req = urllib.request.Request(api_url, data=req_data, headers={'Content-Type': 'text/plain'})
@@ -741,17 +751,7 @@ class GateHubHandler(SimpleHTTPRequestHandler):
     def handle_download_cloud(self, body):
         token = str(body.get('token') or '').strip()
         event_id = str(body.get('eventId') or '').strip()
-
-        # Baca config.js untuk ambil APP_API_URL
-        api_url = "https://ambiltiketnya-api.pram.workers.dev"
-        config_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'config.js')
-        if os.path.exists(config_path):
-            with open(config_path, 'r', encoding='utf-8') as f:
-                cf_text = f.read()
-                import re
-                m = re.search(r'APP_API_URL\s*=\s*[\'"]([^\'"]+)[\'"]', cf_text)
-                if m:
-                    api_url = m.group(1)
+        api_url = get_api_url()
 
         req_data = json.dumps({
             'action': 'offlineManifest',
@@ -792,15 +792,7 @@ class GateHubHandler(SimpleHTTPRequestHandler):
 
     def handle_sync_cloud(self, body):
         token = str(body.get('token') or '').strip()
-        api_url = "https://ambiltiketnya-api.pram.workers.dev"
-        config_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'config.js')
-        if os.path.exists(config_path):
-            with open(config_path, 'r', encoding='utf-8') as f:
-                cf_text = f.read()
-                import re
-                m = re.search(r'APP_API_URL\s*=\s*[\'"]([^\'"]+)[\'"]', cf_text)
-                if m:
-                    api_url = m.group(1)
+        api_url = get_api_url()
 
         conn = sqlite3.connect(DB_FILE)
         c = conn.cursor()
