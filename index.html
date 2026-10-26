@@ -5001,6 +5001,26 @@ async function greetingStageView(evId){
  S_greetingTimer = setInterval(loadGreetings, 8000);
 }
 
+async function getGeminiCandidateModels(apiKey) {
+  const preferred = ['gemini-3.8-flash', 'gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-2.5-flash-lite', 'gemini-2.0-flash-lite'];
+  try {
+    const listRes = await fetch('https://generativelanguage.googleapis.com/v1beta/models?key=' + encodeURIComponent(apiKey));
+    if (listRes.ok) {
+      const data = await listRes.json();
+      if (Array.isArray(data.models)) {
+        const available = data.models
+          .filter(m => Array.isArray(m.supportedGenerationMethods) && m.supportedGenerationMethods.includes('generateContent'))
+          .map(m => m.name.replace(/^models\//, ''));
+        const matched = preferred.filter(p => available.includes(p));
+        const others = available.filter(a => !matched.includes(a) && a.startsWith('gemini') && !a.includes('embedding') && !a.includes('image'));
+        const result = [...matched, ...others];
+        if (result.length > 0) return result;
+      }
+    }
+  } catch (e) {}
+  return preferred;
+}
+
 const NL=String.fromCharCode(10),find=(a,id)=>a.find(x=>x.id===id),A={
  openRsvp(el){
   const ev = (S.ev&&find(S.ev, el.dataset.id)) || (S.aev&&find(S.aev, el.dataset.id));
@@ -5727,12 +5747,12 @@ const NL=String.fromCharCode(10),find=(a,id)=>a.find(x=>x.id===id),A={
       }
     }
 
-    // 2. Fallback: Uji langsung dari browser dengan strict timeout 6 detik
-    const testModels = ['gemini-2.0-flash', 'gemini-1.5-flash'];
+    // 2. Fallback: Uji langsung dari browser
+    const testModels = await getGeminiCandidateModels(key);
     let lastErr = '';
     for (const m of testModels) {
       const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
-      const timeoutId = controller ? setTimeout(() => controller.abort(), 6000) : null;
+      const timeoutId = controller ? setTimeout(() => controller.abort(), 12000) : null;
       try {
         const url = 'https://generativelanguage.googleapis.com/v1beta/models/' + m + ':generateContent?key=' + encodeURIComponent(key);
         const res = await fetch(url, {
@@ -5740,14 +5760,16 @@ const NL=String.fromCharCode(10),find=(a,id)=>a.find(x=>x.id===id),A={
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             contents: [{ parts: [{ text: 'Halo! Konfirmasi koneksi dengan membalas: "Koneksi Google Gemini AI Berhasil Aktif!" dalam 1 kalimat pendek.' }] }],
-            generationConfig: { maxOutputTokens: 50, temperature: 0.2 }
+            generationConfig: { maxOutputTokens: 100, temperature: 0.2 }
           }),
           signal: controller ? controller.signal : undefined
         });
         if (timeoutId) clearTimeout(timeoutId);
         const data = await res.json().catch(() => ({}));
         if (res.ok) {
-          const reply = data?.candidates?.[0]?.content?.parts?.[0]?.text || 'Koneksi Berhasil!';
+          const parts = data?.candidates?.[0]?.content?.parts || [];
+          const nonThought = parts.filter(p => !p.thought && p.text).map(p => p.text);
+          const reply = nonThought.length ? nonThought.join('\n\n') : (parts[0]?.text || 'Koneksi Berhasil!');
           if (st) st.innerHTML = `<span style="color:var(--ok);font-weight:700">✓ Terhubung Berhasil! (Model: ${esc(m)})</span><br><small class="muted">Balasan AI: "${esc(reply.trim())}"</small>`;
           toast('Uji koneksi AI sukses! 🚀', 0);
           ls.s('atk_gemini_key', key);
@@ -5759,7 +5781,7 @@ const NL=String.fromCharCode(10),find=(a,id)=>a.find(x=>x.id===id),A={
         }
       } catch(e) {
         if (timeoutId) clearTimeout(timeoutId);
-        lastErr = e.name === 'AbortError' ? 'Koneksi browser ke Google timeout (diblokir ISP/adblocker)' : e.message;
+        lastErr = e.name === 'AbortError' ? 'Koneksi browser ke Google timeout' : e.message;
       }
     }
 
@@ -5873,11 +5895,11 @@ Berikan catatan evaluatif kualitatif untuk masing-masing:
 
 Tulis dengan gaya bahasa yang profesional, tajam, bernas, dan memotivasi panitia untuk terus berkembang.`;
 
-                const aiModels = ['gemini-2.0-flash', 'gemini-1.5-flash'];
+        const aiModels = await getGeminiCandidateModels(localKey);
         let clientErr = '';
         for (const m of aiModels) {
           const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
-          const timeoutId = controller ? setTimeout(() => controller.abort(), 15000) : null;
+          const timeoutId = controller ? setTimeout(() => controller.abort(), 30000) : null;
           try {
             const url = 'https://generativelanguage.googleapis.com/v1beta/models/' + m + ':generateContent?key=' + encodeURIComponent(localKey);
             const res = await fetch(url, {
@@ -5892,7 +5914,9 @@ Tulis dengan gaya bahasa yang profesional, tajam, bernas, dan memotivasi panitia
             if (timeoutId) clearTimeout(timeoutId);
             const data = await res.json().catch(() => ({}));
             if (res.ok) {
-              analysisText = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+              const parts = data?.candidates?.[0]?.content?.parts || [];
+              const nonThought = parts.filter(p => !p.thought && p.text).map(p => p.text);
+              analysisText = nonThought.length ? nonThought.join('\n\n') : parts.map(p => p.text).filter(Boolean).join('\n\n');
               if (analysisText) {
                 modelName = m;
                 break;
@@ -5903,7 +5927,7 @@ Tulis dengan gaya bahasa yang profesional, tajam, bernas, dan memotivasi panitia
             }
           } catch(e) {
             if (timeoutId) clearTimeout(timeoutId);
-            clientErr = e.name === 'AbortError' ? 'Koneksi ke Google Gemini timeout (15s)' : e.message;
+            clientErr = e.name === 'AbortError' ? 'Koneksi ke Google Gemini timeout (30s)' : e.message;
           }
         }
         if (!analysisText) throw new Error(clientErr || 'Respon AI kosong');

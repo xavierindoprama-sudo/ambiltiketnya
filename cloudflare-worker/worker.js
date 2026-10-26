@@ -466,14 +466,34 @@ async function setSystemSetting(env, key, value) {
     ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()`, [key, String(value || '')]);
 }
 
+async function getGeminiCandidateModels(apiKey) {
+  const preferred = ['gemini-3.8-flash', 'gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-2.5-flash-lite', 'gemini-2.0-flash-lite'];
+  try {
+    const listRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`);
+    if (listRes.ok) {
+      const data = await listRes.json();
+      if (Array.isArray(data.models)) {
+        const available = data.models
+          .filter(m => Array.isArray(m.supportedGenerationMethods) && m.supportedGenerationMethods.includes('generateContent'))
+          .map(m => m.name.replace(/^models\//, ''));
+        const matched = preferred.filter(p => available.includes(p));
+        const others = available.filter(a => !matched.includes(a) && a.startsWith('gemini') && !a.includes('embedding') && !a.includes('image'));
+        const result = [...matched, ...others];
+        if (result.length > 0) return result;
+      }
+    }
+  } catch (e) {}
+  return preferred;
+}
+
 async function callGemini(apiKey, prompt) {
-  const models = ['gemini-2.0-flash', 'gemini-1.5-flash'];
+  const models = await getGeminiCandidateModels(apiKey);
   let lastErr = null;
   for (const model of models) {
     try {
       const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
       const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
-      const timeoutId = controller ? setTimeout(() => controller.abort(), 15000) : null;
+      const timeoutId = controller ? setTimeout(() => controller.abort(), 30000) : null;
       const res = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -489,14 +509,16 @@ async function callGemini(apiKey, prompt) {
       if (timeoutId) clearTimeout(timeoutId);
       if (res.ok) {
         const data = await res.json();
-        const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+        const parts = data?.candidates?.[0]?.content?.parts || [];
+        const nonThought = parts.filter(p => !p.thought && p.text).map(p => p.text);
+        const text = nonThought.length ? nonThought.join('\n\n') : parts.map(p => p.text).filter(Boolean).join('\n\n');
         if (text) return { text, model };
       } else {
         const errJson = await res.json().catch(() => ({}));
         lastErr = errJson?.error?.message || `HTTP ${res.status}: ${res.statusText}`;
       }
     } catch (e) {
-      lastErr = e.name === 'AbortError' ? 'Gemini API timeout (15s)' : e.message;
+      lastErr = e.name === 'AbortError' ? 'Gemini API timeout (30s)' : e.message;
     }
   }
   throw new Error(lastErr || 'Gagal menghubungi Google Gemini API');
