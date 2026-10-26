@@ -31,6 +31,7 @@ from urllib.parse import urlparse, parse_qs
 from datetime import datetime
 
 PORT = 8080
+HTTPS_PORT = 8443
 DB_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'gate_hub.db')
 
 def ensure_ssl_certs():
@@ -550,13 +551,11 @@ class GateHubHandler(SimpleHTTPRequestHandler):
 
         if path == '/api/info':
             ip = get_local_ip()
-            is_ssl = isinstance(self.connection, ssl.SSLSocket) if 'ssl' in sys.modules else False
-            scheme = 'https' if is_ssl else 'http'
             data = {
                 'ip': ip,
                 'port': PORT,
-                'scheme': scheme,
-                'scanUrl': f"{scheme}://{ip}:{PORT}/scan.html"
+                'httpsPort': HTTPS_PORT,
+                'scanUrl': f"https://{ip}:{HTTPS_PORT}/scan.html"
             }
             self.send_json(data)
             return
@@ -910,46 +909,48 @@ class GateHubHandler(SimpleHTTPRequestHandler):
 def run_server():
     init_db()
     ip = get_local_ip()
-    use_ssl = '--no-ssl' not in sys.argv
-    cert_path, key_path = (None, None)
-    if use_ssl:
-        cert_path, key_path = ensure_ssl_certs()
+    cert_path, key_path = ensure_ssl_certs()
 
-    server = ThreadingHTTPServer(('0.0.0.0', PORT), GateHubHandler)
-    protocol = 'http'
+    # 1. Server HTTP (Port 8080 untuk Laptop Dashboard)
+    httpd_http = ThreadingHTTPServer(('0.0.0.0', PORT), GateHubHandler)
+
+    # 2. Server HTTPS (Port 8443 untuk Scanner HP Petugas agar izin kamera terbuka)
+    has_https = False
     if cert_path and key_path:
         try:
+            httpd_https = ThreadingHTTPServer(('0.0.0.0', HTTPS_PORT), GateHubHandler)
             ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
             ctx.load_cert_chain(certfile=cert_path, keyfile=key_path)
-            server.socket = ctx.wrap_socket(server.socket, server_side=True)
-            protocol = 'https'
+            httpd_https.socket = ctx.wrap_socket(httpd_https.socket, server_side=True)
+            has_https = True
         except Exception as e:
-            print(f"SSL Init gagal ({e}), fallback ke HTTP.")
-            protocol = 'http'
+            print(f"Peringatan HTTPS Port 8443: {e}")
 
     print("=" * 65)
     print(">> AMBILTIKETNYA - LOCAL GATE HUB (POSKO GERBANG LOKAL)")
     print("=" * 65)
-    print(f">> Mode Protokol     : {protocol.upper()} (Akses Kamera HP Diizinkan)")
-    print(f">> IP LAN Laptop     : {protocol}://{ip}:{PORT}")
-    print(f">> URL Scan Petugas : {protocol}://{ip}:{PORT}/scan.html")
-    print(f">> Dashboard Posko   : {protocol}://localhost:{PORT}")
+    print(f">> Dashboard Laptop : http://localhost:{PORT}")
+    print(f">> Scanner HP (SSL) : https://{ip}:{HTTPS_PORT}/scan.html" if has_https else f">> Scanner HP (HTTP): http://{ip}:{PORT}/scan.html")
     print("=" * 65)
     print("Petunjuk:")
-    print("1. Pastikan HP Petugas terhubung ke Wi-Fi yang sama.")
-    print(f"2. Buka {protocol}://localhost:{PORT} di laptop ini untuk melihat dashboard.")
-    print("3. Scan QR code di layar laptop dengan kamera HP petugas.")
-    if protocol == 'https':
-        print("4. Jika di HP muncul peringatan 'Koneksi tidak privat', klik:")
-        print("   'Lanjutan' (Advanced) -> 'Lanjutkan ke situs (tidak aman)'.")
-        print("   Setelah itu popup 'Izinkan Kamera' muncul dan kamera langsung menyala.")
-    print("Tekan Ctrl+C untuk menghentikan server.")
+    print(f"1. Buka http://localhost:{PORT} di browser laptop ini untuk dashboard.")
+    print("2. HP Petugas hubungkan ke Wi-Fi yang sama, lalu scan QR Code di layar.")
+    print("3. Di HP petugas, jika muncul 'Koneksi tidak privat', klik:")
+    print("   'Lanjutan' (Advanced) -> 'Lanjutkan ke situs (tidak aman)'.")
+    print("   Setelah itu kamera HP akan langsung menyala normal.")
     print("=" * 65)
+
+    if has_https:
+        t_https = threading.Thread(target=httpd_https.serve_forever, daemon=True)
+        t_https.start()
+
     try:
-        server.serve_forever()
+        httpd_http.serve_forever()
     except KeyboardInterrupt:
         print("\nServer Gate Hub dihentikan.")
-        server.server_close()
+        httpd_http.server_close()
+        if has_https:
+            httpd_https.server_close()
 
 if __name__ == '__main__':
     run_server()
