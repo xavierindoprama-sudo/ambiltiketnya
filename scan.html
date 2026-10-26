@@ -150,7 +150,7 @@ button.btn{width:100%;margin-top:10px;padding:12px;border:0;border-radius:12px;b
 </div>
 
 <script src="config.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jsQR/1.4.0/jsQR.min.js"></script>
+<script src="jsQR.min.js"></script>
 <script>
 const h = new URLSearchParams(location.hash.slice(1)), N = h.get('n'), O = h.get('o');
 const TOK = h.get('tok') || (typeof localStorage !== 'undefined' ? localStorage.getItem('atk_tok') : '') || '';
@@ -651,6 +651,10 @@ async function startCamera() {
     }
     requestAnimationFrame(loop);
   } catch (err) {
+    console.error('Camera start error:', err);
+    if (!window.isSecureContext && location.protocol !== 'https:') {
+      alert('⚠️ Akses kamera diblokir browser karena dibuka via HTTP.\n\nSilakan buka via HTTPS:\n' + location.href.replace('http:', 'https:'));
+    }
     $('man_modal').style.display = 'flex';
   }
 }

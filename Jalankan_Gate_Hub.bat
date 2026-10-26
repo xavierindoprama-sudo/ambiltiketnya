@@ -6,7 +6,7 @@ cd /d "%~dp0"
 echo =======================================================
 echo    AMBILTIKETNYA - LOCAL GATE HUB (POSKO GERBANG LOKAL)
 echo =======================================================
-echo Memulai server posko lokal...
-start "" "http://localhost:8080"
+echo Memulai server posko lokal (Mode HTTPS)...
+start "" "https://localhost:8080"
 python gate_hub.py
 pause

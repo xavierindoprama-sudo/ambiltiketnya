@@ -21,6 +21,7 @@ if sys.stderr and hasattr(sys.stderr, 'reconfigure'):
 import re
 import json
 import sqlite3
+import ssl
 import socket
 import threading
 import urllib.request
@@ -31,6 +32,56 @@ from datetime import datetime
 
 PORT = 8080
 DB_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'gate_hub.db')
+
+def ensure_ssl_certs():
+    """Membuat atau memastikan file cert.pem & key.pem tersedia untuk mode HTTPS lokal."""
+    cert_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'cert.pem')
+    key_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'key.pem')
+    if os.path.exists(cert_path) and os.path.exists(key_path):
+        return cert_path, key_path
+    try:
+        import datetime, ipaddress
+        from cryptography import x509
+        from cryptography.x509.oid import NameOID
+        from cryptography.hazmat.primitives import hashes
+        from cryptography.hazmat.primitives.asymmetric import rsa
+        from cryptography.hazmat.primitives import serialization
+
+        ip = get_local_ip()
+        key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+        subject = issuer = x509.Name([
+            x509.NameAttribute(NameOID.COMMON_NAME, str(ip)),
+            x509.NameAttribute(NameOID.ORGANIZATION_NAME, 'AmbilTiketnya Gate Hub'),
+        ])
+        san = x509.SubjectAlternativeName([
+            x509.IPAddress(ipaddress.IPv4Address(ip)),
+            x509.IPAddress(ipaddress.IPv4Address('127.0.0.1')),
+            x509.DNSName('localhost'),
+        ])
+        cert = (
+            x509.CertificateBuilder()
+            .subject_name(subject)
+            .issuer_name(issuer)
+            .public_key(key.public_key())
+            .serial_number(x509.random_serial_number())
+            .not_valid_before(datetime.datetime.now(datetime.timezone.utc))
+            .not_valid_after(datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(days=730))
+            .add_extension(san, critical=False)
+            .sign(key, hashes.SHA256())
+        )
+        with open(key_path, 'wb') as f:
+            f.write(key.private_bytes(
+                encoding=serialization.Encoding.PEM,
+                format=serialization.PrivateFormat.TraditionalOpenSSL,
+                encryption_algorithm=serialization.NoEncryption(),
+            ))
+        with open(cert_path, 'wb') as f:
+            f.write(cert.public_bytes(serialization.Encoding.PEM))
+        return cert_path, key_path
+    except Exception as e:
+        print(f"Warning SSL: {e}")
+        return None, None
+
 
 def get_api_url():
     """Membaca APP_API_URL dari config.js jika tersedia."""
@@ -208,7 +259,11 @@ body{margin:0;padding:20px;background:var(--bg);color:var(--txt);font-family:sys
         <div class="qr-box" id="qr_wrap"></div>
         <div style="margin-top:10px">
           <div style="font-size:12px;color:var(--sub);margin-bottom:4px">Atau ketik manual di browser HP:</div>
-          <code style="background:rgba(255,255,255,.08);padding:6px 12px;border-radius:8px;font-size:14px;color:#38bdf8;font-weight:700" id="scan_url_txt">http://...</code>
+          <code style="background:rgba(255,255,255,.08);padding:6px 12px;border-radius:8px;font-size:14px;color:#38bdf8;font-weight:700" id="scan_url_txt">https://...</code>
+        </div>
+        <div style="background:rgba(56,189,248,.1);border:1px solid rgba(56,189,248,.25);padding:8px 10px;border-radius:8px;font-size:11px;color:#7dd3fc;margin-top:12px;text-align:left;line-height:1.4">
+          <b>🔒 Catatan Izin Kamera di HP Petugas:</b><br>
+          Saat pertama kali buka link di HP, jika Chrome menampilkan peringatan <i>"Koneksi tidak privat"</i>, klik <b>Lanjutan (Advanced)</b> ➜ <b>Lanjutkan ke situs (tidak aman)</b>. Setelah itu popup izin kamera muncul dan kamera langsung aktif!
         </div>
       </div>
 
@@ -495,10 +550,13 @@ class GateHubHandler(SimpleHTTPRequestHandler):
 
         if path == '/api/info':
             ip = get_local_ip()
+            is_ssl = isinstance(self.connection, ssl.SSLSocket) if 'ssl' in sys.modules else False
+            scheme = 'https' if is_ssl else 'http'
             data = {
                 'ip': ip,
                 'port': PORT,
-                'scanUrl': f"http://{ip}:{PORT}/scan.html"
+                'scheme': scheme,
+                'scanUrl': f"{scheme}://{ip}:{PORT}/scan.html"
             }
             self.send_json(data)
             return
@@ -852,18 +910,39 @@ class GateHubHandler(SimpleHTTPRequestHandler):
 def run_server():
     init_db()
     ip = get_local_ip()
+    use_ssl = '--no-ssl' not in sys.argv
+    cert_path, key_path = (None, None)
+    if use_ssl:
+        cert_path, key_path = ensure_ssl_certs()
+
     server = ThreadingHTTPServer(('0.0.0.0', PORT), GateHubHandler)
+    protocol = 'http'
+    if cert_path and key_path:
+        try:
+            ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+            ctx.load_cert_chain(certfile=cert_path, keyfile=key_path)
+            server.socket = ctx.wrap_socket(server.socket, server_side=True)
+            protocol = 'https'
+        except Exception as e:
+            print(f"SSL Init gagal ({e}), fallback ke HTTP.")
+            protocol = 'http'
+
     print("=" * 65)
     print(">> AMBILTIKETNYA - LOCAL GATE HUB (POSKO GERBANG LOKAL)")
     print("=" * 65)
-    print(f">> IP LAN Laptop     : http://{ip}:{PORT}")
-    print(f">> URL Scan Petugas : http://{ip}:{PORT}/scan.html")
-    print(f">> Dashboard Posko   : http://localhost:{PORT}")
+    print(f">> Mode Protokol     : {protocol.upper()} (Akses Kamera HP Diizinkan)")
+    print(f">> IP LAN Laptop     : {protocol}://{ip}:{PORT}")
+    print(f">> URL Scan Petugas : {protocol}://{ip}:{PORT}/scan.html")
+    print(f">> Dashboard Posko   : {protocol}://localhost:{PORT}")
     print("=" * 65)
     print("Petunjuk:")
     print("1. Pastikan HP Petugas terhubung ke Wi-Fi yang sama.")
-    print(f"2. Buka http://localhost:{PORT} di laptop ini untuk melihat dashboard.")
+    print(f"2. Buka {protocol}://localhost:{PORT} di laptop ini untuk melihat dashboard.")
     print("3. Scan QR code di layar laptop dengan kamera HP petugas.")
+    if protocol == 'https':
+        print("4. Jika di HP muncul peringatan 'Koneksi tidak privat', klik:")
+        print("   'Lanjutan' (Advanced) -> 'Lanjutkan ke situs (tidak aman)'.")
+        print("   Setelah itu popup 'Izinkan Kamera' muncul dan kamera langsung menyala.")
     print("Tekan Ctrl+C untuk menghentikan server.")
     print("=" * 65)
     try:
