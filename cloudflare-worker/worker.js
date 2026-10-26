@@ -1803,25 +1803,74 @@ export default {
 
         if (action === 'waitingPromoteAll') {
           needRole(2);
-          const items = await neonQuery(env, `SELECT * FROM invitation_waiting_list WHERE status='waiting' ORDER BY created_at ASC`);
+          const eventId = params.eventId;
+          const qParams = [];
+          let whereSql = `WHERE w.status = 'waiting'`;
+          if (eventId) {
+            qParams.push(eventId);
+            whereSql += ` AND w.event_id = $${qParams.length}::uuid`;
+          }
+          if (u.role === 2 && u.organizer_id) {
+            qParams.push(u.organizer_id);
+            whereSql += ` AND e.organizer_id = $${qParams.length}::uuid`;
+          }
+
+          const items = await neonQuery(env, `
+            SELECT w.id, w.event_id, w.guest_name, w.guest_org, w.guest_phone, w.guest_age, w.qty, w.status,
+                   e.name AS event_name, e.quota,
+                   (e.quota - coalesce((SELECT sum(qty) FROM orders o WHERE o.event_id=e.id AND o.status<>'cancelled'),0))::int AS remaining
+            FROM invitation_waiting_list w
+            JOIN events e ON e.id = w.event_id
+            ${whereSql}
+            ORDER BY w.created_at ASC
+          `, qParams);
+
           let success = 0, fail = 0;
+          const errors = [];
+          const quotaMap = {};
+
           for (const it of items) {
+            const evId = it.event_id;
+            if (quotaMap[evId] === undefined) {
+              quotaMap[evId] = parseInt(it.remaining, 10) || 0;
+            }
+
+            const qty = Math.max(1, parseInt(it.qty, 10) || 1);
+            if (quotaMap[evId] < qty) {
+              fail++;
+              errors.push(`${it.guest_name}: Sisa kuota acara (${quotaMap[evId]}) tidak cukup`);
+              continue;
+            }
+
+            const prefix = (String(it.event_name || '').replace(/[^A-Za-z]/g, '').slice(0, 4).toUpperCase() || 'EVNT');
+            const tCode = 'TKT-' + prefix + '-' + rnd(6);
+            const oCode = rnd(8);
+            const age = it.guest_age ? (parseInt(it.guest_age, 10) || null) : null;
+            const phone = it.guest_phone ? normPhone(it.guest_phone) : null;
+
             try {
-              const ev = (await neonQuery(env, `SELECT name FROM events WHERE id=$1::uuid`, [it.event_id]))[0];
-              const prefix = (ev.name.replace(/[^A-Za-z]/g, '').slice(0, 4).toUpperCase() || 'EVNT');
-              const tCode = 'TKT-' + prefix + '-' + rnd(6);
-              const oCode = rnd(8);
               const r = await neonQuery(env, `INSERT INTO orders(order_code,ticket_code,user_id,event_id,qty,total,status,kind,guest_name,guest_org,guest_phone,guest_age)
                 SELECT $1,$2,$3::uuid,e.id,$4::int,0,'confirmed','invitation',$6::text,$7::text,$8::text,$9::int FROM events e WHERE e.id=$5::uuid
                  AND (SELECT coalesce(sum(qty),0) FROM orders WHERE event_id=e.id AND status<>'cancelled') + $4::int <= e.quota
-                RETURNING id`, [oCode, tCode, u.id, it.qty, it.event_id, it.guest_name, it.guest_org, it.guest_phone, it.guest_age]);
-              if (r.length) {
+                RETURNING id`, [oCode, tCode, u.id, qty, evId, it.guest_name, it.guest_org, phone, age]);
+
+              if (r && r.length) {
                 await neonQuery(env, `UPDATE invitation_waiting_list SET status='promoted', order_id=$1::uuid, promoted_at=now() WHERE id=$2::uuid`, [r[0].id, it.id]);
+                quotaMap[evId] -= qty;
                 success++;
-              } else { fail++; break; }
-            } catch (x) { fail++; break; }
+              } else {
+                fail++;
+                quotaMap[evId] = 0;
+                errors.push(`${it.guest_name}: Kuota acara penuh`);
+              }
+            } catch (x) {
+              console.error('waitingPromoteAll item error for ' + it.guest_name + ':', x);
+              fail++;
+              errors.push(`${it.guest_name}: ${x.message || 'Gagal menyimpan'}`);
+            }
           }
-          return json({ ok: true, data: { promoted: success, failed: fail } });
+
+          return json({ ok: true, data: { promoted: success, failed: fail, total: items.length, errors } });
         }
 
         if (action === 'invitationBatchImport') {

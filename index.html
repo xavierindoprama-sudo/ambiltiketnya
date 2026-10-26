@@ -5494,14 +5494,22 @@ const NL=String.fromCharCode(10),find=(a,id)=>a.find(x=>x.id===id),A={
    }catch(e){fail(e)}
   },
   async promoteAllWait(){
+   const curEvId=getCurEvId();
+   const keep=$('#wtev')?$('#wtev').value:($('#ivev')?$('#ivev').value:'');
+   const selEvId=keep||curEvId||'';
    if(!await ask(t('wait_confirm_promote_all')))return;
    try{
-     const res=await api('waitingPromoteAll',{},t('loading'));
+     const res=await api('waitingPromoteAll',{eventId:selEvId||undefined},t('loading'));
      const r=await Promise.all([api('adminEvents'),api('invitations'),api('waitingList')]);
      S.aev=r[0];S.inv=r[1];S.waitList=r[2]||[];
      mergeInvTix();
      paintInv();
-     toast('✅ '+res.promoted+' undangan berhasil diterbitkan dari waiting list!'+(res.failed?' (Sisa kuota tidak mencukupi untuk '+res.failed+' lainnya)':''),0);
+     if(res.promoted>0){
+       toast('✅ '+res.promoted+' undangan berhasil diterbitkan dari waiting list!'+(res.failed?' ('+res.failed+' lainnya sisa kuota tidak mencukupi)':''),0);
+     } else {
+       const errMsg=(res.errors&&res.errors[0])||'Sisa kuota tidak mencukupi';
+       toast('⚠️ Belum ada undangan diterbitkan: '+errMsg,1);
+     }
    }catch(e){fail(e)}
   },
   async delWait(el){
