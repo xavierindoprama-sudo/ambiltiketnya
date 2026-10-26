@@ -253,7 +253,7 @@ off_cache_btn:['Unduh Tiket ke HP (Cache Offline)','Download Tickets to Phone (O
 off_cached_cnt:['tiket tersimpan di HP','tickets cached on phone'],
 off_sync_btn:['Sinkronkan Antrean','Sync Queue'],
 off_synced:['Tiket offline berhasil disinkronkan ke server!','Offline tickets synced to server!'],
-off_badge:['Mode Offline','Offline Mode'],open_app:['Buka aplikasi','Open the app'],n_inv:['Undangan','Invitations'],inv_title:['Buat Undangan','Create Invitation'],inv_event:['Acara','Event'],inv_name:['Nama yang diundang *','Invited name *'],inv_org:['Instansi *','Organization *'],inv_age:['Usia (opsional)','Age (optional)'],inv_phone:['No. WhatsApp / HP (opsional)','WhatsApp / Phone (optional)'],inv_qty:['Jumlah tiket','Number of tickets'],inv_max_hint:['Maksimal','Maximum'],inv_make:['Buat Undangan','Create Invitation'],inv_list:['Daftar Undangan','Invitation List'],inv_t:['UNDANGAN','INVITATION'],inv_to:['Kepada Yth.','Dear'],inv_badge:['Undangan','Invitation'],inv_quota:['sisa','left'],inv_made:['Undangan berhasil dibuat.','Invitation created.'],inv_pass:['Tiket Undangan','Invitation Ticket'],inv_who:['Tamu','Guest'],inv_cfg_btn:['Batas Tiket','Ticket Limit'],inv_cfg_title:['Pengaturan Batas Tiket Undangan','Invitation Ticket Limit Settings'],inv_cfg_desc:['Tentukan jumlah maksimal tiket yang dapat diterbitkan dalam 1 undangan.','Set the maximum tickets that can be issued in 1 invitation.'],inv_cfg_cur:['Batas saat ini','Current limit'],inv_cfg_max:['Batas Maksimal Tiket per Undangan','Max Tickets per Invitation'],inv_cfg_save:['Simpan Batas Tiket','Save Ticket Limit'],inv_cfg_ok:['Batas tiket undangan berhasil disimpan.','Invitation ticket limit saved.'],e_BAD_MAX_QTY:['Batas tiket harus antara 1 sampai 1000.','Ticket limit must be between 1 and 1000.'],years_old:['thn','yo'],
+off_badge:['Mode Offline','Offline Mode'],open_app:['Buka aplikasi','Open the app'],n_inv:['Undangan','Invitations'],inv_title:['Buat Undangan','Create Invitation'],inv_event:['Acara','Event'],inv_name:['Nama yang diundang *','Invited name *'],inv_org:['Instansi *','Organization *'],inv_age:['Usia (opsional)','Age (optional)'],inv_phone:['WhatsApp Aktif *','Active WhatsApp *'],inv_qty:['Jumlah tiket','Number of tickets'],inv_max_hint:['Maksimal','Maximum'],inv_make:['Buat Undangan','Create Invitation'],inv_list:['Daftar Undangan','Invitation List'],inv_t:['UNDANGAN','INVITATION'],inv_to:['Kepada Yth.','Dear'],inv_badge:['Undangan','Invitation'],inv_quota:['sisa','left'],inv_made:['Undangan berhasil dibuat.','Invitation created.'],inv_pass:['Tiket Undangan','Invitation Ticket'],inv_who:['Tamu','Guest'],inv_cfg_btn:['Batas Tiket','Ticket Limit'],inv_cfg_title:['Pengaturan Batas Tiket Undangan','Invitation Ticket Limit Settings'],inv_cfg_desc:['Tentukan jumlah maksimal tiket yang dapat diterbitkan dalam 1 undangan.','Set the maximum tickets that can be issued in 1 invitation.'],inv_cfg_cur:['Batas saat ini','Current limit'],inv_cfg_max:['Batas Maksimal Tiket per Undangan','Max Tickets per Invitation'],inv_cfg_save:['Simpan Batas Tiket','Save Ticket Limit'],inv_cfg_ok:['Batas tiket undangan berhasil disimpan.','Invitation ticket limit saved.'],e_BAD_MAX_QTY:['Batas tiket harus antara 1 sampai 1000.','Ticket limit must be between 1 and 1000.'],years_old:['thn','yo'],
 inv_tab_issued:['Undangan Terbit','Issued Invitations'],inv_tab_wait:['Daftar Tunggu (Waiting List)','Waiting List'],
 wait_title:['Tambah ke Daftar Tunggu (Waiting List)','Add to Waiting List'],wait_desc:['Tampung calon penerima undangan saat kuota habis. Tiket dapat diterbitkan begitu kuota acara ditambah.','Queue attendees when quota is full. Tickets can be issued once event quota is added.'],
 wait_add_btn:['+ Simpan ke Waiting List','+ Add to Waiting List'],wait_promote_btn:['Buat Undangan','Issue Invitation'],wait_promote_all_btn:['🚀 Buat Semua Undangan','🚀 Issue All Invitations'],
@@ -3279,6 +3279,12 @@ function paintInv(){
  const curEvId=getCurEvId();
  const curEv=getCurEv();
  const maxQty=(S.invCfg&&S.invCfg.maxQty)||50;
+ const selEvId = keep || curEvId || (S.aev && S.aev[0] && S.aev[0].id) || '';
+ const curEvObj = (S.aev || []).find(e => String(e.id) === String(selEvId)) || curEv;
+ const needAge = !!(curEvObj && Array.isArray(curEvObj.custom_fields) && curEvObj.custom_fields.some(cf => {
+  const l = (cf.label || '').toLowerCase();
+  return l.includes('usia') || l.includes('umur') || l.includes('age');
+ }));
  const opts=S.aev.map(e=>{
   const rem=Math.max(0,e.quota-e.sold);
   const isSel=(keep?e.id===keep:(curEvId?e.id===curEvId:false));
@@ -3339,8 +3345,8 @@ function paintInv(){
     <div style="grid-column:1/-1"><label>${t('inv_event')}</label><select id="wtev">${opts}</select></div>
     <div><label>${t('inv_name')}</label><input id="wtnm" autocomplete="off" placeholder="Nama tamu / calon peserta"></div>
     <div><label>${t('inv_org')}</label><input id="wtog" autocomplete="off" placeholder="Instansi / Gereja"></div>
-    <div><label>${t('inv_age')}</label><input id="wtag" type="number" min="1" max="120" placeholder="Opsional" autocomplete="off"></div>
-    <div><label>${t('inv_phone')}</label><input id="wtph" type="tel" placeholder="0812xxxxxxxx (opsional)" autocomplete="off"></div>
+    <div id="wtag_wrap" style="${needAge?'':'display:none'}"><label>${t('inv_age')}</label><input id="wtag" type="number" min="1" max="120" placeholder="Opsional" autocomplete="off"></div>
+    <div><label>${t('inv_phone')}</label><input id="wtph" type="tel" placeholder="0812xxxxxxxx (WhatsApp Aktif)" autocomplete="off" required></div>
     <div><label>${t('inv_qty')}</label><input id="wtq" type="number" min="1" max="${maxQty}" value="1"></div>
    </div>
    <div class="acts">
@@ -3363,14 +3369,27 @@ function paintInv(){
    return `<tr><td data-l="${t('inv_who')}"><b>${esc(o.guest_name)}</b><br><small class="muted">${esc(o.guest_org)}</small>${metaStr}</td><td data-l="${t('c_event')}">${esc(o.name)}</td><td data-l="${t('c_qty')}">${o.qty}</td><td data-l="${t('c_status')}">${stPill(o.status)}</td><td data-l="${t('c_chk')}" class="mono">${o.checked_in}/${o.qty}</td><td><div class="acts" style="margin:0;justify-content:flex-end;gap:4px"><button class="btn sm" data-act="invopen" data-id="${o.id}">${t('view')}</button><button class="btn sm" data-act="invLink" data-id="${o.id}" style="border-color:#d4af37;color:#d4af37" title="Buka Landing Page Undangan Digital">✉️ Undangan</button><button class="btn sm" data-act="copyInvLink" data-id="${o.id}" title="Salin Link Undangan">📋 Salin</button>${o.status==='confirmed'?`<button class="btn sm wa" data-act="waInv" data-id="${o.id}" title="Kirim Undangan Digital lewat WhatsApp">💬 WhatsApp</button>`:''}${o.status!=='cancelled'&&canEdit()?`<button class="btn sm dg" data-act="cxl" data-id="${o.id}">${t('cancel')}</button>`:''}</div></td></tr>`;
   }).join('');
 
-  bodyHtml=`<div class="card" style="padding:16px;margin:8px 0 18px;border-color:#d4af37"><h3>${t('inv_title')}</h3><div class="fg" style="margin-top:6px"><div style="grid-column:1/-1"><label>${t('inv_event')}</label><select id="ivev">${opts}</select></div><div><label>${t('inv_name')}</label><input id="ivnm" autocomplete="off" placeholder="Nama tamu / PIC"></div><div><label>${t('inv_org')}</label><input id="ivog" autocomplete="off" placeholder="Instansi / Gereja"></div><div><label>${t('inv_age')}</label><input id="ivag" type="number" min="1" max="120" placeholder="Opsional" autocomplete="off"></div><div><label>${t('inv_phone')}</label><input id="ivph" type="tel" placeholder="0812xxxxxxxx (opsional)" autocomplete="off"></div><div><label>${t('inv_qty')}</label><input id="ivq" type="number" min="1" max="${maxQty}" value="1"><small class="muted" style="display:block;margin-top:3px">${t('inv_max_hint')} ${maxQty} ${t('tix')}</small></div></div><div class="acts"><button class="btn pri" data-act="invmake" style="flex:none">${t('inv_make')}</button></div></div>
+  bodyHtml=`<div class="card" style="padding:16px;margin:8px 0 18px;border-color:#d4af37"><h3>${t('inv_title')}</h3><div class="fg" style="margin-top:6px"><div style="grid-column:1/-1"><label>${t('inv_event')}</label><select id="ivev">${opts}</select></div><div><label>${t('inv_name')}</label><input id="ivnm" autocomplete="off" placeholder="Nama tamu / PIC"></div><div><label>${t('inv_org')}</label><input id="ivog" autocomplete="off" placeholder="Instansi / Gereja"></div><div id="ivag_wrap" style="${needAge?'':'display:none'}"><label>${t('inv_age')}</label><input id="ivag" type="number" min="1" max="120" placeholder="Opsional" autocomplete="off"></div><div><label>${t('inv_phone')}</label><input id="ivph" type="tel" placeholder="0812xxxxxxxx (WhatsApp Aktif)" autocomplete="off" required></div><div><label>${t('inv_qty')}</label><input id="ivq" type="number" min="1" max="${maxQty}" value="1"><small class="muted" style="display:block;margin-top:3px">${t('inv_max_hint')} ${maxQty} ${t('tix')}</small></div></div><div class="acts"><button class="btn pri" data-act="invmake" style="flex:none">${t('inv_make')}</button></div></div>
   <h3>${t('inv_list')} ${curEv?`— ${esc(curEv.name)} `:''}(${filteredInv.length})</h3>${filteredInv.length?`<div class="tw"><table class="rt"><tr><th>${t('inv_who')}</th><th>${t('c_event')}</th><th>${t('c_qty')}</th><th>${t('c_status')}</th><th>${t('c_chk')}</th><th></th></tr>${rows}</table></div>`:`<p class="muted" style="padding:20px;text-align:center">Belum ada undangan yang diterbitkan${curEv?` untuk acara ${esc(curEv.name)}`:''}.</p>`}`;
  }
 
  c.innerHTML=cfgCard+subNav+bodyHtml;
- const selEvId = keep || curEvId || '';
  if(selEvId&&$('#ivev'))$('#ivev').value=selEvId;
  if(selEvId&&$('#wtev'))$('#wtev').value=selEvId;
+ const hookEvChange = (selEl, wrapEl, inpEl) => {
+  if(!selEl) return;
+  selEl.addEventListener('change', () => {
+   const chosen = (S.aev || []).find(x => String(x.id) === String(selEl.value));
+   const show = !!(chosen && Array.isArray(chosen.custom_fields) && chosen.custom_fields.some(cf => {
+    const l = (cf.label || '').toLowerCase();
+    return l.includes('usia') || l.includes('umur') || l.includes('age');
+   }));
+   if(wrapEl) wrapEl.style.display = show ? '' : 'none';
+   if(!show && inpEl) inpEl.value = '';
+  });
+ };
+ hookEvChange($('#ivev'), $('#ivag_wrap'), $('#ivag'));
+ hookEvChange($('#wtev'), $('#wtag_wrap'), $('#wtag'));
 }
 const LGK={syarat:'lg_terms',privasi:'lg_priv',cookie:'lg_cookie'};
 async function legalView(c){try{S.lg=await api('legalGet')}catch(e){return fail(e)}if(!S.lgk)S.lgk='syarat';paintLegal()}
@@ -5204,9 +5223,13 @@ const NL=String.fromCharCode(10),find=(a,id)=>a.find(x=>x.id===id),A={
  invCfgModal(){const cur=(S.invCfg&&S.invCfg.maxQty)||50;modal('<button class="btn sm x" data-act="cm">&#10005;</button><h2>⚙️ '+t('inv_cfg_title')+'</h2><p class="muted" style="margin:4px 0 14px">'+t('inv_cfg_desc')+'</p><label>'+t('inv_cfg_max')+'</label><input id="new_inv_max" type="number" min="1" max="1000" value="'+cur+'" autocomplete="off" style="font-size:16px;font-weight:700"><small class="muted" style="display:block;margin-top:6px">Rentang batas tiket: 1 sampai 1000 tiket per undangan.</small><div class="acts" style="margin-top:16px"><button class="btn pri" data-act="invCfgSave">'+t('inv_cfg_save')+'</button><button class="btn" data-act="cm">'+t('close')+'</button></div>');setTimeout(()=>{const el=$('#new_inv_max');if(el){el.focus();el.select()}},50)},
  async invCfgSave(){const val=parseInt(($('#new_inv_max')?$('#new_inv_max').value:''),10);if(isNaN(val)||val<1||val>1000)return toast(t('e_BAD_MAX_QTY'),1);try{const res=await api('setInvMaxQty',{maxQty:val},t('loading'));cm();S.invCfg={maxQty:res.maxQty};toast(t('inv_cfg_ok'),0);paintInv()}catch(e){fail(e)}},
   invSubTab(el){S.invSubTab=el.dataset.v;paintInv()},
-  async invmake(){const nm=$('#ivnm').value,og=$('#ivog').value,qy=$('#ivq').value,ev=$('#ivev').value;
+  async invmake(){const nm=($('#ivnm')?$('#ivnm').value:'').trim(),og=($('#ivog')?$('#ivog').value:'').trim(),qy=($('#ivq')?$('#ivq').value:'1'),ev=($('#ivev')?$('#ivev').value:'');
    const ph=($('#ivph')?$('#ivph').value:'').trim(),ag=($('#ivag')?$('#ivag').value:'').trim();
-   try{const o=await api('invitationCreate',{eventId:ev,name:nm,org:og,qty:qy,phone:ph,age:ag},t('loading'));const r=await Promise.all([api('adminEvents'),api('invitations'),api('waitingList').catch(()=>[]),api('getInvConfig').catch(()=>({maxQty:50}))]);S.aev=r[0];S.inv=r[1];S.waitList=r[2]||[];S.invCfg=r[3]||{maxQty:50};mergeInvTix();paintInv();passModal(o,t('inv_made'))}catch(e){fail(e)}},
+   if(!ev)return toast('Pilih acara terlebih dahulu',1);
+   if(!nm||nm.length<2)return toast(t('e_BAD_NAME'),1);
+   if(!og||og.length<2)return toast(t('e_BAD_ORG'),1);
+   if(!ph||!normPhone(ph))return toast('Nomor WhatsApp aktif wajib diisi (contoh 0812xxxxxxxx)!',1);
+   try{const o=await api('invitationCreate',{eventId:ev,name:nm,org:og,qty:qy,phone:normPhone(ph),age:ag},t('loading'));const r=await Promise.all([api('adminEvents'),api('invitations'),api('waitingList').catch(()=>[]),api('getInvConfig').catch(()=>({maxQty:50}))]);S.aev=r[0];S.inv=r[1];S.waitList=r[2]||[];S.invCfg=r[3]||{maxQty:50};mergeInvTix();paintInv();passModal(o,t('inv_made'))}catch(e){fail(e)}},
   async waitAdd(){
    const nm=($('#wtnm')?$('#wtnm').value:'').trim(),
          og=($('#wtog')?$('#wtog').value:'').trim(),
@@ -5217,8 +5240,9 @@ const NL=String.fromCharCode(10),find=(a,id)=>a.find(x=>x.id===id),A={
    if(!ev)return toast('Pilih acara terlebih dahulu',1);
    if(!nm||nm.length<2)return toast(t('e_BAD_NAME'),1);
    if(!og||og.length<2)return toast(t('e_BAD_ORG'),1);
+   if(!ph||!normPhone(ph))return toast('Nomor WhatsApp aktif wajib diisi (contoh 0812xxxxxxxx)!',1);
    try{
-     await api('waitingCreate',{eventId:ev,name:nm,org:og,qty:qy,phone:ph,age:ag},t('loading'));
+     await api('waitingCreate',{eventId:ev,name:nm,org:og,qty:qy,phone:normPhone(ph),age:ag},t('loading'));
      toast(t('wait_saved'),0);
      const r=await Promise.all([api('adminEvents'),api('waitingList')]);
      S.aev=r[0];S.waitList=r[1]||[];

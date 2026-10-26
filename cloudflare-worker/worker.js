@@ -1659,7 +1659,8 @@ export default {
         if (action === 'waitingCreate') {
           needRole(2);
           const name = String(params.name || '').trim(), org = String(params.org || '').trim(), qty = parseInt(params.qty, 10) || 1;
-          const phone = params.phone ? normPhone(params.phone) : null;
+          const phone = normPhone(params.phone);
+          if (!phone) throw new Error('BAD_PHONE');
           const age = params.age ? parseInt(params.age, 10) : null;
           const r = await neonQuery(env, `INSERT INTO invitation_waiting_list(event_id, created_by, guest_name, guest_org, guest_phone, guest_age, qty, status, created_at)
             VALUES($1::uuid, $2::uuid, $3, $4, $5, $6, $7, 'waiting', now()) RETURNING id`, [params.eventId, u.id, name, org, phone, age, qty]);
@@ -1679,6 +1680,10 @@ export default {
             const w = (await neonQuery(env, `SELECT * FROM invitation_waiting_list WHERE id=$1::uuid AND status='waiting'`, [params.id]))[0];
             if (!w) throw new Error('NOT_FOUND');
             item = { eventId: w.event_id, name: w.guest_name, org: w.guest_org, phone: w.guest_phone, age: w.guest_age, qty: w.qty, waitId: w.id };
+          } else {
+            const phone = normPhone(item.phone);
+            if (!phone) throw new Error('BAD_PHONE');
+            item.phone = phone;
           }
 
           const ev = (await neonQuery(env, `SELECT name FROM events WHERE id=$1::uuid`, [item.eventId]))[0];
