@@ -5684,13 +5684,17 @@ const NL=String.fromCharCode(10),find=(a,id)=>a.find(x=>x.id===id),A={
   async saveAiKey() {
     const inp = $('#gemini_key_inp');
     const val = inp ? inp.value.trim() : '';
+    if (val) ls.s('atk_gemini_key', val);
+    else ls.r('atk_gemini_key');
+
     try {
-      await api('saveAiSettings', { geminiApiKey: val }, t('loading'));
-      if (val) ls.s('atk_gemini_key', val);
-      else ls.r('atk_gemini_key');
+      await api('saveAiSettings', { geminiApiKey: val });
       toast('API Key Google Gemini berhasil disimpan! ✨', 0);
       cm();
-    } catch(e) { fail(e); }
+    } catch(e) {
+      toast('API Key tersimpan di browser! ✨', 0);
+      cm();
+    }
   },
 
   async testAiKey() {
@@ -5701,23 +5705,46 @@ const NL=String.fromCharCode(10),find=(a,id)=>a.find(x=>x.id===id),A={
       if (st) st.innerHTML = '<span style="color:var(--er);font-weight:700">⚠️ Masukkan API Key terlebih dahulu.</span>';
       return;
     }
-    if (st) st.innerHTML = '<span style="color:var(--wn);font-weight:600">⏳ Menguji koneksi langsung ke Google Gemini AI...</span>';
+    if (st) st.innerHTML = '<span style="color:var(--wn);font-weight:600">⏳ Menguji koneksi ke Google Gemini AI...</span>';
 
-    // 1. Uji koneksi langsung ke Google Gemini API dari browser
+    // 1. Uji via Cloudflare Worker dahulu (koneksi server ke Google super cepat & bebas blokir ISP/adblocker)
+    try {
+      const res = await api('testAiKey', { geminiApiKey: key });
+      if (st) st.innerHTML = `<span style="color:var(--ok);font-weight:700">✓ Terhubung Berhasil! (Model: ${esc(res.model)})</span><br><small class="muted">Balasan AI: "${esc(res.reply)}"</small>`;
+      toast('Uji koneksi AI sukses! 🚀', 0);
+      ls.s('atk_gemini_key', key);
+      return;
+    } catch(errServer) {
+      const serverMsg = String(errServer ? errServer.message : '');
+      if (serverMsg && !serverMsg.includes('NOT_FOUND') && !serverMsg.includes('E_GENERIC')) {
+        if (serverMsg.toLowerCase().includes('api_key_invalid') || serverMsg.toLowerCase().includes('not valid')) {
+          if (st) st.innerHTML = `<span style="color:var(--er);font-weight:700">✗ API Key Tidak Valid:</span><br><small style="color:var(--er)">Kunci ditolak oleh Google. Pastikan menyalin seluruh karakter kunci (awalan AIzaSy...).</small>`;
+          return;
+        } else {
+          if (st) st.innerHTML = `<span style="color:var(--er);font-weight:700">✗ Error:</span> <small style="color:var(--er)">${esc(serverMsg)}</small>`;
+          return;
+        }
+      }
+    }
+
+    // 2. Fallback: Uji langsung dari browser dengan strict timeout 6 detik
     const testModels = ['gemini-3.8-flash', 'gemini-2.0-flash', 'gemini-1.5-flash'];
-    let lastErrDetail = '';
+    let lastErr = '';
     for (const m of testModels) {
+      const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+      const timeoutId = controller ? setTimeout(() => controller.abort(), 6000) : null;
       try {
         const url = 'https://generativelanguage.googleapis.com/v1beta/models/' + m + ':generateContent?key=' + encodeURIComponent(key);
         const res = await fetch(url, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            contents: [{ parts: [{ text: 'Halo Gemini! Konfirmasi koneksi dengan membalas: "Koneksi Google Gemini AI Berhasil Aktif!" dalam 1 kalimat pendek.' }] }],
-            generationConfig: { maxOutputTokens: 60, temperature: 0.2 }
-          })
+            contents: [{ parts: [{ text: 'Halo! Konfirmasi koneksi dengan membalas: "Koneksi Google Gemini AI Berhasil Aktif!" dalam 1 kalimat pendek.' }] }],
+            generationConfig: { maxOutputTokens: 50, temperature: 0.2 }
+          }),
+          signal: controller ? controller.signal : undefined
         });
-
+        if (timeoutId) clearTimeout(timeoutId);
         const data = await res.json().catch(() => ({}));
         if (res.ok) {
           const reply = data?.candidates?.[0]?.content?.parts?.[0]?.text || 'Koneksi Berhasil!';
@@ -5727,23 +5754,21 @@ const NL=String.fromCharCode(10),find=(a,id)=>a.find(x=>x.id===id),A={
           api('saveAiSettings', { geminiApiKey: key }).catch(() => {});
           return;
         } else {
-          lastErrDetail = data?.error?.message || `HTTP ${res.status}: ${res.statusText}`;
-          if (lastErrDetail.toLowerCase().includes('api_key_invalid') || lastErrDetail.toLowerCase().includes('not valid')) {
-            break;
-          }
+          lastErr = data?.error?.message || `HTTP ${res.status}: ${res.statusText}`;
+          if (lastErr.toLowerCase().includes('api_key_invalid')) break;
         }
       } catch(e) {
-        lastErrDetail = e.message;
+        if (timeoutId) clearTimeout(timeoutId);
+        lastErr = e.name === 'AbortError' ? 'Koneksi browser ke Google timeout (diblokir ISP/adblocker)' : e.message;
       }
     }
 
-    if (lastErrDetail) {
-      if (lastErrDetail.toLowerCase().includes('api_key_invalid') || lastErrDetail.toLowerCase().includes('not valid')) {
-        if (st) st.innerHTML = `<span style="color:var(--er);font-weight:700">✗ API Key Tidak Valid:</span><br><small style="color:var(--er)">Kunci ditolak oleh Google. Pastikan menyalin seluruh karakter kunci (awalan AIzaSy...).</small>`;
+    if (st) {
+      if (lastErr.toLowerCase().includes('api_key_invalid') || lastErr.toLowerCase().includes('not valid')) {
+        st.innerHTML = `<span style="color:var(--er);font-weight:700">✗ API Key Tidak Valid:</span><br><small style="color:var(--er)">Kunci ditolak oleh Google. Pastikan menyalin seluruh karakter kunci (awalan AIzaSy...).</small>`;
       } else {
-        if (st) st.innerHTML = `<span style="color:var(--er);font-weight:700">✗ Google Error:</span> <small style="color:var(--er)">${esc(lastErrDetail)}</small>`;
+        st.innerHTML = `<span style="color:var(--er);font-weight:700">✗ Gagal:</span> <small style="color:var(--er)">${esc(lastErr || 'Gagal menghubungi Gemini')}</small>`;
       }
-      return;
     }
   },
 

@@ -318,7 +318,7 @@ const LEGAL = {
   cookie: { title: 'Kebijakan Cookie', text: '## 1. Cookie Teknis\n- Kami hanya menyimpan token sesi di peramban Anda untuk keperluan autentikasi masuk.' }
 };
 
-let _tablesEnsured = true;
+let _tablesEnsured = false;
 async function ensureFeatureTables(env, force = false) {
   if (_tablesEnsured && !force) return;
   const ddlStatements = [
@@ -443,11 +443,25 @@ async function getSystemSetting(env, key) {
     const rows = await neonQuery(env, `SELECT value FROM system_settings WHERE key = $1`, [key]);
     return rows.length ? rows[0].value : null;
   } catch (e) {
+    try {
+      await neonExec(env, `CREATE TABLE IF NOT EXISTS system_settings (
+        key text PRIMARY KEY,
+        value text NOT NULL DEFAULT '',
+        updated_at timestamptz NOT NULL DEFAULT now()
+      )`);
+    } catch(err) {}
     return null;
   }
 }
 
 async function setSystemSetting(env, key, value) {
+  try {
+    await neonExec(env, `CREATE TABLE IF NOT EXISTS system_settings (
+      key text PRIMARY KEY,
+      value text NOT NULL DEFAULT '',
+      updated_at timestamptz NOT NULL DEFAULT now()
+    )`);
+  } catch(e) {}
   await neonQuery(env, `INSERT INTO system_settings(key, value, updated_at) VALUES($1, $2, now())
     ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()`, [key, String(value || '')]);
 }
