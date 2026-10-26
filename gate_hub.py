@@ -194,12 +194,21 @@ body{margin:0;padding:20px;background:var(--bg);color:var(--txt);font-family:sys
           Atau gunakan tombol manual di bawah:
         </p>
         <div style="display:flex;flex-direction:column;gap:10px">
-          <button class="btn btn-pri" onclick="promptDownloadCloud()" style="justify-content:center">
-            📥 Unduh Tiket dari Cloud
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+            <button class="btn btn-pri" onclick="openImportFile()" style="justify-content:center;font-size:13px">
+              📂 Impor File (.json)
+            </button>
+            <button class="btn btn-outline" onclick="openPasteModal()" style="justify-content:center;font-size:13px">
+              📋 Tempel Data
+            </button>
+          </div>
+          <button class="btn btn-pri" onclick="openCloudFetchModal()" style="justify-content:center;background:#6366f1">
+            📥 Ambil dari Cloud via Token
           </button>
           <button class="btn btn-ok" onclick="syncToCloud()" style="justify-content:center">
             ☁️ Unggah Rekap ke Cloud
           </button>
+          <input type="file" id="file_import_inp" accept=".json" style="display:none" onchange="handleFileSelected(this)">
         </div>
         <div id="sync_status" style="margin-top:12px;font-size:12px;color:var(--sub);text-align:center"></div>
       </div>
@@ -303,6 +312,98 @@ async function promptDownloadCloud() {
   }
 }
 
+function openImportFile() {
+  document.getElementById('file_import_inp').click();
+}
+
+function handleFileSelected(inp) {
+  const file = inp.files && inp.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = async e => {
+    try {
+      const data = JSON.parse(e.target.result);
+      const res = await fetch('/api/save-manifest', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(data)
+      });
+      const d = await res.json();
+      if (d.ok) {
+        alert('✓ Berhasil memuat ' + d.count + ' tiket untuk acara ' + d.eventName + '!');
+        loadStats();
+        document.getElementById('sync_status').innerHTML = '✓ Terakhir impor: ' + new Date().toLocaleTimeString('id-ID');
+      } else {
+        alert('Gagal: ' + (d.error || 'Format tidak valid'));
+      }
+    } catch(err) {
+      alert('File tidak valid: ' + err.message);
+    }
+  };
+  reader.readAsText(file);
+}
+
+function openPasteModal() {
+  const text = prompt('Tempelkan teks data JSON tiket di sini (dari tombol "📋 Salin Data Tiket"):');
+  if (!text) return;
+  try {
+    const data = JSON.parse(text);
+    fetch('/api/save-manifest', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(data)
+    }).then(r => r.json()).then(d => {
+      if (d.ok) {
+        alert('✓ Sukses memuat ' + d.count + ' tiket untuk acara ' + d.eventName + '!');
+        loadStats();
+      } else {
+        alert('Gagal: ' + d.error);
+      }
+    }).catch(e => alert('Error: ' + e.message));
+  } catch(e) {
+    alert('Format JSON tidak valid!');
+  }
+}
+
+async function openCloudFetchModal() {
+  const tok = prompt('Masukkan Super Admin Token Anda:');
+  if (!tok) return;
+  document.getElementById('sync_status').innerHTML = '⏳ Menghubungi Cloudflare...';
+  try {
+    const res = await fetch('/api/list-events', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ token: tok })
+    });
+    const d = await res.json();
+    if (!d.ok || !d.events || !d.events.length) {
+      return alert('Gagal mengambil daftar acara: ' + (d.error || 'Tidak ada acara aktif'));
+    }
+    const choices = d.events.map((e, i) => `${i + 1}. ${e.name} (${e.sold} tiket)`).join('\n');
+    const pick = prompt('Pilih nomor acara yang ingin diunduh:\n\n' + choices + '\n\nKetik nomornya (misal: 1):');
+    const idx = parseInt(pick, 10) - 1;
+    if (isNaN(idx) || idx < 0 || idx >= d.events.length) return alert('Pilihan dibatalkan');
+    const selEvent = d.events[idx];
+
+    document.getElementById('sync_status').innerHTML = '⏳ Mengunduh tiket ' + selEvent.name + '...';
+    const dlRes = await fetch('/api/download-cloud', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ eventId: selEvent.id, token: tok })
+    });
+    const dlData = await dlRes.json();
+    if (dlData.ok) {
+      alert('✓ Berhasil mengunduh ' + dlData.count + ' tiket untuk ' + dlData.eventName + '!');
+      loadStats();
+      document.getElementById('sync_status').innerHTML = '✓ Terakhir unduh: ' + new Date().toLocaleTimeString('id-ID');
+    } else {
+      alert('Gagal mengunduh: ' + dlData.error);
+    }
+  } catch(e) {
+    alert('Koneksi gagal: ' + e.message);
+  }
+}
+
 async function syncToCloud() {
   const tok = prompt('Masukkan Super Admin Token untuk sinkronisasi ke Cloud:');
   if (!tok) return;
@@ -386,6 +487,10 @@ class GateHubHandler(SimpleHTTPRequestHandler):
             self.handle_save_manifest(body)
             return
 
+        if path == '/api/list-events':
+            self.handle_list_events(body)
+            return
+
         if path == '/api/download-cloud':
             self.handle_download_cloud(body)
             return
@@ -401,7 +506,8 @@ class GateHubHandler(SimpleHTTPRequestHandler):
         self.send_header('Content-Type', 'application/json')
         self.send_header('Access-Control-Allow-Origin', '*')
         self.send_header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
-        self.send_header('Access-Control-Allow-Headers', 'Content-Type')
+        self.send_header('Access-Control-Allow-Headers', 'Content-Type, Access-Control-Request-Private-Network')
+        self.send_header('Access-Control-Allow-Private-Network', 'true')
         self.end_headers()
         self.wfile.write(json.dumps(data).encode('utf-8'))
 
@@ -409,7 +515,8 @@ class GateHubHandler(SimpleHTTPRequestHandler):
         self.send_response(200)
         self.send_header('Access-Control-Allow-Origin', '*')
         self.send_header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
-        self.send_header('Access-Control-Allow-Headers', 'Content-Type')
+        self.send_header('Access-Control-Allow-Headers', 'Content-Type, Access-Control-Request-Private-Network')
+        self.send_header('Access-Control-Allow-Private-Network', 'true')
         self.end_headers()
 
     def handle_validate(self, body):
@@ -579,6 +686,31 @@ class GateHubHandler(SimpleHTTPRequestHandler):
             'rate': rate,
             'logs': logs
         })
+
+    def handle_list_events(self, body):
+        token = str(body.get('token') or '').strip()
+        api_url = "https://ambiltiketnya-api.pram.workers.dev"
+        config_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'config.js')
+        if os.path.exists(config_path):
+            with open(config_path, 'r', encoding='utf-8') as f:
+                cf_text = f.read()
+                m = re.search(r'APP_API_URL\s*=\s*['"]([^'"]+)['"]', cf_text)
+                if m:
+                    api_url = m.group(1)
+
+        req_data = json.dumps({'action': 'adminEvents', 'token': token}).encode('utf-8')
+        req = urllib.request.Request(api_url, data=req_data, headers={'Content-Type': 'text/plain'})
+        try:
+            with urllib.request.urlopen(req, timeout=15) as resp:
+                res_json = json.loads(resp.read().decode('utf-8'))
+                if res_json.get('ok'):
+                    events = res_json.get('data') or []
+                    simplified = [{'id': e.get('id'), 'name': e.get('name'), 'sold': e.get('sold', 0)} for e in events]
+                    self.send_json({'ok': True, 'events': simplified})
+                else:
+                    self.send_json({'ok': False, 'error': res_json.get('error', 'Token tidak valid')})
+        except Exception as e:
+            self.send_json({'ok': False, 'error': str(e)})
 
     def handle_save_manifest(self, data):
         ev_id = str(data.get('eventId') or '').strip()

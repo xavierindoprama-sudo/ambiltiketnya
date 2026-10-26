@@ -5415,6 +5415,32 @@ const NL=String.fromCharCode(10),find=(a,id)=>a.find(x=>x.id===id),A={
  copyGateLink(){const el=$('#gl_txt');if(!el)return;navigator.clipboard.writeText(el.textContent.trim()).then(()=>toast(t('gate_copied'),0)).catch(()=>toast('Gagal menyalin',1))},
  async cacheEv(){const sel=$('#off_ev_sel');if(sel&&sel.value)await cacheOfflineEvent(sel.value)},
  async syncoff(){await syncOfflineQueue()},
+  dlGateManifestJson() {
+    const data = window._lastGateManifest;
+    if (!data) return toast('Data tiket belum tersedia.', 1);
+    const str = JSON.stringify(data, null, 2);
+    const blob = new Blob([str], { type: 'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    const evName = (data.eventName || 'Acara').replace(/[^a-zA-Z0-9]/g, '_');
+    a.download = `tiket_gatehub_${evName}.json`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    toast('File tiket tersimpan! 📥 Buka http://localhost:8080 lalu klik "📂 Impor File".', 0);
+  },
+
+  async copyGateManifestJson() {
+    const data = window._lastGateManifest;
+    if (!data) return toast('Data tiket belum tersedia.', 1);
+    try {
+      await navigator.clipboard.writeText(JSON.stringify(data));
+      toast('Data tiket disalin! 📋 Buka http://localhost:8080 lalu klik "📋 Tempel Data".', 0);
+    } catch(e) {
+      toast('Gagal menyalin.', 1);
+    }
+  },
+
   async sendToGateHub(el) {
     const sel = $('#off_ev_sel');
     const evId = (el && el.dataset && el.dataset.id) || (sel && sel.value) || getCurEvId();
@@ -5441,22 +5467,24 @@ const NL=String.fromCharCode(10),find=(a,id)=>a.find(x=>x.id===id),A={
           toast('Gate Hub merespons: ' + (hubData.error || 'Gagal menyimpan'), 1);
         }
       } catch(errHub) {
+        window._lastGateManifest = res;
         modal(`
           <button class="btn sm x" data-act="cm">&#10005;</button>
-          <div style="text-align:center;padding:24px 16px">
-            <div style="font-size:38px;margin-bottom:10px">💻</div>
-            <h3 style="margin:0 0 8px">Gate Hub Belum Berjalan di Laptop</h3>
-            <p class="muted" style="margin:0 auto 16px;max-width:380px;font-size:13px;line-height:1.5">
-              Data tiket acara <b>"${esc(evName)}"</b> (${res.count} tiket) berhasil diambil dari cloud, tetapi belum dapat terhubung ke <code>http://localhost:8080</code>.
+          <div style="text-align:center;padding:22px 16px">
+            <div style="font-size:36px;margin-bottom:8px">💻</div>
+            <h3 style="margin:0 0 6px">Koneksi Browser ke Gate Hub Dibatasi</h3>
+            <p class="muted" style="margin:0 auto 14px;max-width:390px;font-size:13px;line-height:1.5">
+              Data tiket acara <b>"${esc(evName)}"</b> (${res.count} tiket) sudah siap! Namun browser membatasi koneksi langsung dari website HTTPS ke HTTP lokal.
             </p>
-            <div style="background:rgba(255,255,255,.05);border:1px solid var(--bd);padding:12px;border-radius:10px;font-size:12px;text-align:left;margin-bottom:16px">
-              <b>Cara Menjalankan Gate Hub:</b><br>
-              1. Buka folder proyek di laptop ini.<br>
-              2. Klik ganda file <b>Jalankan_Gate_Hub.bat</b>.<br>
-              3. Setelah jendela Gate Hub terbuka, klik tombol "Coba Kirim Ulang" di bawah.
+            <div style="background:rgba(255,255,255,.05);border:1px solid var(--bd);padding:14px;border-radius:12px;font-size:13px;text-align:left;margin-bottom:16px;line-height:1.6">
+              <b>Pilih Cara Termudah:</b><br>
+              • <b>Opsi A (Paling Cepat):</b> Klik tombol <b>"📥 Simpan File Tiket"</b> di bawah, lalu buka tab Gate Hub (<code>http://localhost:8080</code>) dan klik <b>"📂 Impor File"</b>.<br>
+              • <b>Opsi B:</b> Klik <b>"📋 Salin Data"</b>, lalu di Gate Hub klik <b>"📋 Tempel Data"</b>.
             </div>
-            <div style="display:flex;justify-content:center;gap:8px">
-              <button class="btn pri" data-act="sendToGateHub" data-id="${evId}">🔄 Coba Kirim Ulang</button>
+            <div style="display:flex;justify-content:center;gap:8px;flex-wrap:wrap">
+              <button class="btn pri" data-act="dlGateManifestJson" style="font-weight:700">📥 Simpan File Tiket (.json)</button>
+              <button class="btn" data-act="copyGateManifestJson">📋 Salin Data</button>
+              <button class="btn" data-act="sendToGateHub" data-id="${evId}">🔄 Coba Kirim Langsung</button>
               <button class="btn" data-act="cm">${t('close')}</button>
             </div>
           </div>
