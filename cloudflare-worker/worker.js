@@ -453,7 +453,7 @@ async function setSystemSetting(env, key, value) {
 }
 
 async function callGemini(apiKey, prompt) {
-  const models = ['gemini-2.5-flash', 'gemini-1.5-flash', 'gemini-2.0-flash'];
+  const models = ['gemini-3.8-flash', 'gemini-2.0-flash', 'gemini-1.5-flash'];
   let lastErr = null;
   for (const model of models) {
     try {

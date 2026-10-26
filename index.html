@@ -5704,45 +5704,46 @@ const NL=String.fromCharCode(10),find=(a,id)=>a.find(x=>x.id===id),A={
     if (st) st.innerHTML = '<span style="color:var(--wn);font-weight:600">⏳ Menguji koneksi langsung ke Google Gemini AI...</span>';
 
     // 1. Uji koneksi langsung ke Google Gemini API dari browser
-    try {
-      const url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=' + encodeURIComponent(key);
-      const res = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: 'Halo Gemini! Konfirmasi koneksi dengan membalas: "Koneksi Google Gemini AI Berhasil Aktif!" dalam 1 kalimat pendek.' }] }],
-          generationConfig: { maxOutputTokens: 60, temperature: 0.2 }
-        })
-      });
-
-      const data = await res.json().catch(() => ({}));
-      if (res.ok) {
-        const reply = data?.candidates?.[0]?.content?.parts?.[0]?.text || 'Koneksi Berhasil!';
-        if (st) st.innerHTML = `<span style="color:var(--ok);font-weight:700">✓ Terhubung Berhasil! (Model: Gemini 2.5 Flash)</span><br><small class="muted">Balasan AI: "${esc(reply.trim())}"</small>`;
-        toast('Uji koneksi AI sukses! 🚀', 0);
-        ls.s('atk_gemini_key', key);
-        api('saveAiSettings', { geminiApiKey: key }).catch(() => {});
-        return;
-      } else {
-        const errDetail = data?.error?.message || `HTTP ${res.status}: ${res.statusText}`;
-        if (errDetail.toLowerCase().includes('api_key_invalid') || errDetail.toLowerCase().includes('not valid')) {
-          if (st) st.innerHTML = `<span style="color:var(--er);font-weight:700">✗ API Key Tidak Valid:</span><br><small style="color:var(--er)">Kunci ditolak oleh Google. Pastikan menyalin seluruh karakter kunci (awalan AIzaSy...).</small>`;
-        } else {
-          if (st) st.innerHTML = `<span style="color:var(--er);font-weight:700">✗ Google Error:</span> <small style="color:var(--er)">${esc(errDetail)}</small>`;
-        }
-        return;
-      }
-    } catch(errBrowser) {
-      // 2. Jika browser diblokir (misal adblocker), fallback uji lewat Cloudflare Worker
+    const testModels = ['gemini-3.8-flash', 'gemini-2.0-flash', 'gemini-1.5-flash'];
+    let lastErrDetail = '';
+    for (const m of testModels) {
       try {
-        const res = await api('testAiKey', { geminiApiKey: key }, t('loading'));
-        if (st) st.innerHTML = `<span style="color:var(--ok);font-weight:700">✓ Terhubung Berhasil! (Model: ${esc(res.model)})</span><br><small class="muted">Balasan AI: "${esc(res.reply)}"</small>`;
-        toast('Uji koneksi AI sukses! 🚀', 0);
-        ls.s('atk_gemini_key', key);
-      } catch(errServer) {
-        const msg = (errServer && errServer.message) ? errServer.message : 'Koneksi gagal';
-        if (st) st.innerHTML = `<span style="color:var(--er);font-weight:700">✗ Gagal:</span> <small style="color:var(--er)">${esc(msg)}</small>`;
+        const url = 'https://generativelanguage.googleapis.com/v1beta/models/' + m + ':generateContent?key=' + encodeURIComponent(key);
+        const res = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: 'Halo Gemini! Konfirmasi koneksi dengan membalas: "Koneksi Google Gemini AI Berhasil Aktif!" dalam 1 kalimat pendek.' }] }],
+            generationConfig: { maxOutputTokens: 60, temperature: 0.2 }
+          })
+        });
+
+        const data = await res.json().catch(() => ({}));
+        if (res.ok) {
+          const reply = data?.candidates?.[0]?.content?.parts?.[0]?.text || 'Koneksi Berhasil!';
+          if (st) st.innerHTML = `<span style="color:var(--ok);font-weight:700">✓ Terhubung Berhasil! (Model: ${esc(m)})</span><br><small class="muted">Balasan AI: "${esc(reply.trim())}"</small>`;
+          toast('Uji koneksi AI sukses! 🚀', 0);
+          ls.s('atk_gemini_key', key);
+          api('saveAiSettings', { geminiApiKey: key }).catch(() => {});
+          return;
+        } else {
+          lastErrDetail = data?.error?.message || `HTTP ${res.status}: ${res.statusText}`;
+          if (lastErrDetail.toLowerCase().includes('api_key_invalid') || lastErrDetail.toLowerCase().includes('not valid')) {
+            break;
+          }
+        }
+      } catch(e) {
+        lastErrDetail = e.message;
       }
+    }
+
+    if (lastErrDetail) {
+      if (lastErrDetail.toLowerCase().includes('api_key_invalid') || lastErrDetail.toLowerCase().includes('not valid')) {
+        if (st) st.innerHTML = `<span style="color:var(--er);font-weight:700">✗ API Key Tidak Valid:</span><br><small style="color:var(--er)">Kunci ditolak oleh Google. Pastikan menyalin seluruh karakter kunci (awalan AIzaSy...).</small>`;
+      } else {
+        if (st) st.innerHTML = `<span style="color:var(--er);font-weight:700">✗ Google Error:</span> <small style="color:var(--er)">${esc(lastErrDetail)}</small>`;
+      }
+      return;
     }
   },
 
@@ -5845,21 +5846,35 @@ Berikan catatan evaluatif kualitatif untuk masing-masing:
 
 Tulis dengan gaya bahasa yang profesional, tajam, bernas, dan memotivasi panitia untuk terus berkembang.`;
 
-        const url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=' + encodeURIComponent(localKey);
-        const res = await fetch(url, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            contents: [{ parts: [{ text: prompt }] }],
-            generationConfig: { temperature: 0.4, maxOutputTokens: 3500 }
-          })
-        });
-        const data = await res.json().catch(() => ({}));
-        if (!res.ok) {
-          throw new Error(data?.error?.message || `Google Error (${res.status})`);
+                const aiModels = ['gemini-3.8-flash', 'gemini-2.0-flash', 'gemini-1.5-flash'];
+        let clientErr = '';
+        for (const m of aiModels) {
+          try {
+            const url = 'https://generativelanguage.googleapis.com/v1beta/models/' + m + ':generateContent?key=' + encodeURIComponent(localKey);
+            const res = await fetch(url, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                contents: [{ parts: [{ text: prompt }] }],
+                generationConfig: { temperature: 0.4, maxOutputTokens: 3500 }
+              })
+            });
+            const data = await res.json().catch(() => ({}));
+            if (res.ok) {
+              analysisText = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+              if (analysisText) {
+                modelName = m;
+                break;
+              }
+            } else {
+              clientErr = data?.error?.message || `HTTP ${res.status}`;
+              if (clientErr.toLowerCase().includes('api_key_invalid')) break;
+            }
+          } catch(e) {
+            clientErr = e.message;
+          }
         }
-        analysisText = data?.candidates?.[0]?.content?.parts?.[0]?.text;
-        if (!analysisText) throw new Error('Respon AI kosong');
+        if (!analysisText) throw new Error(clientErr || 'Respon AI kosong');
       } catch(errClient) {
         return fail(errClient);
       }
