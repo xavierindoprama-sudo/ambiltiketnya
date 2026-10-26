@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lembar QR Code Simulasi - AmbilTiketnya</title>
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
+<style>
+:root{--bg:#090d16;--card:#111827;--card-border:rgba(255,255,255,.1);--ok:#10b981;--wn:#f59e0b;--er:#ef4444;--ac:#8b5cf6;--txt:#f1f5f9;--sub:#94a3b8}
+*{box-sizing:border-box}
+body{margin:0;padding:20px;background:var(--bg);color:var(--txt);font-family:system-ui,-apple-system,sans-serif}
+.container{max-width:1280px;margin:0 auto}
+.header{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:14px;padding-bottom:16px;border-bottom:1px solid var(--card-border);margin-bottom:20px}
+.logo{display:flex;align-items:center;gap:12px;font-size:20px;font-weight:900}
+.btn{padding:8px 14px;border-radius:10px;border:none;cursor:pointer;font-weight:700;font-size:13px;display:inline-flex;align-items:center;gap:6px;transition:.15s;text-decoration:none}
+.btn:hover{filter:brightness(1.1);transform:translateY(-1px)}
+.btn-pri{background:var(--ac);color:#fff}
+.btn-ok{background:var(--ok);color:#fff}
+.btn-wn{background:var(--wn);color:#000}
+.btn-er{background:rgba(239,68,68,.15);border:1px solid rgba(239,68,68,.3);color:var(--er)}
+.btn-outline{background:transparent;border:1px solid var(--card-border);color:var(--txt)}
+
+.stats-bar{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-bottom:18px}
+.stat-pill{background:var(--card);border:1px solid var(--card-border);padding:10px 16px;border-radius:12px;display:flex;justify-content:space-between;align-items:center}
+.stat-pill b{font-size:20px}
+
+.controls{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;margin-bottom:18px;background:var(--card);border:1px solid var(--card-border);padding:12px 16px;border-radius:14px}
+.filter-tabs{display:flex;gap:6px;flex-wrap:wrap}
+.filter-btn{padding:6px 12px;border-radius:8px;border:1px solid var(--card-border);background:transparent;color:var(--sub);font-size:12px;font-weight:700;cursor:pointer}
+.filter-btn.active{background:rgba(139,92,246,.25);border-color:var(--ac);color:#fff}
+.search-inp{background:rgba(255,255,255,.05);border:1px solid var(--card-border);color:#fff;padding:8px 14px;border-radius:8px;font-size:13px;outline:none;min-width:240px}
+
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(270px,1fr));gap:14px}
+.ticket-card{background:var(--card);border:1px solid var(--card-border);border-radius:14px;padding:14px;display:flex;flex-direction:column;align-items:center;text-align:center;position:relative;transition:.2s}
+.ticket-card:hover{border-color:rgba(255,255,255,.25);box-shadow:0 8px 24px rgba(0,0,0,.4)}
+.ticket-card.is-checked{border-color:rgba(16,185,129,.4);background:rgba(16,185,129,.04)}
+.ticket-card.is-partial{border-color:rgba(245,158,11,.4);background:rgba(245,158,11,.04)}
+
+.qr-box{background:#fff;padding:10px;border-radius:10px;margin:8px 0;box-shadow:0 4px 12px rgba(0,0,0,.3)}
+.ticket-code{font-family:monospace;font-weight:800;font-size:14px;letter-spacing:1px;color:#38bdf8;margin-top:2px}
+.ticket-name{font-weight:800;font-size:14px;margin:4px 0 2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+.ticket-sub{font-size:11px;color:var(--sub);margin-bottom:8px}
+
+.badge{font-size:10px;font-weight:800;padding:3px 8px;border-radius:99px;text-transform:uppercase;letter-spacing:.5px}
+.badge-pax{background:rgba(255,255,255,.1);color:var(--txt)}
+.badge-vip{background:linear-gradient(135deg,#f59e0b,#d97706);color:#000}
+.badge-status-uncheck{background:rgba(255,255,255,.07);color:var(--sub);border:1px dashed rgba(255,255,255,.2)}
+.badge-status-valid{background:rgba(16,185,129,.2);color:var(--ok);border:1px solid rgba(16,185,129,.4)}
+.badge-status-part{background:rgba(245,158,11,.2);color:var(--wn);border:1px solid rgba(245,158,11,.4)}
+</style>
+<script src="/qrcode.min.js"></script>
+</head>
+<body>
+<div class="container">
+  <div class="header">
+    <div class="logo">
+      <span>🧪</span>
+      <div>
+        Laboratorium Simulasi <span style="color:var(--ac);font-weight:400">| Lembar Scan QR Uji Coba</span>
+      </div>
+    </div>
+    <div style="display:flex;align-items:center;gap:8px">
+      <button class="btn btn-wn" onclick="generate100()">⚡ Buat 100 Tiket Dummy</button>
+      <button class="btn btn-er" onclick="resetData()">🗑️ Hapus Data</button>
+      <a href="/" class="btn btn-outline">🔙 Ke Dashboard Posko</a>
+    </div>
+  </div>
+
+  <div class="stats-bar">
+    <div class="stat-pill">
+      <div><small style="color:var(--sub)">Total Tiket</small><div style="font-size:11px;color:var(--sub)">Uji Coba</div></div>
+      <b id="s_total">0</b>
+    </div>
+    <div class="stat-pill" style="border-left:3px solid var(--ok)">
+      <div><small style="color:var(--sub)">Sudah Masuk</small><div style="font-size:11px;color:var(--ok)" id="s_pct">0%</div></div>
+      <b id="s_checked" style="color:var(--ok)">0</b>
+    </div>
+    <div class="stat-pill" style="border-left:3px solid var(--wn)">
+      <div><small style="color:var(--sub)">Belum Hadir</small><div style="font-size:11px;color:var(--wn)">Menunggu Scan</div></div>
+      <b id="s_remain" style="color:var(--wn)">0</b>
+    </div>
+    <div class="stat-pill">
+      <div><small style="color:var(--sub)">Status Sinkron</small><div style="font-size:11px;color:#38bdf8">Auto-polling 2s</div></div>
+      <b style="font-size:14px;color:var(--ok)">⚡ LIVE</b>
+    </div>
+  </div>
+
+  <div class="controls">
+    <div class="filter-tabs">
+      <button class="filter-btn active" onclick="setFilter('all', this)">Semua (<span id="cnt_all">0</span>)</button>
+      <button class="filter-btn" onclick="setFilter('uncheck', this)">⏳ Belum Masuk (<span id="cnt_uncheck">0</span>)</button>
+      <button class="filter-btn" onclick="setFilter('checked', this)">✓ Sudah Masuk (<span id="cnt_checked">0</span>)</button>
+      <button class="filter-btn" onclick="setFilter('multi', this)">👥 Rombongan (<span id="cnt_multi">0</span>)</button>
+      <button class="filter-btn" onclick="setFilter('vip', this)">⭐ VIP / Undangan (<span id="cnt_vip">0</span>)</button>
+    </div>
+    <input type="text" class="search-inp" id="search_inp" placeholder="🔍 Cari nama, gereja, atau kode..." oninput="renderGrid()">
+  </div>
+
+  <div class="grid" id="ticket_grid">
+    <div style="grid-column:1/-1;text-align:center;padding:60px 20px;color:var(--sub)">
+      Memuat daftar tiket uji coba...
+    </div>
+  </div>
+</div>
+
+<script>
+let TICKETS = [];
+let ACTIVE_FILTER = 'all';
+
+function renderQrSvg(code) {
+  if (typeof qrcode === 'undefined') return `<div style="padding:40px;color:#000;font-size:11px">QR</div>`;
+  try {
+    const qr = qrcode(0, 'M');
+    qr.addData(code);
+    qr.make();
+    const n = qr.getModuleCount();
+    let p = '';
+    for (let r = 0; r < n; r++) {
+      for (let c = 0; c < n; c++) {
+        if (qr.isDark(r, c)) p += `M${c} ${r}h1v1h-1z`;
+      }
+    }
+    return `<svg viewBox="0 0 ${n} ${n}" width="140" height="140" shape-rendering="crispEdges" style="display:block"><path d="${p}" fill="#000"/></svg>`;
+  } catch(e) {
+    return `<div style="padding:40px;color:#000;font-size:11px">QR</div>`;
+  }
+}
+
+async function loadTickets() {
+  try {
+    const res = await fetch('/api/tickets');
+    const d = await res.json();
+    if (d.ok) {
+      TICKETS = d.tickets || [];
+      updateStats();
+      renderGrid();
+    }
+  } catch(e) {}
+}
+
+function updateStats() {
+  const tot = TICKETS.length;
+  let checked = 0;
+  let uncheck = 0;
+  let multi = 0;
+  let vip = 0;
+
+  TICKETS.forEach(t => {
+    if (t.checked >= t.qty && t.qty > 0) checked++;
+    else if (t.checked === 0) uncheck++;
+    else checked++; // partial
+    if (t.qty > 1) multi++;
+    if (t.kind === 'invitation') vip++;
+  });
+
+  document.getElementById('s_total').textContent = tot;
+  document.getElementById('s_checked').textContent = checked;
+  document.getElementById('s_remain').textContent = tot - checked;
+  document.getElementById('s_pct').textContent = tot > 0 ? Math.round((checked / tot) * 100) + '%' : '0%';
+
+  document.getElementById('cnt_all').textContent = tot;
+  document.getElementById('cnt_uncheck').textContent = uncheck;
+  document.getElementById('cnt_checked').textContent = checked;
+  document.getElementById('cnt_multi').textContent = multi;
+  document.getElementById('cnt_vip').textContent = vip;
+}
+
+function setFilter(f, el) {
+  ACTIVE_FILTER = f;
+  document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+  if (el) el.classList.add('active');
+  renderGrid();
+}
+
+function renderGrid() {
+  const query = (document.getElementById('search_inp').value || '').toLowerCase().trim();
+  const grid = document.getElementById('ticket_grid');
+
+  const filtered = TICKETS.filter(t => {
+    // Filter tab
+    if (ACTIVE_FILTER === 'uncheck' && t.checked > 0) return false;
+    if (ACTIVE_FILTER === 'checked' && t.checked === 0) return false;
+    if (ACTIVE_FILTER === 'multi' && t.qty <= 1) return false;
+    if (ACTIVE_FILTER === 'vip' && t.kind !== 'invitation') return false;
+
+    // Search query
+    if (query) {
+      const match = t.code.toLowerCase().includes(query) ||
+                    (t.name || '').toLowerCase().includes(query) ||
+                    (t.church || '').toLowerCase().includes(query);
+      if (!match) return false;
+    }
+    return true;
+  });
+
+  if (!filtered.length) {
+    grid.innerHTML = `
+      <div style="grid-column:1/-1;text-align:center;padding:60px 20px;color:var(--sub)">
+        ${TICKETS.length === 0 ? 'Belum ada tiket uji coba. Klik tombol kuning <b>"⚡ Buat 100 Tiket Dummy"</b> di kanan atas untuk memulai!' : 'Tidak ada tiket yang sesuai dengan filter.'}
+      </div>`;
+    return;
+  }
+
+  grid.innerHTML = filtered.map(t => {
+    const isFull = t.checked >= t.qty && t.qty > 0;
+    const isPart = t.checked > 0 && t.checked < t.qty;
+    const cardClass = isFull ? 'is-checked' : (isPart ? 'is-partial' : '');
+
+    let statusBadge = '';
+    if (isFull) {
+      statusBadge = `<span class="badge badge-status-valid">✓ Sudah Masuk (${t.gate || 'Gate'})</span>`;
+    } else if (isPart) {
+      statusBadge = `<span class="badge badge-status-part">👥 Masuk Sebagian (${t.checked}/${t.qty})</span>`;
+    } else {
+      statusBadge = `<span class="badge badge-status-uncheck">⏳ Belum Masuk</span>`;
+    }
+
+    const kindBadge = t.kind === 'invitation'
+      ? `<span class="badge badge-vip">VIP</span>`
+      : (t.qty > 1 ? `<span class="badge badge-pax">👥 ${t.qty} PAX</span>` : `<span class="badge badge-pax">1 PAX</span>`);
+
+    return `
+      <div class="ticket-card ${cardClass}" id="card_${t.code}">
+        <div style="display:flex;justify-content:space-between;width:100%;align-items:center;margin-bottom:4px">
+          ${kindBadge}
+          ${statusBadge}
+        </div>
+        <div class="qr-box">
+          ${renderQrSvg(t.code)}
+        </div>
+        <div class="ticket-code">${t.code}</div>
+        <div class="ticket-name" title="${t.name}">${t.name}</div>
+        <div class="ticket-sub">${t.church || 'Jemaat'} ${t.age ? '· ' + t.age + ' thn' : ''}</div>
+      </div>
+    `;
+  }).join('');
+}
+
+async function generate100() {
+  if (!confirm('Buat 100 data tiket dummy sekarang? Data uji coba sebelumnya akan digantikan.')) return;
+  try {
+    const res = await fetch('/api/dummy-generate', { method: 'POST' });
+    const d = await res.json();
+    if (d.ok) {
+      alert('✓ Berhasil membuat 100 tiket dummy!\n\nSilakan arahkan kamera scanner HP ke layar laptop untuk mulai menguji.');
+      loadTickets();
+    } else {
+      alert('Gagal: ' + d.error);
+    }
+  } catch(e) {
+    alert('Error: ' + e.message);
+  }
+}
+
+async function resetData() {
+  if (!confirm('Yakin ingin menghapus seluruh data tiket uji coba?')) return;
+  try {
+    const res = await fetch('/api/dummy-reset', { method: 'POST' });
+    const d = await res.json();
+    if (d.ok) {
+      alert('✓ Seluruh data uji coba telah dibersihkan!');
+      loadTickets();
+    }
+  } catch(e) {
+    alert('Error: ' + e.message);
+  }
+}
+
+loadTickets();
+setInterval(loadTickets, 2000);
+</script>
+</body>
+</html>

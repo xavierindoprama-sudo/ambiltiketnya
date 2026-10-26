@@ -296,6 +296,25 @@ body{margin:0;padding:20px;background:var(--bg);color:var(--txt);font-family:sys
         </div>
         <div id="sync_status" style="margin-top:12px;font-size:12px;color:var(--sub);text-align:center"></div>
       </div>
+      <div class="card" style="border:1px dashed rgba(245,158,11,.4);background:rgba(245,158,11,.04)">
+        <h3 style="color:#fbbf24">🧪 Laboratorium Simulasi Gate</h3>
+        <p style="color:var(--sub);font-size:12px;line-height:1.5;margin:0 0 12px">
+          Uji coba lonjakan antrean: buat 100 tiket contoh (perorangan, rombongan keluarga, VIP) untuk menguji validasi, pencegahan tiket ganda, dan kecepatan scanner HP.
+        </p>
+        <div style="display:flex;flex-direction:column;gap:8px">
+          <button class="btn btn-pri" onclick="generateDummyTickets()" style="background:#f59e0b;color:#000;justify-content:center;font-size:13px">
+            ⚡ Isi 100 Tiket Dummy
+          </button>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+            <a href="/simulasi.html" target="_blank" class="btn btn-outline" style="justify-content:center;font-size:12px;text-decoration:none">
+              📱 Buka Lembar QR
+            </a>
+            <button class="btn btn-outline" onclick="resetDummyTickets()" style="justify-content:center;font-size:12px;color:var(--er);border-color:rgba(239,68,68,.3)">
+              🗑️ Reset Data
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
 
     <!-- KOLOM KANAN: LIVE CHECK-IN FEED -->
@@ -524,6 +543,37 @@ async function syncToCloud() {
   }
 }
 
+
+async function generateDummyTickets() {
+  if (!confirm('Buat 100 data tiket simulasi sekarang? Tiket sebelumnya akan digantikan.')) return;
+  try {
+    const res = await fetch('/api/dummy-generate', { method: 'POST' });
+    const d = await res.json();
+    if (d.ok) {
+      alert('✓ Berhasil membuat 100 tiket dummy uji coba!\n\nKlik tombol "📱 Buka Lembar QR" untuk menampilkan tiket di layar.');
+      loadStats();
+    } else {
+      alert('Gagal: ' + d.error);
+    }
+  } catch(e) {
+    alert('Error: ' + e.message);
+  }
+}
+
+async function resetDummyTickets() {
+  if (!confirm('Yakin ingin menghapus seluruh data tiket uji coba?')) return;
+  try {
+    const res = await fetch('/api/dummy-reset', { method: 'POST' });
+    const d = await res.json();
+    if (d.ok) {
+      alert('✓ Seluruh data uji coba telah dibersihkan!');
+      loadStats();
+    }
+  } catch(e) {
+    alert('Error: ' + e.message);
+  }
+}
+
 loadInfo();
 loadStats();
 setInterval(loadStats, 1500);
@@ -564,6 +614,10 @@ class GateHubHandler(SimpleHTTPRequestHandler):
             self.handle_stats()
             return
 
+        if path == '/api/tickets':
+            self.handle_get_tickets()
+            return
+
         # Fallback to standard static file server (for scan.html, config.js, favicon.svg, etc.)
         super().do_GET()
 
@@ -596,6 +650,14 @@ class GateHubHandler(SimpleHTTPRequestHandler):
 
         if path == '/api/sync-cloud':
             self.handle_sync_cloud(body)
+            return
+
+        if path == '/api/dummy-generate':
+            self.handle_dummy_generate()
+            return
+
+        if path == '/api/dummy-reset':
+            self.handle_dummy_reset()
             return
 
         self.send_json({'error': 'NOT_FOUND'}, status=404)
@@ -905,6 +967,84 @@ class GateHubHandler(SimpleHTTPRequestHandler):
                     self.send_json({'ok': False, 'error': res_json.get('error', 'Gagal sinkron')})
         except Exception as e:
             self.send_json({'ok': False, 'error': str(e)})
+
+
+    def handle_get_tickets(self):
+        conn = sqlite3.connect(DB_FILE)
+        c = conn.cursor()
+        c.execute('SELECT code, name, church, age, qty, checked_in, kind, checked_in_gate, checked_in_at FROM tickets ORDER BY code ASC')
+        rows = c.fetchall()
+        conn.close()
+        tickets = []
+        for r in rows:
+            tickets.append({
+                'code': r[0],
+                'name': r[1],
+                'church': r[2],
+                'age': r[3],
+                'qty': r[4],
+                'checked': r[5],
+                'kind': r[6],
+                'gate': r[7],
+                'at': r[8]
+            })
+        self.send_json({'ok': True, 'tickets': tickets})
+
+    def handle_dummy_generate(self):
+        import random
+        first_names = ['Budi', 'David', 'Grace', 'Michael', 'Maria', 'Daniel', 'Yohanes', 'Ruth', 'Samuel', 'Christine', 'Jonathan', 'Stefanie', 'Andreas', 'Jessica', 'Hendra', 'Ratna', 'Petrus', 'Theresia', 'Anton', 'Agnes', 'Kevin', 'Cindy', 'Victor', 'Melisa', 'Ronald', 'Natalia', 'Felix', 'Irene', 'Edward', 'Veronica']
+        last_names = ['Santoso', 'Wijaya', 'Siregar', 'Hutapea', 'Kurniawan', 'Sitorus', 'Pratama', 'Simanjuntak', 'Kusuma', 'Halim', 'Tanudjaja', 'Hartono', 'Setiawan', 'Lubis', 'Panggabean', 'Sinaga', 'Wibowo', 'Tanjung', 'Susanto', 'Gunawan']
+        churches = ['GBI Glow Fellowship', 'HKBP Sudirman', 'GPIB Paulus Menteng', 'GKI Pondok Indah', 'Gereja Tiberias Roxy', 'Paroki Katedral Jakarta', 'GSJA Bethel Sunter', 'GKII Ebenhaezer', 'GBI Senayan City', 'GKI Kebayoran Baru']
+
+        conn = sqlite3.connect(DB_FILE)
+        c = conn.cursor()
+
+        ev_id = 'evt_simulasi_gate'
+        ev_name = 'Uji Coba Gate Hub (Simulasi 100 Tiket)'
+        c.execute('DELETE FROM events')
+        c.execute('INSERT INTO events(id, name, downloaded_at, total_tickets) VALUES(?, ?, ?, ?)',
+                  (ev_id, ev_name, datetime.now().isoformat(), 100))
+
+        c.execute('DELETE FROM tickets')
+        c.execute('DELETE FROM checkin_logs')
+
+        for i in range(1, 101):
+            code = f'SIM-{i:03d}'
+            f_name = random.choice(first_names)
+            l_name = random.choice(last_names)
+            church = random.choice(churches)
+            age = random.randint(18, 65)
+            if i <= 70:
+                name = f'{f_name} {l_name}'
+                qty = 1
+                kind = 'regular'
+            elif i <= 90:
+                qty = random.choice([2, 3, 4, 5])
+                name = f'Kel. {f_name} {l_name}' if random.random() > 0.4 else f'Rombongan {f_name} ({church})'
+                kind = 'regular'
+            else:
+                qty = random.choice([1, 2])
+                name = f'Pdt. {f_name} {l_name}' if random.random() > 0.5 else f'Tamu VIP {f_name} {l_name}'
+                kind = 'invitation'
+
+            c.execute('''
+                INSERT INTO tickets(code, event_id, name, church, age, qty, checked_in, status, kind)
+                VALUES(?, ?, ?, ?, ?, ?, 0, 'confirmed', ?)
+            ''', (code, ev_id, name, church, age, qty, kind))
+
+        conn.commit()
+        conn.close()
+        self.send_json({'ok': True, 'count': 100, 'eventName': ev_name})
+
+    def handle_dummy_reset(self):
+        conn = sqlite3.connect(DB_FILE)
+        c = conn.cursor()
+        c.execute('DELETE FROM events')
+        c.execute('DELETE FROM tickets')
+        c.execute('DELETE FROM checkin_logs')
+        conn.commit()
+        conn.close()
+        self.send_json({'ok': True, 'message': 'Data uji coba telah dibersihkan.'})
 
 def run_server():
     init_db()
