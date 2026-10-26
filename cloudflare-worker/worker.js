@@ -2453,6 +2453,158 @@ Tulis dengan gaya bahasa yang profesional, tajam, bernas, dan memotivasi panitia
           return json({ ok: true, data: cacheData });
         }
 
+        if (action === 'analyticsAiAnalyze') {
+          needRole(2);
+          await ensureFeatureTables(env);
+          let key = String(params.geminiApiKey || '').trim();
+          if (!key) {
+            key = (await getSystemSetting(env, 'gemini_api_key')) || (env.GEMINI_API_KEY || '').trim();
+          }
+          if (!key) throw new Error('API_KEY_REQUIRED');
+
+          const evId = String(params.eventId || '').trim();
+          let evName = 'Semua Acara (Global)';
+          if (evId) {
+            const evRow = (await neonQuery(env, `SELECT name FROM events WHERE id=$1::uuid`, [evId]))[0];
+            if (evRow) evName = evRow.name;
+          }
+
+          let whereSql = '';
+          const qArgs = [];
+          if (evId) {
+            whereSql = 'WHERE o.event_id = $1::uuid';
+            qArgs.push(evId);
+          }
+          if (u.role === 2 && u.organizer_id) {
+            qArgs.push(u.organizer_id);
+            whereSql += (whereSql ? ' AND ' : 'WHERE ') + `e.organizer_id = $${qArgs.length}::uuid`;
+          }
+
+          const sql = `SELECT o.qty, o.status, o.checked_in, o.checked_in_at, o.kind,
+            coalesce(o.guestbook_message, '') AS guestbook_message,
+            CASE WHEN o.kind IN ('invitation','walk_in') THEN o.guest_age ELSE u.age END AS age,
+            CASE WHEN o.kind IN ('invitation','walk_in') THEN o.guest_org ELSE u.church END AS church
+            FROM orders o JOIN users u ON u.id=o.user_id JOIN events e ON e.id=o.event_id
+            ${whereSql}
+            ORDER BY o.created_at DESC LIMIT 3000`;
+          const rows = await neonQuery(env, sql, qArgs);
+
+          if (!rows.length) {
+            throw new Error('NO_ORDER_DATA');
+          }
+
+          const activeOrders = rows.filter(o => o.status !== 'cancelled');
+          const totalBooked = activeOrders.reduce((a, o) => a + (o.qty || 1), 0);
+          const totalChecked = activeOrders.reduce((a, o) => a + (o.checked_in || 0), 0);
+          const noShow = Math.max(0, totalBooked - totalChecked);
+          const rate = totalBooked ? Math.round((totalChecked / totalBooked) * 100) : 0;
+          const vipCount = activeOrders.filter(o => o.kind === 'invitation').reduce((a, o) => a + (o.qty || 1), 0);
+          const regCount = Math.max(0, totalBooked - vipCount);
+
+          const timeBuckets = {};
+          activeOrders.filter(o => o.checked_in_at).forEach(o => {
+            const d = new Date(o.checked_in_at);
+            const m = d.getMinutes() < 30 ? '00' : '30';
+            const slot = String(d.getHours()).padStart(2, '0') + ':' + m;
+            timeBuckets[slot] = (timeBuckets[slot] || 0) + (o.checked_in || 1);
+          });
+          const sortedSlots = Object.keys(timeBuckets).sort();
+          const peakSlot = sortedSlots.length ? sortedSlots.reduce((a, b) => timeBuckets[a] > timeBuckets[b] ? a : b) : '';
+          const peakCount = peakSlot ? timeBuckets[peakSlot] : 0;
+
+          const churches = {};
+          activeOrders.forEach(o => {
+            const ch = (o.church || '').trim();
+            if (ch) churches[ch] = (churches[ch] || 0) + (o.qty || 1);
+          });
+          const sortedChurches = Object.entries(churches).sort((a, b) => b[1] - a[1]);
+
+          const ageBuckets = {'<18': 0, '18-25': 0, '26-35': 0, '36-50': 0, '51-60': 0, '>60': 0};
+          let totalAgeCount = 0;
+          activeOrders.filter(o => o.age).forEach(o => {
+            const a = parseInt(o.age, 10);
+            const q = o.qty || 1;
+            if (!isNaN(a)) {
+              if (a < 18) ageBuckets['<18'] += q;
+              else if (a <= 25) ageBuckets['18-25'] += q;
+              else if (a <= 35) ageBuckets['26-35'] += q;
+              else if (a <= 50) ageBuckets['36-50'] += q;
+              else if (a <= 60) ageBuckets['51-60'] += q;
+              else ageBuckets['>60'] += q;
+              totalAgeCount += q;
+            }
+          });
+
+          const timeSlotsText = sortedSlots.map(s => `  * Jam ${s} WIB: ${timeBuckets[s]} orang check-in`).join('\n');
+          const topChurchesText = sortedChurches.slice(0, 10).map((c, i) => `  ${i + 1}. ${c[0]}: ${c[1]} orang (${Math.round((c[1]/totalBooked)*100)}%)`).join('\n');
+          const ageLabels = {'<18':'< 18 tahun (Anak/Remaja)','18-25':'18–25 tahun (Pemuda)','26-35':'26–35 tahun (Dewasa Muda)','36-50':'36–50 tahun (Dewasa)','51-60':'51–60 tahun (Pra-Senior)','>60':'> 60 tahun (Senior)'};
+          const ageText = Object.entries(ageBuckets).filter(x => x[1] > 0).map(([k, v]) => `  * ${ageLabels[k]}: ${v} orang (${Math.round((v/totalAgeCount)*100)}%)`).join('\n');
+          const guestbookSamples = activeOrders.filter(o => o.guestbook_message && o.guestbook_message.trim()).slice(0, 15).map((o, i) => `  ${i + 1}. "${o.guestbook_message.trim()}"`).join('\n');
+
+          const prompt = `Anda adalah seorang Ahli Strategi Manajemen Acara & Konsultan Analisis Data Audiens (Event Intelligence & Operations Specialist) terkemuka.
+Tugas Anda adalah melakukan analisis mendalam, komprehensif, operasional, dan strategis terhadap laporan data kehadiran dan demografi acara berikut:
+
+### DATA LAPORAN & KEHADIRAN ACARA:
+- Nama Acara: ${evName}
+- Total Tiket Dipesan: ${totalBooked} tiket (${regCount} Reguler, ${vipCount} Undangan VIP)
+- Total Kehadiran Riil: ${totalChecked} orang (${rate}% Rasio Kehadiran / Turnout Rate)
+- Tidak Hadir (No-Show): ${noShow} orang (${100 - rate}%)
+- Puncak Arus Check-in: ${peakSlot ? `${peakSlot} WIB (${peakCount} orang)` : 'Belum terdata'}
+- Sebaran Waktu Check-In:
+${timeSlotsText || '- (Belum ada data waktu check-in)'}
+- Demografi Komunitas / Gereja Asal:
+  * Total Komunitas Terdata: ${sortedChurches.length} gereja/komunitas
+  * Top 5 Komunitas Terbanyak:
+${topChurchesText || '- (Belum ada data komunitas)'}
+- Demografi Kelompok Usia Peserta:
+${ageText || '- (Belum ada data usia)'}
+${guestbookSamples ? `\n- Sampel Ucapan / Catatan Buku Tamu Peserta:\n${guestbookSamples}` : ''}
+
+---
+### FORMAT LAPORAN ANALISIS EKSEKUTIF YANG HARUS ANDA SUSUN:
+Susun laporan dalam Bahasa Indonesia profesional, bernas, berwawasan tajam, dengan format Markdown standar:
+
+## 📊 1. Ringkasan Eksekutif & Health Score Acara
+- Berikan sintesis cepat performa kehadiran acara.
+- Cantumkan **"Attendance Health Score"** (misal: **"Sangat Sukses (90-100%)"**, **"Optimal & Solid"**, atau **"Perlu Strategi Konversi Lebih Baik"**).
+- Berikan ulasan singkat mengenai efektivitas konversi pemesanan ke kehadiran riil.
+
+## ⏱️ 2. Analisis Arus Kedatangan & Efisiensi Alur Check-in
+- Analisis pola kedatangan peserta (apakah menumpuk mendekati acara dimulai, tersebar merata, atau terlambat).
+- Evaluasi titik kritis beban antrean (*bottleneck*) di gerbang/meja registrasi dan kapasitas petugas usher/pindai QR.
+
+## 👥 3. Karakteristik & Segmentasi Audiens
+- Bedah komposisi komunitas/gereja yang hadir (seberapa luas jangkauan acara, dominasi komunitas tuan rumah vs tamu).
+- Analisis segmentasi usia audiens dan relevansi acara terhadap kelompok demografi yang mendominasi.
+
+## 📉 4. Diagnosis No-Show & Faktor Retensi
+- Berikan analisis kritis terhadap potensi penyebab ${noShow} peserta batal hadir (${100 - rate}% no-show rate).
+- Strategi pencegahan atau komitmen kehadiran (misal: automated reminder via WhatsApp, sistem deposit/komitmen, batas waktu klaim tiket).
+
+## 🚀 5. Rekomendasi Taktis & Strategis Acara Selanjutnya
+- Berikan 4-5 poin rekomendasi operasional yang terukur untuk panitia (penjadwalan registrasi, penataan jalur masuk, strategi promosi ke segmen usia tertentu, dan kemitraan antar komunitas).
+
+Tulis secara elegan, objektif, tajam, dan berorientasi pada peningkatan kualitas operasional acara masa depan.`;
+
+          const aiRes = await callGemini(key, prompt);
+          const cacheKey = 'ai_analytics_analysis_' + (evId || 'global');
+          const cacheData = {
+            analysis: aiRes.text,
+            model: aiRes.model,
+            eventName: evName,
+            totalBooked,
+            totalChecked,
+            rate,
+            noShow,
+            peakSlot,
+            churchCount: sortedChurches.length,
+            generatedAt: new Date().toISOString()
+          };
+          await setSystemSetting(env, cacheKey, JSON.stringify(cacheData));
+
+          return json({ ok: true, data: cacheData });
+        }
+
         if (action === 'assignTable') {
           needRole(2);
           const ordId = String(params.orderId || '').trim();
