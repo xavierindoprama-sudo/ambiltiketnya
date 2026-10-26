@@ -101,6 +101,25 @@ button.btn{width:100%;margin-top:10px;padding:12px;border:0;border-radius:12px;b
       </select>
     </div>
 
+    <!-- LOCAL HUB GATE SELECTOR (Aktif otomatis saat terhubung ke Wi-Fi Posko Laptop) -->
+    <div id="gate_sel_wrap" style="display:none;align-items:center;justify-content:center;gap:6px;margin:2px 0 6px;width:100%;z-index:10">
+      <span style="font-size:11px;font-weight:800;color:#38bdf8;letter-spacing:1px;text-transform:uppercase">PINTU:</span>
+      <select id="sc_gate_sel" style="background:rgba(14,165,233,.25);border:1.5px solid #38bdf8;color:#fff;border-radius:99px;padding:3px 10px;font-size:12px;font-weight:700;backdrop-filter:blur(6px);cursor:pointer">
+        <option value="Pintu 1">🚪 Pintu 1</option>
+        <option value="Pintu 2">🚪 Pintu 2</option>
+        <option value="Pintu 3">🚪 Pintu 3</option>
+        <option value="Pintu 4">🚪 Pintu 4</option>
+        <option value="Pintu 5">🚪 Pintu 5</option>
+        <option value="Pintu 6">🚪 Pintu 6</option>
+        <option value="Pintu 7">🚪 Pintu 7</option>
+        <option value="Pintu 8">🚪 Pintu 8</option>
+        <option value="Pintu 9">🚪 Pintu 9</option>
+        <option value="Pintu 10">🚪 Pintu 10</option>
+        <option value="Pintu VIP">⭐ Pintu VIP</option>
+        <option value="Pintu Khusus">🏷️ Pintu Khusus</option>
+      </select>
+    </div>
+
     <div class="frame-wrap">
       <div class="frame" id="fr">
         <div class="crn ctl"></div><div class="crn ctr"></div>
@@ -135,6 +154,20 @@ button.btn{width:100%;margin-top:10px;padding:12px;border:0;border-radius:12px;b
 <script>
 const h = new URLSearchParams(location.hash.slice(1)), N = h.get('n'), O = h.get('o');
 const TOK = h.get('tok') || (typeof localStorage !== 'undefined' ? localStorage.getItem('atk_tok') : '') || '';
+const isLocalHub = location.port === '8080' || (location.hostname !== 'ambiltiketnya.online' && (location.hostname.startsWith('192.168.') || location.hostname.startsWith('10.') || location.hostname === 'localhost' || location.hostname === '127.0.0.1'));
+
+if (isLocalHub) {
+  window.addEventListener('DOMContentLoaded', () => {
+    const gw = $('gate_sel_wrap');
+    if (gw) gw.style.display = 'flex';
+    const gs = $('sc_gate_sel');
+    if (gs) {
+      const saved = localStorage.getItem('atk_gate_num');
+      if (saved) gs.value = saved;
+      gs.onchange = e => localStorage.setItem('atk_gate_num', e.target.value);
+    }
+  });
+}
 const $ = s => document.getElementById(s);
 
 let actx = null, muted = false, stream = null, track = null, torch = false, facing = 'environment';
@@ -300,6 +333,30 @@ async function submitPartialCheckin(code, all) {
   
   $('res_area').innerHTML = `<div class="card" style="border-color:#8b5cf6;background:rgba(20,15,40,.92)"><div style="display:flex;align-items:center;gap:10px;justify-content:center"><span style="display:inline-block;animation:spin 1s linear infinite">⏳</span><span style="font-size:14px;font-weight:600">Memproses check-in ${qtyToEnter} orang...</span></div></div>`;
 
+  if (isLocalHub) {
+    try {
+      const gateName = ($('sc_gate_sel') ? $('sc_gate_sel').value : 'Pintu Masuk');
+      const res = await fetch('/api/validate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          code: code,
+          gate: gateName,
+          checkpoint: ($('sc_cp_sel') ? $('sc_cp_sel').value : 'main_gate'),
+          entered_qty: qtyToEnter,
+          confirm: true
+        })
+      });
+      const r = await res.json();
+      if (r.ok && r.data) showResult(r.data);
+      else showResult({ result: 'ERROR', code: code, message: r.error || 'Gagal memvalidasi' });
+      return;
+    } catch(e) {
+      showResult({ result: 'ERROR', code: code, message: 'Koneksi ke laptop posko terputus. Pastikan Wi-Fi aktif.' });
+      return;
+    }
+  }
+
   const tok = TOK || (typeof localStorage !== 'undefined' ? localStorage.getItem('atk_tok') : '');
   const apiUrl = window.APP_API_URL;
   if (apiUrl && tok) {
@@ -386,6 +443,29 @@ async function handleCode(raw) {
   if (resTimer) { clearTimeout(resTimer); resTimer = null; }
 
   $('res_area').innerHTML = `<div class="card" style="border-color:#8b5cf6;background:rgba(20,15,40,.92)"><div style="display:flex;align-items:center;gap:10px;justify-content:center"><span style="display:inline-block;animation:spin 1s linear infinite">⏳</span><span style="font-size:14px;font-weight:600">Memverifikasi ${esc(code)}...</span></div></div>`;
+
+  if (isLocalHub) {
+    try {
+      const gateName = ($('sc_gate_sel') ? $('sc_gate_sel').value : 'Pintu Masuk');
+      const res = await fetch('/api/validate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          code: code,
+          gate: gateName,
+          checkpoint: ($('sc_cp_sel') ? $('sc_cp_sel').value : 'main_gate'),
+          entered_qty: 1
+        })
+      });
+      const r = await res.json();
+      if (r.ok && r.data) showResult(r.data);
+      else showResult({ result: 'ERROR', code: code, message: r.error || 'Gagal memvalidasi' });
+      return;
+    } catch(e) {
+      showResult({ result: 'ERROR', code: code, message: 'Koneksi ke laptop posko terputus. Pastikan Wi-Fi aktif.' });
+      return;
+    }
+  }
 
   let answered = false;
   const timer = setTimeout(async () => {

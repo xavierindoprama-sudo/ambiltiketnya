@@ -11,3 +11,7 @@
 
 # Temporary logs
 *.log
+
+# Database lokal Gate Hub
+*.db
+__pycache__/
