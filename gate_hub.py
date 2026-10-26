@@ -191,10 +191,17 @@ class GateHubHandler(SimpleHTTPRequestHandler):
 
         if path == '/api/info':
             ip = get_local_ip()
+            conn = sqlite3.connect(DB_FILE)
+            c = conn.cursor()
+            c.execute("SELECT value FROM settings WHERE key = 'admin_token'")
+            row = c.fetchone()
+            conn.close()
+            has_token = bool(row and row[0])
             data = {
                 'ip': ip,
                 'port': PORT,
                 'httpsPort': HTTPS_PORT,
+                'hasToken': has_token,
                 'scanUrl': f"https://{ip}:{HTTPS_PORT}/scan.html"
             }
             self.send_json(data)
@@ -248,6 +255,16 @@ class GateHubHandler(SimpleHTTPRequestHandler):
 
         if path == '/api/dummy-reset':
             self.handle_dummy_reset()
+            return
+
+        if path == '/api/save-token':
+            tok = str(body.get('token') or '').strip()
+            conn = sqlite3.connect(DB_FILE)
+            c = conn.cursor()
+            c.execute("INSERT OR REPLACE INTO settings(key, value) VALUES('admin_token', ?)", (tok,))
+            conn.commit()
+            conn.close()
+            self.send_json({'ok': True, 'saved': bool(tok)})
             return
 
         self.send_json({'error': 'NOT_FOUND'}, status=404)
@@ -441,6 +458,14 @@ class GateHubHandler(SimpleHTTPRequestHandler):
     def handle_list_events(self, body):
         token = str(body.get('token') or '').strip()
         api_url = get_api_url()
+        if not token:
+            conn = sqlite3.connect(DB_FILE)
+            c = conn.cursor()
+            c.execute("SELECT value FROM settings WHERE key = 'admin_token'")
+            row = c.fetchone()
+            conn.close()
+            if row and row[0]:
+                token = row[0].strip()
 
         req_data = json.dumps({'action': 'adminEvents', 'token': token}).encode('utf-8')
         req = urllib.request.Request(api_url, data=req_data, headers={'Content-Type': 'text/plain'})
@@ -471,6 +496,10 @@ class GateHubHandler(SimpleHTTPRequestHandler):
         c.execute('INSERT INTO events(id, name, downloaded_at, total_tickets) VALUES(?, ?, ?, ?)',
                   (ev_id, ev_name, datetime.now().isoformat(), len(tickets)))
 
+        admin_token = str(data.get('adminToken') or '').strip()
+        if admin_token:
+            c.execute("INSERT OR REPLACE INTO settings(key, value) VALUES('admin_token', ?)", (admin_token,))
+
         c.execute('DELETE FROM tickets')
         for t in tickets:
             c.execute('''
@@ -486,6 +515,14 @@ class GateHubHandler(SimpleHTTPRequestHandler):
         token = str(body.get('token') or '').strip()
         event_id = str(body.get('eventId') or '').strip()
         api_url = get_api_url()
+        if not token:
+            conn = sqlite3.connect(DB_FILE)
+            c = conn.cursor()
+            c.execute("SELECT value FROM settings WHERE key = 'admin_token'")
+            row = c.fetchone()
+            conn.close()
+            if row and row[0]:
+                token = row[0].strip()
 
         req_data = json.dumps({
             'action': 'offlineManifest',
@@ -530,6 +567,16 @@ class GateHubHandler(SimpleHTTPRequestHandler):
 
         conn = sqlite3.connect(DB_FILE)
         c = conn.cursor()
+        if not token:
+            c.execute("SELECT value FROM settings WHERE key = 'admin_token'")
+            row = c.fetchone()
+            if row and row[0]:
+                token = row[0].strip()
+
+        if not token:
+            conn.close()
+            self.send_json({'ok': False, 'needToken': True, 'error': 'Token Admin belum tersimpan. Silakan masukkan token terlebih dahulu.'})
+            return
         c.execute('SELECT code, checked_in_at, checked_in_gate FROM tickets WHERE checked_in > 0')
         checked_rows = c.fetchall()
         conn.close()

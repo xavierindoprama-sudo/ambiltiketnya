@@ -102,9 +102,13 @@ body{margin:0;padding:20px;background:var(--bg);color:var(--txt);font-family:sys
 
       <div class="card">
         <h3>☁️ Sinkronisasi Cloud (Cloudflare)</h3>
-        <div style="background:rgba(139,92,246,.15);border:1px solid rgba(139,92,246,.3);padding:10px 12px;border-radius:10px;font-size:12px;line-height:1.4;margin-bottom:14px;color:#ddd6fe">
+        <div style="background:rgba(139,92,246,.15);border:1px solid rgba(139,92,246,.3);padding:10px 12px;border-radius:10px;font-size:12px;line-height:1.4;margin-bottom:12px;color:#ddd6fe">
           <b>💡 Cara 1-Klik Paling Praktis:</b><br>
-          Buka dashboard admin <b>ambiltiketnya.online</b> di browser laptop ini, masuk menu <b>Pos Check-In / Offline</b>, lalu klik tombol hijau <b>"💻 Kirim ke Gate Hub"</b>!
+          Buka dashboard admin <b>ambiltiketnya.online</b> di laptop ini, masuk menu <b>Pos Check-In / Offline</b>, lalu klik tombol hijau <b>"💻 Kirim ke Gate Hub"</b>!
+        </div>
+        <div style="display:flex;align-items:center;justify-content:space-between;background:rgba(255,255,255,.05);border:1px solid var(--card-border);padding:8px 12px;border-radius:10px;margin-bottom:12px;font-size:12px">
+          <span id="tok_status_txt">🔑 Token Admin: <i style="color:var(--sub)">Memeriksa...</i></span>
+          <button class="btn sm" onclick="promptSaveToken()" style="padding:4px 10px;font-size:11px;background:rgba(139,92,246,.2);border:1px solid rgba(139,92,246,.4);color:#c4b5fd">🔑 Tempel Token</button>
         </div>
         <p style="color:var(--sub);font-size:12px;line-height:1.5;margin:0 0 14px">
           Atau gunakan tombol manual di bawah:
@@ -184,6 +188,7 @@ async function loadInfo() {
     HUB_URL = d.scanUrl;
     document.getElementById('hub_ip_badge').textContent = 'Wi-Fi: ' + d.ip + ':' + d.port;
     document.getElementById('scan_url_txt').textContent = d.scanUrl;
+    updateTokenStatus(d.hasToken);
 
     // Render QR Code
     const qrWrap = document.getElementById('qr_wrap');
@@ -315,8 +320,17 @@ function openPasteModal() {
 }
 
 async function openCloudFetchModal() {
-  const tok = prompt('Masukkan Super Admin Token Anda:');
-  if (!tok) return;
+  let tok = localStorage.getItem('atk_gate_tok') || '';
+  if (!tok) {
+    tok = prompt('🔑 Masukkan Token Admin Cloudflare:\n\n(Tip: Di dashboard ambiltiketnya.online klik tombol "🔑 Salin Token Admin" lalu tempel di sini)');
+    if (!tok) return;
+    localStorage.setItem('atk_gate_tok', tok.trim());
+    fetch('/api/save-token', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ token: tok.trim() })
+    });
+  }
   document.getElementById('sync_status').innerHTML = '⏳ Menghubungi Cloudflare...';
   try {
     const res = await fetch('/api/list-events', {
@@ -353,10 +367,34 @@ async function openCloudFetchModal() {
   }
 }
 
+function updateTokenStatus(hasToken) {
+  const el = document.getElementById('tok_status_txt');
+  if (!el) return;
+  if (hasToken || localStorage.getItem('atk_gate_tok')) {
+    el.innerHTML = '🔑 Token Admin: <b style="color:var(--ok)">✓ Tersambung</b>';
+  } else {
+    el.innerHTML = '🔑 Token Admin: <i style="color:var(--sub)">Belum tersimpan</i>';
+  }
+}
+
+async function promptSaveToken() {
+  const cur = localStorage.getItem('atk_gate_tok') || '';
+  const tok = prompt('Tempelkan Token Admin Cloudflare di sini:\n\n(Bisa disalin dari tombol "🔑 Salin Token Admin" di dashboard ambiltiketnya.online)', cur);
+  if (tok === null) return;
+  const clean = tok.trim();
+  localStorage.setItem('atk_gate_tok', clean);
+  await fetch('/api/save-token', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({ token: clean })
+  });
+  updateTokenStatus(Boolean(clean));
+  alert(clean ? '✓ Token Admin berhasil disimpan!' : 'Token telah dikosongkan.');
+}
+
 async function syncToCloud() {
-  const tok = prompt('Masukkan Super Admin Token untuk sinkronisasi ke Cloud:');
-  if (!tok) return;
-  document.getElementById('sync_status').innerHTML = '⏳ Mengunggah data check-in ke Cloudflare...';
+  let tok = localStorage.getItem('atk_gate_tok') || '';
+  document.getElementById('sync_status').innerHTML = '⏳ Menghubungi Cloudflare...';
   try {
     const res = await fetch('/api/sync-cloud', {
       method: 'POST',
@@ -365,11 +403,24 @@ async function syncToCloud() {
     });
     const d = await res.json();
     if (d.ok) {
-      alert('✓ Sukses menyinkronkan ' + d.synced + ' tiket ke Cloudflare!');
+      alert('✓ Sukses menyinkronkan ' + d.synced + ' data check-in ke Cloudflare!');
       document.getElementById('sync_status').innerHTML = '✓ Terakhir sinkron ke cloud: ' + new Date().toLocaleTimeString('id-ID');
-    } else {
-      alert('Gagal: ' + (d.error || 'Terjadi kesalahan'));
+      return;
     }
+    if (d.needToken) {
+      const inputTok = prompt('🔑 Masukkan Token Admin Anda untuk sinkronisasi ke Cloud:\n\n(Tip: Di dashboard ambiltiketnya.online klik tombol "🔑 Salin Token Admin" lalu tempel di sini)');
+      if (!inputTok) return;
+      localStorage.setItem('atk_gate_tok', inputTok.trim());
+      await fetch('/api/save-token', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ token: inputTok.trim() })
+      });
+      updateTokenStatus(true);
+      return syncToCloud();
+    }
+    alert('Gagal: ' + (d.error || 'Terjadi kesalahan'));
+    document.getElementById('sync_status').innerHTML = '✗ Gagal sinkron';
   } catch(e) {
     alert('Koneksi gagal: ' + e.message);
   }

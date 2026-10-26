@@ -2480,6 +2480,7 @@ function scanView(c){
       <select id="off_ev_sel" style="flex:1;min-width:160px;font-size:13px"></select>
       <button class="btn sm pri" data-act="cacheEv" style="white-space:nowrap;font-size:12px">📥 ${t('off_download_btn')}</button>
       <button class="btn sm ok" data-act="sendToGateHub" style="white-space:nowrap;font-size:12px;font-weight:700" title="Kirim data tiket acara terpilih langsung ke Local Gate Hub laptop">💻 Kirim ke Gate Hub</button>
+      <button class="btn sm" data-act="copyAdminToken" style="white-space:nowrap;font-size:12px;background:rgba(139,92,246,.2);border:1px solid rgba(139,92,246,.4);color:#c4b5fd" title="Salin Token Admin untuk Gate Hub">🔑 Salin Token Admin</button>
     </div>
   </div>
 </div><div id="vr"></div></div><div class="card" style="padding:16px"><h3>${t('v_hist')}</h3><div id="vh"></div></div></div>`;
@@ -5441,6 +5442,20 @@ const NL=String.fromCharCode(10),find=(a,id)=>a.find(x=>x.id===id),A={
     }
   },
 
+  copyAdminToken() {
+    const tok = (typeof S !== 'undefined' && S.token) || (typeof localStorage !== 'undefined' ? localStorage.getItem('atk_tok') : '') || '';
+    if (!tok) return toast('Token admin belum tersedia. Pastikan Anda sudah login.', 1);
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(tok).then(() => {
+        toast('✓ Token Admin berhasil disalin ke clipboard! Siap ditempel di Gate Hub.', 0);
+      }).catch(() => {
+        prompt('Salin Token Admin Anda di bawah ini:', tok);
+      });
+    } else {
+      prompt('Salin Token Admin Anda di bawah ini:', tok);
+    }
+  },
+
   async sendToGateHub(el) {
     const sel = $('#off_ev_sel');
     const evId = (el && el.dataset && el.dataset.id) || (sel && sel.value) || getCurEvId();
@@ -5454,11 +5469,14 @@ const NL=String.fromCharCode(10),find=(a,id)=>a.find(x=>x.id===id),A={
       const res = await api('offlineManifest', { eventId: evId }, t('loading'));
       if (!res || !res.tickets) throw new Error('Data tiket kosong');
 
+      const adminTok = (typeof S !== 'undefined' && S.token) || (typeof localStorage !== 'undefined' ? localStorage.getItem('atk_tok') : '') || '';
+      const payload = Object.assign({}, res, { adminToken: adminTok });
+
       try {
         const hubRes = await fetch('http://localhost:8080/api/save-manifest', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(res)
+          body: JSON.stringify(payload)
         });
         const hubData = await hubRes.json();
         if (hubData.ok) {
@@ -5467,7 +5485,7 @@ const NL=String.fromCharCode(10),find=(a,id)=>a.find(x=>x.id===id),A={
           toast('Gate Hub merespons: ' + (hubData.error || 'Gagal menyimpan'), 1);
         }
       } catch(errHub) {
-        window._lastGateManifest = res;
+        window._lastGateManifest = payload;
         modal(`
           <button class="btn sm x" data-act="cm">&#10005;</button>
           <div style="text-align:center;padding:22px 16px">
