@@ -5728,7 +5728,7 @@ const NL=String.fromCharCode(10),find=(a,id)=>a.find(x=>x.id===id),A={
     }
 
     // 2. Fallback: Uji langsung dari browser dengan strict timeout 6 detik
-    const testModels = ['gemini-3.8-flash', 'gemini-2.0-flash', 'gemini-1.5-flash'];
+    const testModels = ['gemini-2.0-flash', 'gemini-1.5-flash'];
     let lastErr = '';
     for (const m of testModels) {
       const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
@@ -5784,19 +5784,21 @@ const NL=String.fromCharCode(10),find=(a,id)=>a.find(x=>x.id===id),A={
     }
 
     modal(`
-      <div style="text-align:center;padding:36px 20px">
-        <div style="font-size:42px;margin-bottom:12px;animation:spin 2s linear infinite">✨</div>
+      <button class="btn sm x" data-act="cm">&#10005;</button>
+      <div style="text-align:center;padding:30px 20px">
+        <div style="font-size:42px;margin-bottom:12px;display:inline-block;animation:spin 2s linear infinite">✨</div>
         <h3 style="margin:0 0 8px">Menghubungi Google Gemini AI...</h3>
         <p class="muted" style="margin:0 auto 16px;max-width:380px;font-size:13px;line-height:1.5">
           Sedang menganalisis <b>${d.total} ulasan</b> peserta, mengkalkulasi kepuasan multi-aspek, dan menyusun laporan evaluasi resmi...
         </p>
-        <div style="height:6px;width:240px;background:rgba(255,255,255,.1);border-radius:99px;margin:0 auto;overflow:hidden">
+        <div style="height:6px;width:240px;background:rgba(255,255,255,.1);border-radius:99px;margin:0 auto 18px;overflow:hidden">
           <div style="height:100%;width:70%;background:linear-gradient(90deg,#8b5cf6,#6366f1);border-radius:99px;animation:pulse 1s infinite alternate"></div>
         </div>
+        <button class="btn sm" data-act="cm">Batal</button>
       </div>
     `);
 
-    let analysisText = '', modelName = 'Gemini 2.5 Flash';
+    let analysisText = '', modelName = 'Gemini 2.0 Flash';
     const curEv = (S_fb.evId && S.aev && S.aev.find(x => x.id === S_fb.evId));
     const evName = curEv ? curEv.name : 'Semua Acara (Global)';
 
@@ -5871,9 +5873,11 @@ Berikan catatan evaluatif kualitatif untuk masing-masing:
 
 Tulis dengan gaya bahasa yang profesional, tajam, bernas, dan memotivasi panitia untuk terus berkembang.`;
 
-                const aiModels = ['gemini-3.8-flash', 'gemini-2.0-flash', 'gemini-1.5-flash'];
+                const aiModels = ['gemini-2.0-flash', 'gemini-1.5-flash'];
         let clientErr = '';
         for (const m of aiModels) {
+          const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+          const timeoutId = controller ? setTimeout(() => controller.abort(), 15000) : null;
           try {
             const url = 'https://generativelanguage.googleapis.com/v1beta/models/' + m + ':generateContent?key=' + encodeURIComponent(localKey);
             const res = await fetch(url, {
@@ -5882,8 +5886,10 @@ Tulis dengan gaya bahasa yang profesional, tajam, bernas, dan memotivasi panitia
               body: JSON.stringify({
                 contents: [{ parts: [{ text: prompt }] }],
                 generationConfig: { temperature: 0.4, maxOutputTokens: 3500 }
-              })
+              }),
+              signal: controller ? controller.signal : undefined
             });
+            if (timeoutId) clearTimeout(timeoutId);
             const data = await res.json().catch(() => ({}));
             if (res.ok) {
               analysisText = data?.candidates?.[0]?.content?.parts?.[0]?.text;
@@ -5896,12 +5902,29 @@ Tulis dengan gaya bahasa yang profesional, tajam, bernas, dan memotivasi panitia
               if (clientErr.toLowerCase().includes('api_key_invalid')) break;
             }
           } catch(e) {
-            clientErr = e.message;
+            if (timeoutId) clearTimeout(timeoutId);
+            clientErr = e.name === 'AbortError' ? 'Koneksi ke Google Gemini timeout (15s)' : e.message;
           }
         }
         if (!analysisText) throw new Error(clientErr || 'Respon AI kosong');
       } catch(errClient) {
-        return fail(errClient);
+        const errMsg = errClient?.message || 'Gagal menghubungi Gemini AI';
+        modal(`
+          <button class="btn sm x" data-act="cm">&#10005;</button>
+          <div style="text-align:center;padding:26px 16px">
+            <div style="font-size:38px;margin-bottom:12px">⚠️</div>
+            <h3 style="margin:0 0 8px;color:var(--er)">Analisis AI Belum Berhasil</h3>
+            <p class="muted" style="margin:0 auto 16px;max-width:380px;font-size:13px;line-height:1.5">
+              ${esc(errMsg)}
+            </p>
+            <div style="display:flex;justify-content:center;gap:8px;flex-wrap:wrap">
+              <button class="btn pri" data-act="fbAiAnalyze">🔄 Coba Lagi</button>
+              <button class="btn" data-act="aiSettingsModal">⚙️ Cek API Key</button>
+              <button class="btn" data-act="cm">${t('close')}</button>
+            </div>
+          </div>
+        `);
+        return;
       }
     }
 

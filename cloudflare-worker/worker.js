@@ -467,11 +467,13 @@ async function setSystemSetting(env, key, value) {
 }
 
 async function callGemini(apiKey, prompt) {
-  const models = ['gemini-3.8-flash', 'gemini-2.0-flash', 'gemini-1.5-flash'];
+  const models = ['gemini-2.0-flash', 'gemini-1.5-flash'];
   let lastErr = null;
   for (const model of models) {
     try {
       const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+      const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+      const timeoutId = controller ? setTimeout(() => controller.abort(), 15000) : null;
       const res = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -481,8 +483,10 @@ async function callGemini(apiKey, prompt) {
             temperature: 0.4,
             maxOutputTokens: 3500
           }
-        })
+        }),
+        signal: controller ? controller.signal : undefined
       });
+      if (timeoutId) clearTimeout(timeoutId);
       if (res.ok) {
         const data = await res.json();
         const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
@@ -492,7 +496,7 @@ async function callGemini(apiKey, prompt) {
         lastErr = errJson?.error?.message || `HTTP ${res.status}: ${res.statusText}`;
       }
     } catch (e) {
-      lastErr = e.message;
+      lastErr = e.name === 'AbortError' ? 'Gemini API timeout (15s)' : e.message;
     }
   }
   throw new Error(lastErr || 'Gagal menghubungi Google Gemini API');
