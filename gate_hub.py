@@ -421,8 +421,8 @@ async function openCloudFetchModal() {
     if (!d.ok || !d.events || !d.events.length) {
       return alert('Gagal mengambil daftar acara: ' + (d.error || 'Tidak ada acara aktif'));
     }
-    const choices = d.events.map((e, i) => `${i + 1}. ${e.name} (${e.sold} tiket)`).join('\n');
-    const pick = prompt('Pilih nomor acara yang ingin diunduh:\n\n' + choices + '\n\nKetik nomornya (misal: 1):');
+    const choices = d.events.map((e, i) => `${i + 1}. ${e.name} (${e.sold} tiket)`).join('\\n');
+    const pick = prompt(`Pilih nomor acara yang ingin diunduh:\\n\\n${choices}\\n\\nKetik nomornya (misal: 1):`);
     const idx = parseInt(pick, 10) - 1;
     if (isNaN(idx) || idx < 0 || idx >= d.events.length) return alert('Pilihan dibatalkan');
     const selEvent = d.events[idx];
