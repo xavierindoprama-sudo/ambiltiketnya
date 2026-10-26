@@ -1734,7 +1734,7 @@ function paintOfflineStatus(){const badge=$('#off_badge_area'),info=$('#off_info
   else{const totalTix=evIds.reduce((a,k)=>a+(store[k].count||0),0);info.innerHTML=`<span style="color:var(--ok)">✓ <b>${totalTix}</b> ${t('off_cached_cnt')} (${evIds.map(k=>esc(store[k].eventName)).join(', ')})</span>`}}}
 
 async function evList(c){try{if(!S.aev)S.aev=await api('adminEvents')}catch(e){return fail(e)}
- c.innerHTML=(canEdit()?`<div class="acts"><button class="btn pri" data-act="evForm" style="flex:none">+ ${t('new_ev')}</button></div>`:'')+S.aev.map(e=>`<div class="card er"><img src="${esc(e.banner_url)}" onerror="this.style.visibility='hidden'"><div style="flex:1;min-width:0"><b>${esc(e.name)}</b>${e.organizer_name?`<span class="badge" style="background:var(--card-sub);font-size:11px;margin-left:6px;padding:2px 8px;border-radius:10px">🏢 ${esc(e.organizer_name)}</span>`:''}<div class="muted">${fd(e.event_date)} &#183; Online: ${e.sold}/${e.quota} ${t('tix')}${e.walkin_quota?` &#183; Walk-in: ${e.walkin_sold||0}/${e.walkin_quota}`:''} &#183; ${rp(e.is_paid?e.price:0)}</div></div>${canEdit()?`<label class="sw"><input type="checkbox" data-ch="tgl" data-id="${e.id}" ${e.is_active?'checked':''}><i></i></label>${hasMod(e,'guestbook')?`<a class="btn sm" href="${location.pathname}?stage=greeting&ev=${e.id}" target="_blank" title="Buka Layar Panggung Ucapan (Live Wall)">📺 Layar Ucapan</a>`:""}<button class="btn sm" data-act="cpManageModal" data-id="${e.id}" title="Kelola Pos Check-In &amp; Fasilitas">📍 Pos Check-In</button><button class="btn sm" data-act="gatelink" data-id="${e.id}" title="${t('gate_pass')}">📋 ${t('gate_pass')}</button><button class="btn sm ${getCurEvId()===e.id?'ok':'pri'}" data-act="focusEv" data-id="${e.id}" title="Kelola dan fokuskan ke acara ini" style="font-weight:700">${getCurEvId()===e.id?'✓ Dikelola':'🎯 Kelola'}</button><button class="btn sm" data-act="evForm" data-id="${e.id}">${t('edit')}</button>`:stPill(e.is_active?'confirmed':'cancelled')}</div>`).join('')}
+ c.innerHTML=(canEdit()?`<div class="acts"><button class="btn pri" data-act="evForm" style="flex:none">+ ${t('new_ev')}</button></div>`:'')+S.aev.map(e=>`<div class="card er"><img src="${esc(e.banner_url)}" onerror="this.style.visibility='hidden'"><div style="flex:1;min-width:0"><b>${esc(e.name)}</b>${e.organizer_name?`<span class="badge" style="background:var(--card-sub);font-size:11px;margin-left:6px;padding:2px 8px;border-radius:10px">🏢 ${esc(e.organizer_name)}</span>`:''}<div class="muted">${fd(e.event_date)} &#183; Online: ${e.sold}/${e.quota} ${t('tix')}${e.walkin_quota?` &#183; Walk-in: ${e.walkin_sold||0}/${e.walkin_quota}`:''} &#183; ${rp(e.is_paid?e.price:0)}</div></div>${canEdit()?`<label class="sw"><input type="checkbox" data-ch="tgl" data-id="${e.id}" ${e.is_active?'checked':''}><i></i></label>${hasMod(e,'guestbook')?`<a class="btn sm" href="${location.pathname}?stage=greeting&ev=${e.id}" target="_blank" title="Buka Layar Panggung Ucapan (Live Wall)">📺 Layar Ucapan</a>`:""}<button class="btn sm" data-act="cpManageModal" data-id="${e.id}" title="Kelola Pos Check-In &amp; Fasilitas">📍 Pos Check-In</button><button class="btn sm" data-act="sendToGateHub" data-id="${e.id}" title="Kirim data tiket acara ini langsung ke Gate Hub Laptop" style="font-weight:700;color:var(--ok)">💻 Gate Hub</button><button class="btn sm" data-act="gatelink" data-id="${e.id}" title="${t('gate_pass')}">📋 ${t('gate_pass')}</button><button class="btn sm ${getCurEvId()===e.id?'ok':'pri'}" data-act="focusEv" data-id="${e.id}" title="Kelola dan fokuskan ke acara ini" style="font-weight:700">${getCurEvId()===e.id?'✓ Dikelola':'🎯 Kelola'}</button><button class="btn sm" data-act="evForm" data-id="${e.id}">${t('edit')}</button>`:stPill(e.is_active?'confirmed':'cancelled')}</div>`).join('')}
 function compressImageToWebp(file, maxW = 1200, maxH = 675, quality = 0.82) {
   return new Promise((resolve, reject) => {
     if (!file || !file.type.startsWith('image/')) return reject(new Error('File bukan gambar'));
@@ -2479,6 +2479,7 @@ function scanView(c){
     <div style="display:flex;gap:8px;align-items:center;margin-top:8px;flex-wrap:wrap">
       <select id="off_ev_sel" style="flex:1;min-width:160px;font-size:13px"></select>
       <button class="btn sm pri" data-act="cacheEv" style="white-space:nowrap;font-size:12px">📥 ${t('off_download_btn')}</button>
+      <button class="btn sm ok" data-act="sendToGateHub" style="white-space:nowrap;font-size:12px;font-weight:700" title="Kirim data tiket acara terpilih langsung ke Local Gate Hub laptop">💻 Kirim ke Gate Hub</button>
     </div>
   </div>
 </div><div id="vr"></div></div><div class="card" style="padding:16px"><h3>${t('v_hist')}</h3><div id="vh"></div></div></div>`;
@@ -5414,6 +5415,57 @@ const NL=String.fromCharCode(10),find=(a,id)=>a.find(x=>x.id===id),A={
  copyGateLink(){const el=$('#gl_txt');if(!el)return;navigator.clipboard.writeText(el.textContent.trim()).then(()=>toast(t('gate_copied'),0)).catch(()=>toast('Gagal menyalin',1))},
  async cacheEv(){const sel=$('#off_ev_sel');if(sel&&sel.value)await cacheOfflineEvent(sel.value)},
  async syncoff(){await syncOfflineQueue()},
+  async sendToGateHub(el) {
+    const sel = $('#off_ev_sel');
+    const evId = (el && el.dataset && el.dataset.id) || (sel && sel.value) || getCurEvId();
+    if (!evId) return toast('Pilih acara terlebih dahulu.', 1);
+
+    const curEv = (S.aev && S.aev.find(x => x.id === evId));
+    const evName = curEv ? curEv.name : 'Acara Terpilih';
+
+    toast('Mengambil tiket dari cloud...', 0);
+    try {
+      const res = await api('offlineManifest', { eventId: evId }, t('loading'));
+      if (!res || !res.tickets) throw new Error('Data tiket kosong');
+
+      try {
+        const hubRes = await fetch('http://localhost:8080/api/save-manifest', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(res)
+        });
+        const hubData = await hubRes.json();
+        if (hubData.ok) {
+          toast(`✅ Sukses mengirim ${hubData.count} tiket acara "${esc(hubData.eventName)}" ke Gate Hub Laptop! 🚀`, 0);
+        } else {
+          toast('Gate Hub merespons: ' + (hubData.error || 'Gagal menyimpan'), 1);
+        }
+      } catch(errHub) {
+        modal(`
+          <button class="btn sm x" data-act="cm">&#10005;</button>
+          <div style="text-align:center;padding:24px 16px">
+            <div style="font-size:38px;margin-bottom:10px">💻</div>
+            <h3 style="margin:0 0 8px">Gate Hub Belum Berjalan di Laptop</h3>
+            <p class="muted" style="margin:0 auto 16px;max-width:380px;font-size:13px;line-height:1.5">
+              Data tiket acara <b>"${esc(evName)}"</b> (${res.count} tiket) berhasil diambil dari cloud, tetapi belum dapat terhubung ke <code>http://localhost:8080</code>.
+            </p>
+            <div style="background:rgba(255,255,255,.05);border:1px solid var(--bd);padding:12px;border-radius:10px;font-size:12px;text-align:left;margin-bottom:16px">
+              <b>Cara Menjalankan Gate Hub:</b><br>
+              1. Buka folder proyek di laptop ini.<br>
+              2. Klik ganda file <b>Jalankan_Gate_Hub.bat</b>.<br>
+              3. Setelah jendela Gate Hub terbuka, klik tombol "Coba Kirim Ulang" di bawah.
+            </div>
+            <div style="display:flex;justify-content:center;gap:8px">
+              <button class="btn pri" data-act="sendToGateHub" data-id="${evId}">🔄 Coba Kirim Ulang</button>
+              <button class="btn" data-act="cm">${t('close')}</button>
+            </div>
+          </div>
+        `);
+      }
+    } catch(errCloud) {
+      fail(errCloud);
+    }
+  },
  fbOpenModal(el){
   feedbackModal({
    eventId: el.dataset.ev,

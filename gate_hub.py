@@ -186,8 +186,12 @@ body{margin:0;padding:20px;background:var(--bg);color:var(--txt);font-family:sys
 
       <div class="card">
         <h3>☁️ Sinkronisasi Cloud (Cloudflare)</h3>
+        <div style="background:rgba(139,92,246,.15);border:1px solid rgba(139,92,246,.3);padding:10px 12px;border-radius:10px;font-size:12px;line-height:1.4;margin-bottom:14px;color:#ddd6fe">
+          <b>💡 Cara 1-Klik Paling Praktis:</b><br>
+          Buka dashboard admin <b>ambiltiketnya.online</b> di browser laptop ini, masuk menu <b>Pos Check-In / Offline</b>, lalu klik tombol hijau <b>"💻 Kirim ke Gate Hub"</b>!
+        </div>
         <p style="color:var(--sub);font-size:12px;line-height:1.5;margin:0 0 14px">
-          Unduh data tiket sebelum gerbang dibuka, atau kirim rekap kehadiran ke Cloudflare saat ada internet:
+          Atau gunakan tombol manual di bawah:
         </p>
         <div style="display:flex;flex-direction:column;gap:10px">
           <button class="btn btn-pri" onclick="promptDownloadCloud()" style="justify-content:center">
@@ -376,6 +380,10 @@ class GateHubHandler(SimpleHTTPRequestHandler):
 
         if path == '/api/validate' or path == '/':
             self.handle_validate(body)
+            return
+
+        if path == '/api/save-manifest':
+            self.handle_save_manifest(body)
             return
 
         if path == '/api/download-cloud':
@@ -571,6 +579,32 @@ class GateHubHandler(SimpleHTTPRequestHandler):
             'rate': rate,
             'logs': logs
         })
+
+    def handle_save_manifest(self, data):
+        ev_id = str(data.get('eventId') or '').strip()
+        ev_name = str(data.get('eventName') or 'Acara').strip()
+        tickets = data.get('tickets') or []
+
+        if not tickets and not ev_name:
+            self.send_json({'ok': False, 'error': 'Data tiket kosong'}, status=400)
+            return
+
+        conn = sqlite3.connect(DB_FILE)
+        c = conn.cursor()
+        c.execute('DELETE FROM events')
+        c.execute('INSERT INTO events(id, name, downloaded_at, total_tickets) VALUES(?, ?, ?, ?)',
+                  (ev_id, ev_name, datetime.now().isoformat(), len(tickets)))
+
+        c.execute('DELETE FROM tickets')
+        for t in tickets:
+            c.execute('''
+                INSERT OR REPLACE INTO tickets(code, event_id, name, church, age, qty, checked_in, status, kind)
+                VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ''', (t.get('code'), ev_id, t.get('name'), t.get('church'), t.get('age'), t.get('qty', 1), t.get('checked', 0), t.get('status', 'confirmed'), t.get('kind', 'regular')))
+        conn.commit()
+        conn.close()
+
+        self.send_json({'ok': True, 'eventName': ev_name, 'count': len(tickets)})
 
     def handle_download_cloud(self, body):
         token = str(body.get('token') or '').strip()
