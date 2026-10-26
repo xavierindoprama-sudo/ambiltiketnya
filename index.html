@@ -5695,19 +5695,54 @@ const NL=String.fromCharCode(10),find=(a,id)=>a.find(x=>x.id===id),A={
 
   async testAiKey() {
     const inp = $('#gemini_key_inp');
-    const key = inp ? inp.value.trim() : (ls.g('atk_gemini_key') || '');
+    const key = (inp ? inp.value : (ls.g('atk_gemini_key') || '')).trim();
     const st = $('#ai_test_status');
     if (!key) {
-      if (st) st.innerHTML = '<span style="color:var(--er)">Masukkan API Key terlebih dahulu.</span>';
+      if (st) st.innerHTML = '<span style="color:var(--er);font-weight:700">⚠️ Masukkan API Key terlebih dahulu.</span>';
       return;
     }
-    if (st) st.innerHTML = '<span style="color:var(--wn)">⏳ Menguji koneksi ke Google Gemini AI...</span>';
+    if (st) st.innerHTML = '<span style="color:var(--wn);font-weight:600">⏳ Menguji koneksi langsung ke Google Gemini AI...</span>';
+
+    // 1. Uji koneksi langsung ke Google Gemini API dari browser
     try {
-      const res = await api('testAiKey', { geminiApiKey: key }, t('loading'));
-      if (st) st.innerHTML = `<span style="color:var(--ok);font-weight:700">✓ Terhubung Berhasil! (Model: ${esc(res.model)})</span><br><small class="muted">Balasan AI: "${esc(res.reply)}"</small>`;
-      toast('Uji koneksi AI sukses! 🚀', 0);
-    } catch(e) {
-      if (st) st.innerHTML = `<span style="color:var(--er);font-weight:700">✗ Gagal: ${esc(errMsg(e))}</span>`;
+      const url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=' + encodeURIComponent(key);
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: 'Halo Gemini! Konfirmasi koneksi dengan membalas: "Koneksi Google Gemini AI Berhasil Aktif!" dalam 1 kalimat pendek.' }] }],
+          generationConfig: { maxOutputTokens: 60, temperature: 0.2 }
+        })
+      });
+
+      const data = await res.json().catch(() => ({}));
+      if (res.ok) {
+        const reply = data?.candidates?.[0]?.content?.parts?.[0]?.text || 'Koneksi Berhasil!';
+        if (st) st.innerHTML = `<span style="color:var(--ok);font-weight:700">✓ Terhubung Berhasil! (Model: Gemini 2.5 Flash)</span><br><small class="muted">Balasan AI: "${esc(reply.trim())}"</small>`;
+        toast('Uji koneksi AI sukses! 🚀', 0);
+        ls.s('atk_gemini_key', key);
+        api('saveAiSettings', { geminiApiKey: key }).catch(() => {});
+        return;
+      } else {
+        const errDetail = data?.error?.message || `HTTP ${res.status}: ${res.statusText}`;
+        if (errDetail.toLowerCase().includes('api_key_invalid') || errDetail.toLowerCase().includes('not valid')) {
+          if (st) st.innerHTML = `<span style="color:var(--er);font-weight:700">✗ API Key Tidak Valid:</span><br><small style="color:var(--er)">Kunci ditolak oleh Google. Pastikan menyalin seluruh karakter kunci (awalan AIzaSy...).</small>`;
+        } else {
+          if (st) st.innerHTML = `<span style="color:var(--er);font-weight:700">✗ Google Error:</span> <small style="color:var(--er)">${esc(errDetail)}</small>`;
+        }
+        return;
+      }
+    } catch(errBrowser) {
+      // 2. Jika browser diblokir (misal adblocker), fallback uji lewat Cloudflare Worker
+      try {
+        const res = await api('testAiKey', { geminiApiKey: key }, t('loading'));
+        if (st) st.innerHTML = `<span style="color:var(--ok);font-weight:700">✓ Terhubung Berhasil! (Model: ${esc(res.model)})</span><br><small class="muted">Balasan AI: "${esc(res.reply)}"</small>`;
+        toast('Uji koneksi AI sukses! 🚀', 0);
+        ls.s('atk_gemini_key', key);
+      } catch(errServer) {
+        const msg = (errServer && errServer.message) ? errServer.message : 'Koneksi gagal';
+        if (st) st.innerHTML = `<span style="color:var(--er);font-weight:700">✗ Gagal:</span> <small style="color:var(--er)">${esc(msg)}</small>`;
+      }
     }
   },
 
@@ -5715,6 +5750,11 @@ const NL=String.fromCharCode(10),find=(a,id)=>a.find(x=>x.id===id),A={
     const d = S_fb.data;
     if (!d || !d.total) {
       return toast('Belum ada data ulasan peserta untuk dianalisis.', 1);
+    }
+    const localKey = (ls.g('atk_gemini_key') || '').trim();
+    if (!localKey) {
+      toast('Google Gemini API Key belum disetel. Silakan masukkan API Key Anda.', 1);
+      return A.aiSettingsModal();
     }
 
     modal(`
@@ -5730,45 +5770,127 @@ const NL=String.fromCharCode(10),find=(a,id)=>a.find(x=>x.id===id),A={
       </div>
     `);
 
+    let analysisText = '', modelName = 'Gemini 2.5 Flash';
+    const curEv = (S_fb.evId && S.aev && S.aev.find(x => x.id === S_fb.evId));
+    const evName = curEv ? curEv.name : 'Semua Acara (Global)';
+
+    // Coba via server Cloudflare Worker dahulu
+    let serverOk = false;
     try {
-      const localKey = ls.g('atk_gemini_key') || '';
       const res = await api('feedbackAiAnalyze', { eventId: S_fb.evId, geminiApiKey: localKey });
-      const evName = res.eventName || (S_fb.evId ? 'Acara Terpilih' : 'Semua Acara');
-      window._lastAiAnalysis = res.analysis;
+      if (res && res.analysis) {
+        analysisText = res.analysis;
+        modelName = res.model || 'Gemini Flash';
+        serverOk = true;
+      }
+    } catch(errServer) {
+      console.warn('Worker feedbackAiAnalyze fallback to client fetch:', errServer);
+    }
 
-      modal(`
-        <button class="btn sm x" data-act="cm">&#10005;</button>
-        <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px">
-          <span style="font-size:24px">✨</span>
-          <div>
-            <h2 style="margin:0;font-size:18px">Ulasan AI Komprehensif</h2>
-            <small class="muted">${esc(evName)} · ${res.totalFeedback} Responden · Model: ${esc(res.model || 'Gemini Flash')}</small>
-          </div>
-        </div>
+    // Jika server belum di-update / gagal, panggil Gemini langsung dari browser
+    if (!serverOk) {
+      try {
+        const rows = d.rows || [];
+        const textComments = rows
+          .filter(r => r.comment && r.comment.trim() && r.comment.trim() !== 'Tanpa catatan tambahan.')
+          .slice(0, 70)
+          .map((r, i) => `${i + 1}. [Skor ${r.rating_overall||r.rating}★ | Konten ${r.rating_content||5}★ | Panitia ${r.rating_service||5}★ | Venue ${r.rating_venue||5}★ | Sound ${r.rating_sound||5}★]: "${r.comment.trim()}"`)
+          .join('\n');
 
-        <div style="max-height:65vh;overflow-y:auto;padding:14px;background:var(--in);border:1px solid var(--bd);border-radius:12px;margin:14px 0;line-height:1.6;font-size:14px" id="ai_report_body">
-          ${md2html(res.analysis)}
-        </div>
+        const prompt = `Anda adalah seorang Konsultan Evaluasi & Spesialis Mutu Acara (Event Quality & Experience Specialist) berpengalaman tinggi.
+Tugas Anda adalah melakukan analisis mendalam, objektif, tajam, dan menyusun laporan evaluasi resmi yang bernas berdasarkan data survey kepuasan peserta berikut:
 
-        <div class="acts" style="justify-content:space-between;flex-wrap:wrap;gap:8px">
-          <div style="display:flex;gap:6px">
-            <button class="btn ok" data-act="copyAiReport" style="font-weight:700">📋 Salin Laporan AI</button>
-            <button class="btn" data-act="fbAiAnalyze">🔄 Analisis Ulang</button>
-          </div>
-          <div style="display:flex;gap:6px">
-            <button class="btn sm" data-act="aiSettingsModal">⚙️ AI Key</button>
-            <button class="btn" data-act="cm">${t('close')}</button>
-          </div>
-        </div>
-      `);
-    } catch(e) {
-      if (String(e.message || '').includes('API_KEY_REQUIRED')) {
-        toast('Google Gemini API Key belum disetel. Silakan masukkan API Key Anda.', 1);
-        A.aiSettingsModal();
-      } else {
-        fail(e);
+### DATA SURVEI ACARA:
+- Nama Acara: ${evName}
+- Total Responden: ${d.total} peserta (${d.anonCount} anonim, ${d.total - d.anonCount} terbuka)
+- Rata-Rata Penilaian (Skala 1.0 - 5.0):
+  * Kepuasan Keseluruhan: ${d.avg || 0} / 5.0
+  * Konten & Pengisi Acara / Pembicara: ${d.aspectAvgs?.content || 5} / 5.0
+  * Pelayanan Panitia & Usher: ${d.aspectAvgs?.service || 5} / 5.0
+  * Fasilitas & Kenyamanan Venue: ${d.aspectAvgs?.venue || 5} / 5.0
+  * Sound System, Musik & Multimedia: ${d.aspectAvgs?.sound || 5} / 5.0
+- Distribusi Rating Keseluruhan:
+  * 5 Bintang: ${d.dist?.[5] || 0}
+  * 4 Bintang: ${d.dist?.[4] || 0}
+  * 3 Bintang: ${d.dist?.[3] || 0}
+  * 2 Bintang: ${d.dist?.[2] || 0}
+  * 1 Bintang: ${d.dist?.[1] || 0}
+
+### DAFTAR KOMENTAR & MASUKAN ASLI DARI PESERTA:
+${textComments || '(Tidak ada komentar teks tertulis, analisis didasarkan pada distribusi kuantitatif skor)'}
+
+---
+### FORMAT LAPORAN YANG HARUS ANDA SUSUN:
+Susun laporan dalam Bahasa Indonesia profesional, terstruktur rapi, menggunakan format Markdown standar:
+
+## 📋 1. Ringkasan Eksekutif (Executive Summary)
+- Berikan sintesis singkat (2-3 paragraf) mengenai gambaran umum sentimen audiens dan kesuksesan acara.
+- Cantumkan label Indeks Kepuasan: (misal: **"Sangat Memuaskan (Outstanding)"**, **"Baik & Positif"**, atau **"Butuh Perhatian Khusus"**).
+
+## 🌟 2. Kekuatan Utama Acara (Top Highlights)
+- Sebutkan 3-5 poin keunggulan yang paling diapresiasi dan berkesan bagi audiens berdasarkan data dan komentar.
+
+## ⚠️ 3. Keluhan Utama & Titik Kritis (Key Pain Points)
+- Rangkum masalah, kendala, atau hal-hal yang paling banyak disorot/dikeluhkan oleh peserta (jujur dan apa adanya tanpa ditutup-tutupi).
+
+## 🎯 4. Evaluasi Mendalam per Aspek Acara
+Berikan catatan evaluatif kualitatif untuk masing-masing:
+- **Konten & Pembicara / Pengisi Acara** (Skor: ${d.aspectAvgs?.content || 5}/5.0)
+- **Pelayanan Panitia, Usher & Alur Masuk** (Skor: ${d.aspectAvgs?.service || 5}/5.0)
+- **Fasilitas Venue, Ruangan & Suhu/Kenyamanan** (Skor: ${d.aspectAvgs?.venue || 5}/5.0)
+- **Sound System, Musik & Multimedia** (Skor: ${d.aspectAvgs?.sound || 5}/5.0)
+
+## 💡 5. Rekomendasi Aksi Konkret (Actionable Next Steps)
+- Berikan 4-6 poin rekomendasi praktis, terukur, dan berurutan prioritas yang harus dilakukan tim panitia untuk penyelenggaraan acara berikutnya.
+
+Tulis dengan gaya bahasa yang profesional, tajam, bernas, dan memotivasi panitia untuk terus berkembang.`;
+
+        const url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=' + encodeURIComponent(localKey);
+        const res = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: prompt }] }],
+            generationConfig: { temperature: 0.4, maxOutputTokens: 3500 }
+          })
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          throw new Error(data?.error?.message || `Google Error (${res.status})`);
+        }
+        analysisText = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+        if (!analysisText) throw new Error('Respon AI kosong');
+      } catch(errClient) {
+        return fail(errClient);
       }
     }
+
+    window._lastAiAnalysis = analysisText;
+    modal(`
+      <button class="btn sm x" data-act="cm">&#10005;</button>
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px">
+        <span style="font-size:24px">✨</span>
+        <div>
+          <h2 style="margin:0;font-size:18px">Ulasan AI Komprehensif</h2>
+          <small class="muted">${esc(evName)} · ${d.total} Responden · Model: ${esc(modelName)}</small>
+        </div>
+      </div>
+
+      <div style="max-height:65vh;overflow-y:auto;padding:14px;background:var(--in);border:1px solid var(--bd);border-radius:12px;margin:14px 0;line-height:1.6;font-size:14px" id="ai_report_body">
+        ${md2html(analysisText)}
+      </div>
+
+      <div class="acts" style="justify-content:space-between;flex-wrap:wrap;gap:8px">
+        <div style="display:flex;gap:6px">
+          <button class="btn ok" data-act="copyAiReport" style="font-weight:700">📋 Salin Laporan AI</button>
+          <button class="btn" data-act="fbAiAnalyze">🔄 Analisis Ulang</button>
+        </div>
+        <div style="display:flex;gap:6px">
+          <button class="btn sm" data-act="aiSettingsModal">⚙️ AI Key</button>
+          <button class="btn" data-act="cm">${t('close')}</button>
+        </div>
+      </div>
+    `);
   },
 
   async copyAiReport() {
