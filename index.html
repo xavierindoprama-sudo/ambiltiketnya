@@ -1272,6 +1272,32 @@ const FB_ASPECTS = [
 function md2html(md) {
   if (!md) return '';
   let h = esc(md);
+
+  // Parse markdown tables
+  h = h.replace(/((?:^\|.+?\|\r?\n)+)/gm, (match) => {
+    const lines = match.trim().split('\n').map(l => l.trim()).filter(Boolean);
+    if (lines.length < 2) return match;
+    let tableHtml = '<div style="overflow-x:auto;margin:12px 0"><table style="border-collapse:collapse;width:100%;font-size:12.5px;border:1px solid var(--bd, #cbd5e1);background:rgba(255,255,255,.02)">';
+    let isHeader = true;
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      if (/^\|[-:\s|]+\|$/.test(line)) {
+        isHeader = false;
+        continue;
+      }
+      const cells = line.split('|').slice(1, -1).map(c => c.trim());
+      if (isHeader) {
+        tableHtml += '<tr style="background:rgba(99,102,241,.15);border-bottom:2px solid var(--bd, #cbd5e1)">' + 
+          cells.map(c => `<th style="padding:7px 10px;text-align:left;font-weight:700;border:1px solid var(--bd, #cbd5e1);color:#a5b4fc">${c}</th>`).join('') + '</tr>';
+      } else {
+        tableHtml += '<tr style="border-bottom:1px solid var(--bd, #cbd5e1)">' + 
+          cells.map(c => `<td style="padding:6px 10px;border:1px solid var(--bd, #cbd5e1)">${c}</td>`).join('') + '</tr>';
+      }
+    }
+    tableHtml += '</table></div>';
+    return tableHtml;
+  });
+
   h = h.replace(/^### (.*$)/gim, '<h4 style="margin:16px 0 6px;color:#818cf8;font-size:15px">$1</h4>');
   h = h.replace(/^## (.*$)/gim, '<h3 style="margin:20px 0 8px;color:#a5b4fc;font-size:17px;border-bottom:1px solid rgba(255,255,255,.08);padding-bottom:6px">$1</h3>');
   h = h.replace(/^# (.*$)/gim, '<h2 style="margin:22px 0 10px;font-size:19px">$1</h2>');
@@ -6823,8 +6849,10 @@ ${guestbookSamples ? `\n### SAMPEL BUKU TAMU / UCAPAN PESERTA:\n${guestbookSampl
         </div>
 
         <div class="acts" style="justify-content:space-between;flex-wrap:wrap;gap:8px">
-          <div style="display:flex;gap:6px">
-            <button class="btn ok" data-act="copyAiReport" style="font-weight:700">📋 Salin Laporan AI</button>
+          <div style="display:flex;gap:6px;flex-wrap:wrap">
+            <button class="btn ok" data-act="copyAiReport" style="font-weight:700">📋 Salin</button>
+            <button class="btn" data-act="exportDocFeedback" style="font-weight:700;background:linear-gradient(135deg,#2563eb,#1d4ed8);color:#fff">📄 Word (.doc)</button>
+            <button class="btn" data-act="exportPdfFeedback" style="font-weight:700;background:linear-gradient(135deg,#dc2626,#b91c1c);color:#fff">📑 Simpan PDF</button>
             <button class="btn" data-act="fbAiAnalyze">🔄 Analisis Ulang</button>
           </div>
           <div style="display:flex;gap:6px">
@@ -6896,8 +6924,10 @@ ${guestbookSamples ? `\n### SAMPEL BUKU TAMU / UCAPAN PESERTA:\n${guestbookSampl
         </div>
 
         <div class="acts" style="justify-content:space-between;flex-wrap:wrap;gap:8px">
-          <div style="display:flex;gap:6px">
-            <button class="btn ok" data-act="copyAnalyticsAiReport" style="font-weight:700">📋 Salin Laporan AI</button>
+          <div style="display:flex;gap:6px;flex-wrap:wrap">
+            <button class="btn ok" data-act="copyAnalyticsAiReport" style="font-weight:700">📋 Salin</button>
+            <button class="btn" data-act="exportDocAnalytics" style="font-weight:700;background:linear-gradient(135deg,#2563eb,#1d4ed8);color:#fff">📄 Word (.doc)</button>
+            <button class="btn" data-act="exportPdfAnalytics" style="font-weight:700;background:linear-gradient(135deg,#dc2626,#b91c1c);color:#fff">📑 Simpan PDF</button>
             <button class="btn" data-act="anAiAnalyze">🔄 Analisis Ulang</button>
           </div>
           <div style="display:flex;gap:6px">
@@ -6937,6 +6967,321 @@ ${guestbookSamples ? `\n### SAMPEL BUKU TAMU / UCAPAN PESERTA:\n${guestbookSampl
     } catch(e) {
       toast('Gagal menyalin secara otomatis.', 1);
     }
+  },
+
+  exportDocFeedback() { A.exportAiDoc('feedback'); },
+  exportPdfFeedback() { A.exportAiPdf('feedback'); },
+  exportDocAnalytics() { A.exportAiDoc('analytics'); },
+  exportPdfAnalytics() { A.exportAiPdf('analytics'); },
+
+  exportAiDoc(type) {
+    const isFb = type === 'feedback';
+    const text = isFb ? window._lastAiAnalysis : window._lastAnalyticsAiReport;
+    if (!text) return toast('Tidak ada data analisis untuk diekspor.', 1);
+
+    let evName = 'Semua Acara (Global)';
+    let subInfo = '';
+    if (isFb) {
+      const curEv = (S_fb.evId && S.aev && S.aev.find(x => x.id === S_fb.evId));
+      if (curEv) evName = curEv.name;
+      subInfo = `Total Responden: ${S_fb.data?.total || 0} peserta | Rata-rata Skor: ${S_fb.data?.avg || 0}/5.0`;
+    } else {
+      const curEv = (S.anSelEv && S.aev && S.aev.find(x => x.id === S.anSelEv));
+      if (curEv) evName = curEv.name;
+      const ords = (S.anOrds || []).filter(o => !S.anSelEv || o.event_id === S.anSelEv);
+      const activeOrders = ords.filter(o => o.status !== 'cancelled');
+      const totalBooked = activeOrders.reduce((a, o) => a + (o.qty || 1), 0);
+      const totalChecked = activeOrders.reduce((a, o) => a + (o.checked_in || 0), 0);
+      const rate = totalBooked ? Math.round((totalChecked / totalBooked) * 100) : 0;
+      subInfo = `Total Pesanan: ${totalBooked} tiket | Kehadiran Riil: ${totalChecked} (${rate}%)`;
+    }
+
+    const title = isFb ? 'Laporan Evaluasi Kepuasan & Ulasan AI' : 'Laporan Analisis Eksekutif & Demografi AI';
+    const htmlContent = md2html(text);
+    const nowStr = new Date().toLocaleDateString('id-ID', {
+      weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit'
+    });
+
+    const wordHtml = `<html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>
+<head>
+  <meta charset='utf-8'>
+  <title>${esc(title)} - ${esc(evName)}</title>
+  <style>
+    body { font-family: 'Calibri', 'Segoe UI', Arial, sans-serif; font-size: 11pt; line-height: 1.6; color: #1e293b; margin: 30px; }
+    h1 { font-size: 18pt; color: #1e1b4b; border-bottom: 2pt solid #4338ca; padding-bottom: 6pt; margin-bottom: 4pt; }
+    h2 { font-size: 14pt; color: #3730a3; margin-top: 18pt; margin-bottom: 6pt; border-bottom: 1pt solid #cbd5e1; padding-bottom: 4pt; }
+    h3 { font-size: 12pt; color: #4338ca; margin-top: 14pt; margin-bottom: 4pt; }
+    h4 { font-size: 11pt; color: #4f46e5; margin-top: 10pt; margin-bottom: 2pt; }
+    p { margin: 6pt 0; text-align: justify; }
+    ul, ol { margin: 6pt 0 6pt 20pt; padding: 0; }
+    li { margin-bottom: 4pt; }
+    table { border-collapse: collapse; width: 100%; margin: 12pt 0; }
+    th { background-color: #ede9fe; color: #3730a3; font-weight: bold; text-align: left; padding: 8pt; border: 1pt solid #cbd5e1; }
+    td { padding: 6pt 8pt; border: 1pt solid #e2e8f0; font-size: 10pt; }
+    tr:nth-child(even) td { background-color: #f8fafc; }
+    .header-box { background-color: #f1f5f9; border-left: 4pt solid #4f46e5; padding: 10pt 14pt; margin-bottom: 18pt; }
+    .header-box p { margin: 2pt 0; font-size: 10pt; color: #475569; }
+    .footer-doc { margin-top: 30pt; padding-top: 10pt; border-top: 1pt solid #e2e8f0; font-size: 9pt; color: #94a3b8; text-align: center; }
+  </style>
+</head>
+<body>
+  <h1>${esc(title)}</h1>
+  <div class="header-box">
+    <p><b>Nama Acara:</b> ${esc(evName)}</p>
+    <p><b>Ringkasan Data:</b> ${esc(subInfo)}</p>
+    <p><b>Waktu Analisis:</b> ${esc(nowStr)} WIB</p>
+    <p><b>Platform:</b> AmbilTiketnya &middot; Intelligence Powered by Google Gemini AI</p>
+  </div>
+  <div class="content">
+    ${htmlContent}
+  </div>
+  <div class="footer-doc">
+    Dokumen Laporan Resmi &copy; ${new Date().getFullYear()} AmbilTiketnya. Dokumen ini di-generate secara otomatis menggunakan analisis kecerdasan buatan.
+  </div>
+</body>
+</html>`;
+
+    const blob = new Blob(['\ufeff' + wordHtml], { type: 'application/msword' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    const safeName = (evName || 'Acara').replace(/[^a-zA-Z0-9_\- ]/g, '_').substring(0, 30);
+    a.download = `${safeName} - ${isFb ? 'Evaluasi_Kepuasan_AI' : 'Analisis_Eksekutif_AI'}.doc`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    toast('Dokumen Word (.doc) berhasil diunduh! 📄', 0);
+  },
+
+  exportAiPdf(type) {
+    const isFb = type === 'feedback';
+    const text = isFb ? window._lastAiAnalysis : window._lastAnalyticsAiReport;
+    if (!text) return toast('Tidak ada data analisis untuk dicetak/diekspor.', 1);
+
+    let evName = 'Semua Acara (Global)';
+    let subInfo = '';
+    if (isFb) {
+      const curEv = (S_fb.evId && S.aev && S.aev.find(x => x.id === S_fb.evId));
+      if (curEv) evName = curEv.name;
+      subInfo = `Total Responden: ${S_fb.data?.total || 0} peserta · Rata-rata Skor: ${S_fb.data?.avg || 0}/5.0`;
+    } else {
+      const curEv = (S.anSelEv && S.aev && S.aev.find(x => x.id === S.anSelEv));
+      if (curEv) evName = curEv.name;
+      const ords = (S.anOrds || []).filter(o => !S.anSelEv || o.event_id === S.anSelEv);
+      const activeOrders = ords.filter(o => o.status !== 'cancelled');
+      const totalBooked = activeOrders.reduce((a, o) => a + (o.qty || 1), 0);
+      const totalChecked = activeOrders.reduce((a, o) => a + (o.checked_in || 0), 0);
+      const rate = totalBooked ? Math.round((totalChecked / totalBooked) * 100) : 0;
+      subInfo = `Total Pesanan: ${totalBooked} tiket · Kehadiran Riil: ${totalChecked} (${rate}%)`;
+    }
+
+    const title = isFb ? 'Laporan Evaluasi Kepuasan & Ulasan AI' : 'Laporan Analisis Eksekutif & Demografi AI';
+    const htmlContent = md2html(text);
+    const nowStr = new Date().toLocaleDateString('id-ID', {
+      weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit'
+    });
+
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) {
+      return toast('Pop-up terblokir oleh peramban. Izinkan pop-up untuk mencetak / menyimpan PDF.', 1);
+    }
+
+    printWindow.document.open();
+    printWindow.document.write(`<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <title>${esc(title)} - ${esc(evName)}</title>
+  <style>
+    @page {
+      size: A4 portrait;
+      margin: 18mm 16mm 18mm 16mm;
+    }
+    * { box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      font-size: 11pt;
+      line-height: 1.6;
+      color: #1e293b;
+      background: #fff;
+      margin: 0;
+      padding: 0;
+    }
+    .print-bar {
+      background: #1e1b4b;
+      color: #fff;
+      padding: 12px 20px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      box-shadow: 0 4px 12px rgba(0,0,0,.15);
+    }
+    .print-bar button {
+      border: 0;
+      border-radius: 8px;
+      padding: 8px 16px;
+      font-weight: 700;
+      font-size: 13px;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      transition: opacity .15s;
+    }
+    .print-bar .btn-print { background: #4f46e5; color: #fff; }
+    .print-bar .btn-close { background: rgba(255,255,255,.2); color: #fff; }
+    .container {
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 24px 20px 40px;
+    }
+    .brand-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      border-bottom: 2px solid #4f46e5;
+      padding-bottom: 12px;
+      margin-bottom: 20px;
+    }
+    .brand-title {
+      font-size: 20pt;
+      font-weight: 800;
+      color: #1e1b4b;
+      margin: 0;
+    }
+    .brand-sub {
+      font-size: 10pt;
+      color: #64748b;
+      margin-top: 4px;
+    }
+    .badge-org {
+      background: #ede9fe;
+      color: #4338ca;
+      font-weight: 700;
+      font-size: 10pt;
+      padding: 4px 10px;
+      border-radius: 6px;
+    }
+    .meta-box {
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-left: 4px solid #4f46e5;
+      border-radius: 8px;
+      padding: 12px 16px;
+      margin-bottom: 24px;
+      font-size: 10pt;
+    }
+    .meta-box div { margin-bottom: 4px; }
+    .meta-box div:last-child { margin-bottom: 0; }
+    h2 {
+      font-size: 14pt;
+      color: #1e1b4b;
+      border-bottom: 1px solid #cbd5e1;
+      padding-bottom: 4px;
+      margin-top: 24px;
+      margin-bottom: 8px;
+      page-break-after: avoid;
+      break-after: avoid;
+    }
+    h3 {
+      font-size: 12pt;
+      color: #4338ca;
+      margin-top: 16px;
+      margin-bottom: 6px;
+      page-break-after: avoid;
+      break-after: avoid;
+    }
+    h4 {
+      font-size: 11pt;
+      color: #4f46e5;
+      margin-top: 12px;
+      margin-bottom: 4px;
+    }
+    p { margin: 6pt 0; text-align: justify; }
+    ul, ol { margin: 6pt 0 6pt 20pt; padding: 0; }
+    li { margin-bottom: 4pt; }
+    table {
+      border-collapse: collapse;
+      width: 100%;
+      margin: 14pt 0;
+      page-break-inside: avoid;
+      break-inside: avoid;
+    }
+    th {
+      background-color: #ede9fe;
+      color: #3730a3;
+      font-weight: 700;
+      text-align: left;
+      padding: 8pt 10pt;
+      border: 1pt solid #cbd5e1;
+      font-size: 9.5pt;
+    }
+    td {
+      padding: 6pt 10pt;
+      border: 1pt solid #e2e8f0;
+      font-size: 9pt;
+    }
+    tr:nth-child(even) td { background-color: #f8fafc; }
+    .report-footer {
+      margin-top: 36px;
+      padding-top: 12px;
+      border-top: 1px solid #cbd5e1;
+      display: flex;
+      justify-content: space-between;
+      font-size: 8.5pt;
+      color: #94a3b8;
+    }
+    @media print {
+      .print-bar { display: none !important; }
+      .container { padding: 0; }
+      body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    }
+  </style>
+</head>
+<body>
+  <div class="print-bar">
+    <div style="font-weight:700;font-size:14px">📑 Pratinjau Cetak / Simpan PDF</div>
+    <div style="display:flex;gap:8px">
+      <button class="btn-print" onclick="window.print()">🖨️ Simpan ke PDF / Cetak</button>
+      <button class="btn-close" onclick="window.close()">✕ Tutup</button>
+    </div>
+  </div>
+
+  <div class="container">
+    <div class="brand-header">
+      <div>
+        <h1 class="brand-title">${esc(title)}</h1>
+        <div class="brand-sub">AmbilTiketnya &middot; Intelligence Report &middot; Powered by Google Gemini AI</div>
+      </div>
+      <span class="badge-org">Laporan Resmi</span>
+    </div>
+
+    <div class="meta-box">
+      <div><b>Acara:</b> ${esc(evName)}</div>
+      <div><b>Ringkasan Data:</b> ${esc(subInfo)}</div>
+      <div><b>Waktu Analisis:</b> ${esc(nowStr)} WIB</div>
+    </div>
+
+    <div class="report-body">
+      ${htmlContent}
+    </div>
+
+    <div class="report-footer">
+      <span>Dokumen ini dihasilkan secara otomatis oleh sistem AmbilTiketnya</span>
+      <span>Halaman otomatis menyesuaikan dokumen</span>
+    </div>
+  </div>
+
+  <script>
+    setTimeout(function() {
+      try { window.print(); } catch(e) {}
+    }, 450);
+  </script>
+</body>
+</html>`);
+    printWindow.document.close();
   },
 
  dpToggleFs(){
