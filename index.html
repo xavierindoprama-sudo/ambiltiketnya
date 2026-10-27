@@ -146,7 +146,7 @@ label{display:block;font-size:12px;font-weight:600;color:var(--mu);margin:12px 0
 .sb{position:sticky;top:0;height:100vh;display:flex;flex-direction:column;gap:6px;padding:14px 12px;background:var(--card);border-right:1px solid var(--bd);z-index:30;overflow-y:auto;overflow-x:hidden}
 .sb-top{display:flex;align-items:center;gap:8px;min-height:44px}.sb-top .logo{min-width:0;overflow:hidden;white-space:nowrap}.sb-tg{margin-left:auto}.sb-top .sb-x{display:none;margin-left:auto}
 .ib{width:36px;height:36px;border-radius:11px;border:1px solid var(--bd);background:var(--in);display:inline-grid;place-items:center;cursor:pointer;color:var(--mu);flex:none;font-weight:700;font-size:12px}.ib:hover{color:var(--tx)}.sb-tg svg{transition:transform .2s}.col .sb-tg svg{transform:rotate(180deg)}
-.sb-nav{display:flex;flex-direction:column;gap:4px;margin-top:12px;flex:1}.sb-sep{height:1px;background:var(--bd);margin:8px 4px}
+.sb-nav{display:flex;flex-direction:column;gap:3px;margin-top:10px;flex:1}.sb-sep{height:1px;background:var(--bd);margin:6px 4px}.sb-group-title{font-size:10px;font-weight:700;letter-spacing:1px;color:var(--mu);text-transform:uppercase;padding:8px 12px 3px;opacity:.75}.col .sb-group-title,.col .ni .pill{display:none}
 .ni{display:flex;align-items:center;gap:12px;width:100%;padding:11px 12px;border-radius:13px;border:0;background:none;color:var(--mu);font-weight:600;cursor:pointer;text-align:left;white-space:nowrap}.ni:hover{background:var(--in);color:var(--tx)}.ni.on{background:var(--ac);color:#fff;box-shadow:0 6px 16px rgba(91,78,240,.35)}.ni svg{flex:none}.ni.dg,.ni.dg:hover{color:var(--er)}
 .sb-bot{display:flex;flex-direction:column;gap:8px;border-top:1px solid var(--bd);padding-top:12px}.uc{display:flex;gap:10px;align-items:center;min-width:0}.uc>div{min-width:0}.uc b,.uc small{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.uc small{color:var(--mu);font-size:11px}
 .sb-full{display:flex;flex-wrap:wrap;gap:6px}.sb-mini{display:none;flex-direction:column;gap:6px;align-items:center}
@@ -312,7 +312,7 @@ const ctl=()=>seg([['id','ID'],['en','EN']],L,'lang')+' '+seg([['light',IC.light
 const ini=n=>(n||'?').split(' ').map(x=>x[0]).slice(0,2).join('').toUpperCase();
 const avt=u=>`<div class="av">${u.picture?`<img src="${esc(u.picture)}" referrerpolicy="no-referrer" onerror="this.remove()">`:esc(ini(u.name))}</div>`;
 const ico=p=>'<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'+p+'</svg>';
-const ICN={ticket:'<path d="M2 9a3 3 0 0 1 0 6v2a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-2a3 3 0 0 1 0-6V7a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2z"/><path d="M13 5v2M13 11v2M13 17v2"/>',dash:'<rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/>',events:'<rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/>',orders:'<rect x="8" y="2" width="8" height="4" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2M9 12h6M9 16h4"/>',scan:'<path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2M7 12h10"/>',users:'<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.9M16 3.1a4 4 0 0 1 0 7.8"/>',user:'<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>',out:'<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/>',left:'<path d="M15 18l-6-6 6-6"/>',menu:'<path d="M3 6h18M3 12h18M3 18h18"/>',close:'<path d="M18 6L6 18M6 6l12 12"/>',inv:'<path d="M12 2l3 6.5 7 .9-5.2 4.8 1.4 7-6.2-3.5-6.2 3.5 1.4-7L2 9.4l7-.9z"/>',analytics:'<path d="M18 20V10M12 20V4M6 20v-6"/>',legal:'<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M8 13h8M8 17h6"/>',doorprize:'<polyline points="20 12 20 22 4 22 4 12"/><rect x="2" y="7" width="20" height="5"/><line x1="12" y1="22" x2="12" y2="7"/><path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"/><path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"/>',feedback:'<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><line x1="9" y1="9" x2="15" y2="9"/><line x1="9" y1="13" x2="13" y2="13"/>'};
+const ICN={ticket:'<path d="M2 9a3 3 0 0 1 0 6v2a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-2a3 3 0 0 1 0-6V7a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2z"/><path d="M13 5v2M13 11v2M13 17v2"/>',dash:'<rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/>',events:'<rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/>',orders:'<rect x="8" y="2" width="8" height="4" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2M9 12h6M9 16h4"/>',scan:'<path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2M7 12h10"/>',users:'<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.9M16 3.1a4 4 0 0 1 0 7.8"/>',user:'<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>',out:'<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/>',left:'<path d="M15 18l-6-6 6-6"/>',menu:'<path d="M3 6h18M3 12h18M3 18h18"/>',close:'<path d="M18 6L6 18M6 6l12 12"/>',inv:'<path d="M12 2l3 6.5 7 .9-5.2 4.8 1.4 7-6.2-3.5-6.2 3.5 1.4-7L2 9.4l7-.9z"/>',analytics:'<path d="M18 20V10M12 20V4M6 20v-6"/>',legal:'<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M8 13h8M8 17h6"/>',doorprize:'<polyline points="20 12 20 22 4 22 4 12"/><rect x="2" y="7" width="20" height="5"/><line x1="12" y1="22" x2="12" y2="7"/><path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"/><path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"/>',feedback:'<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><line x1="9" y1="9" x2="15" y2="9"/><line x1="9" y1="13" x2="13" y2="13"/>',organizers:'<rect x="4" y="2" width="16" height="20" rx="2"/><path d="M9 22v-4h6v4"/><path d="M8 6h.01M16 6h.01M12 6h.01M12 10h.01M12 14h.01M16 10h.01M16 14h.01M8 10h.01M8 14h.01"/>'};
 const logo='<div class="logo"><i>'+ico(ICN.ticket)+'</i><span>ambiltiketnya<b>.online</b></span></div>';
 /* qr */
 function qr(x){if(typeof qrcode==='undefined')return '<p class="muted">QR...</p>';const q=qrcode(0,'M');q.addData(x);q.make();const n=q.getModuleCount();let p='';for(let r=0;r<n;r++)for(let c=0;c<n;c++)if(q.isDark(r,c))p+=`M${c} ${r}h1v1h-1z`;return `<svg viewBox="0 0 ${n} ${n}" shape-rendering="crispEdges"><path d="${p}" fill="#000"/></svg>`}
@@ -552,10 +552,16 @@ function renderAdmin(){
  const ordersNavLabel=isRsvp?'Rekap Peserta':t('n_orders');
  const pageTitle=(S.view==='orders')?(isRsvp?'📋 Rekap Peserta & Konfirmasi RSVP':t('n_orders')):t('n_'+S.view);
 
- const nav=[['dash',1],['events',2],['orders',2],['scan',1],['analytics',2],['doorprize',2],['feedback',2],['inv',2],['organizers',3],['legal',2],['users',3]].filter(n=>rk()>=n[1]);
- if(!nav.find(n=>n[0]===S.view))S.view=nav[0][0];
+ const navGroups=[
+  {title:'Acara & Tiket',items:[['dash',1],['events',2],['orders',2],['inv',2]]},
+  {title:'Hari-H & Gate',items:[['scan',1],['doorprize',2],['feedback',2]]},
+  {title:'Laporan',items:[['analytics',2]]},
+  {title:'Pengaturan',items:[['organizers',3],['users',3],['legal',2]]}
+ ];
+ const allViews=navGroups.flatMap(g=>g.items).filter(n=>rk()>=n[1]).map(n=>n[0]);
+ if(!allViews.includes(S.view))S.view=allViews[0]||'dash';
  const sv=ls.g('sbcol'),col=sv==null?innerWidth<1100:sv==='1';
- const it=(on,ic,l,act,dv,x)=>'<button class="ni '+(on?'on ':'')+(x||'')+'" title="'+esc(l)+'" data-act="'+act+'"'+(dv?' data-v="'+dv+'"':'')+'>'+ico(ic)+'<span>'+l+'</span></button>';
+ const it=(on,ic,l,act,dv,x,badge)=>'<button class="ni '+(on?'on ':'')+(x||'')+'" title="'+esc(l)+'" data-act="'+act+'"'+(dv?' data-v="'+dv+'"':'')+'>'+ico(ic)+'<span>'+l+'</span>'+(badge||'')+'</button>';
 
  const evContextBar=(rk()>=2&&S.aev&&S.aev.length)?`
  <div class="ev-context-bar" style="background:var(--card-sub,rgba(255,255,255,.03));border:1px solid var(--bd);border-radius:12px;padding:8px 14px;margin-bottom:14px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
@@ -579,7 +585,21 @@ function renderAdmin(){
  </div>`: '';
 
  $('#app').innerHTML='<div class="app'+(col?' col':'')+'" id="shell"><aside class="sb"><div class="sb-top"><div class="logo"><i>'+ico(ICN.ticket)+'</i><span class="sb-txt">ambiltiketnya<b>.online</b></span></div><button class="ib sb-tg" data-act="sbtoggle" title="Menu">'+ico(ICN.left)+'</button><button class="ib sb-x" data-act="sbclose">'+ico(ICN.close)+'</button></div>'
- +'<nav class="sb-nav">'+nav.map(n=>it(S.view===n[0],ICN[n[0]],n[0]==='orders'?ordersNavLabel:t('n_'+n[0]),'view',n[0])).join('')+'<div class="sb-sep"></div>'+it(0,ICN.user,t('asuser'),'mode','user')+'</nav>'
+ +'<nav class="sb-nav">'+navGroups.map((g,idx)=>{
+  const visible=g.items.filter(n=>rk()>=n[1]);
+  if(!visible.length)return '';
+  const sep=idx>0?'<div class="sb-sep"></div>':'';
+  const gTitle='<div class="sb-group-title">'+esc(g.title)+'</div>';
+  const btns=visible.map(n=>{
+   let badge='';
+   if(n[0]==='inv'&&S.waitList&&S.waitList.length){
+    badge='<span class="pill wn" style="font-size:10px;margin-left:auto;padding:1px 6px;line-height:1.2;font-weight:700">'+S.waitList.length+'</span>';
+   }
+   const label=n[0]==='orders'?ordersNavLabel:t('n_'+n[0]);
+   return it(S.view===n[0],ICN[n[0]],label,'view',n[0],'',badge);
+  }).join('');
+  return sep+gTitle+btns;
+ }).join('')+'<div class="sb-sep"></div>'+it(0,ICN.user,t('asuser'),'mode','user')+'</nav>'
  +'<div class="sb-bot"><div class="uc">'+avt(S.user)+'<div class="sb-txt"><b>'+esc(S.user.name)+'</b><small>'+t('r_'+S.user.role)+'</small></div></div><div class="sb-full">'+ctl()+'<button class="btn sm" data-act="aiSettingsModal" style="width:100%;margin-top:8px;display:flex;align-items:center;justify-content:center;gap:6px;font-size:12px;font-weight:700;background:rgba(139,92,246,.12);border:1px solid rgba(139,92,246,.35);color:#c7d2fe"><span>✨</span> <span>Pengaturan AI Key</span></button></div><div class="sb-mini"><button class="ib" data-act="themecycle" title="'+t('theme')+'">'+IC[TH]+'</button><button class="ib" data-act="langtoggle">'+L.toUpperCase()+'</button></div>'+it(0,ICN.out,t('logout'),'logout','','dg')+'</div></aside><div class="sb-bg" data-act="sbclose"></div>'
  +'<div class="mw"><header class="mbar"><button class="ib" data-act="sbopen">'+ico(ICN.menu)+'</button><b>'+pageTitle+'</b><span class="sp"></span>'+avt(S.user)+'</header><section class="card main"><h2 class="ptitle">'+pageTitle+'</h2>'+evContextBar+'<div id="ac">'+skel(1)+'</div></section></div></div>';adminView()}
 async function adminView(){
