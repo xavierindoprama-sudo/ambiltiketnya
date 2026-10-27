@@ -6290,60 +6290,299 @@ const NL=String.fromCharCode(10),find=(a,id)=>a.find(x=>x.id===id),A={
     }
   },
 
-  async fbAiAnalyze() {
-    const d = S_fb.data;
-    if (!d || !d.total) {
-      return toast('Belum ada data ulasan peserta untuk dianalisis.', 1);
+  getAiDefaultInstructions(type) {
+    if (type === 'feedback') {
+      return `### FORMAT LAPORAN YANG HARUS ANDA SUSUN:
+Susun laporan dalam Bahasa Indonesia profesional, terstruktur rapi, menggunakan format Markdown standar:
+
+## 📋 1. Ringkasan Eksekutif (Executive Summary)
+- Berikan sintesis singkat (2-3 paragraf) mengenai gambaran umum sentimen audiens dan kesuksesan acara.
+- Cantumkan label Indeks Kepuasan: (misal: **"Sangat Memuaskan (Outstanding)"**, **"Baik & Positif"**, atau **"Butuh Perhatian Khusus"**).
+
+## 🌟 2. Kekuatan Utama Acara (Top Highlights)
+- Sebutkan 3-5 poin keunggulan yang paling diapresiasi dan berkesan bagi audiens berdasarkan data dan komentar.
+
+## ⚠️ 3. Keluhan Utama & Titik Kritis (Key Pain Points)
+- Rangkum masalah, kendala, atau hal-hal yang paling banyak disorot/dikeluhkan oleh peserta (jujur dan apa adanya tanpa ditutup-tutupi).
+
+## 🎯 4. Evaluasi Mendalam per Aspek Acara
+Berikan catatan evaluatif kualitatif untuk masing-masing:
+- **Konten & Pembicara / Pengisi Acara**
+- **Pelayanan Panitia, Usher & Alur Masuk**
+- **Fasilitas Venue, Ruangan & Suhu/Kenyamanan**
+- **Sound System, Musik & Multimedia**
+
+## 💡 5. Rekomendasi Aksi Konkret (Actionable Next Steps)
+- Berikan 4-6 poin rekomendasi praktis, terukur, dan berurutan prioritas yang harus dilakukan tim panitia untuk penyelenggaraan acara berikutnya.
+
+Tulis dengan gaya bahasa yang profesional, tajam, bernas, dan memotivasi panitia untuk terus berkembang.`;
     }
+
+    return `### FORMAT LAPORAN ANALISIS EKSEKUTIF YANG HARUS ANDA SUSUN:
+Susun laporan dalam Bahasa Indonesia profesional, bernas, berwawasan tajam, dengan format Markdown standar:
+
+## 📊 1. Ringkasan Eksekutif & Health Score Acara
+- Berikan sintesis cepat performa kehadiran acara.
+- Cantumkan **"Attendance Health Score"** (misal: **"Sangat Sukses (90-100%)"**, **"Optimal & Solid"**, atau **"Perlu Strategi Konversi Lebih Baik"**).
+- Berikan ulasan singkat mengenai efektivitas konversi pemesanan ke kehadiran riil.
+
+## ⛪ 2. Analisis Mendalam Demografi Gereja, Normalisasi & Deduplikasi Entitas
+*(FOKUS UTAMA & WAJIB LENGKAP)*
+- **Estimasi Jumlah Gereja Unik Sebenarnya**:
+  Lakukan deduplikasi semantik dan berikan angka perkiraan riil. Jelaskan alasan penggabungannya secara objektif.
+- **Tabel Pemetaan & Normalisasi Nama Gereja**:
+  Buat tabel Markdown yang merangkum hasil pengelompokan nama gereja yang terdeteksi sama/terafiliasi:
+  | Gereja Standar / Terkonsolidasi | Variasi Nama Input Peserta | Total Jemaat Gabungan | Estimasi % Audiens |
+- **Spektrum Aliran & Rumpun Denominasi**:
+  Petakan sebaran peserta ke dalam rumpun tradisi gereja (Kharismatik / Pentakosta, Protestan Klasik / Arus Utama / PGI, Injili / Reformed, Katolik, Komunitas Independen / Para-Church). Berikan persentase estimasi masing-masing rumpun.
+- **Wawasan Jangkauan Ekumenis**:
+  Evaluasi seberapa luas jangkauan lintas sinode acara ini dan apakah acara berhasil menjadi wadah kesatuan ekumenis yang inklusif atau terkonsentrasi pada komunitas tertentu.
+
+## ⏱️ 3. Analisis Arus Kedatangan & Efisiensi Alur Check-in
+- Analisis pola kedatangan peserta (apakah menumpuk mendekati acara dimulai, tersebar merata, atau terlambat).
+- Evaluasi titik kritis beban antrean (*bottleneck*) di gerbang/meja registrasi dan kapasitas petugas usher/pindai QR.
+
+## 👥 4. Karakteristik Demografi Usia Audiens
+- Analisis segmentasi usia audiens dan relevansi acara terhadap kelompok demografi yang mendominasi.
+
+## 📉 5. Diagnosis No-Show & Faktor Retensi
+- Berikan analisis kritis terhadap potensi penyebab peserta batal hadir.
+- Strategi pencegahan atau komitmen kehadiran (misal: automated reminder via WhatsApp, sistem deposit/komitmen, batas waktu klaim tiket).
+
+## 🚀 6. Rekomendasi Taktis & Strategis Acara Selanjutnya
+- Berikan 4-5 poin rekomendasi operasional yang terukur untuk panitia (penjadwalan registrasi, penataan jalur masuk, strategi promosi ke segmen usia tertentu, dan kemitraan antar komunitas/sinode).
+
+Tulis secara elegan, objektif, tajam, dan berorientasi pada peningkatan kualitas operasional acara masa depan.`;
+  },
+
+  openAiPromptStudio(type) {
+    const isFb = type === 'feedback';
     const localKey = (ls.g('atk_gemini_key') || '').trim();
     if (!localKey) {
       toast('Google Gemini API Key belum disetel. Silakan masukkan API Key Anda.', 1);
       return A.aiSettingsModal();
     }
 
+    let evName = 'Semua Acara (Global)';
+    let statsSummary = '';
+
+    if (isFb) {
+      const d = S_fb.data;
+      if (!d || !d.total) return toast('Belum ada data ulasan peserta untuk dianalisis.', 1);
+      const curEv = (S_fb.evId && S.aev && S.aev.find(x => x.id === S_fb.evId));
+      if (curEv) evName = curEv.name;
+      statsSummary = `${d.total} Responden · Rata-rata Skor: ${d.avg || 0}/5.0`;
+    } else {
+      const selEv = S.anSelEv || '';
+      const ords = (S.anOrds || []).filter(o => !selEv || o.event_id === selEv);
+      const activeOrders = ords.filter(o => o.status !== 'cancelled');
+      if (!activeOrders.length) return toast('Belum ada data pesanan tiket untuk dianalisis.', 1);
+      const curEv = (selEv && S.aev && S.aev.find(x => x.id === selEv));
+      if (curEv) evName = curEv.name;
+      const totalBooked = activeOrders.reduce((a, o) => a + (o.qty || 1), 0);
+      const totalChecked = activeOrders.reduce((a, o) => a + (o.checked_in || 0), 0);
+      const rate = totalBooked ? Math.round((totalChecked / totalBooked) * 100) : 0;
+      statsSummary = `${totalBooked} Tiket Dipesan · ${totalChecked} Hadir (${rate}%)`;
+    }
+
+    const savedMode = ls.g('atk_ai_' + type + '_mode') || 'standard';
+    const savedExtra = ls.g('atk_ai_' + type + '_extra') || '';
+    const defaultInstructions = A.getAiDefaultInstructions(type);
+    const savedCustom = ls.g('atk_ai_' + type + '_custom') || defaultInstructions;
+
+    const modalTitle = isFb ? 'Studio Analisis AI Kepuasan & Ulasan' : 'Studio Analisis AI Eksekutif Acara';
+    const modalIcon = isFb ? '✨' : '📊';
+
     modal(`
       <button class="btn sm x" data-act="cm">&#10005;</button>
-      <div style="text-align:center;padding:30px 20px">
-        <div style="font-size:42px;margin-bottom:12px;display:inline-block;animation:spin 2s linear infinite">✨</div>
-        <h3 style="margin:0 0 8px">Menghubungi Google Gemini AI...</h3>
-        <p class="muted" style="margin:0 auto 16px;max-width:380px;font-size:13px;line-height:1.5">
-          Sedang menganalisis <b>${d.total} ulasan</b> peserta, mengkalkulasi kepuasan multi-aspek, dan menyusun laporan evaluasi resmi...
-        </p>
-        <div style="height:6px;width:240px;background:rgba(255,255,255,.1);border-radius:99px;margin:0 auto 18px;overflow:hidden">
-          <div style="height:100%;width:70%;background:linear-gradient(90deg,#8b5cf6,#6366f1);border-radius:99px;animation:pulse 1s infinite alternate"></div>
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
+        <span style="font-size:26px">${modalIcon}</span>
+        <div>
+          <h2 style="margin:0;font-size:18px">${modalTitle}</h2>
+          <small class="muted">Acara: <b>${esc(evName)}</b> (${esc(statsSummary)})</small>
         </div>
-        <button class="btn sm" data-act="cm">Batal</button>
+      </div>
+
+      <!-- Segmented Tab Selector -->
+      <div style="display:flex;background:var(--in);padding:4px;border-radius:10px;border:1px solid var(--bd);margin-bottom:14px;gap:4px">
+        <button type="button" id="ai_tab_btn_std" class="btn sm" style="flex:1;border-radius:8px;padding:8px 12px;font-weight:700;transition:all .2s;${savedMode === 'standard' ? 'background:var(--ac);color:#fff;box-shadow:0 2px 6px rgba(0,0,0,.2)' : 'background:transparent;color:var(--fg);opacity:.85'}">
+          🌟 Prompt Standar (Bawaan)
+        </button>
+        <button type="button" id="ai_tab_btn_cst" class="btn sm" style="flex:1;border-radius:8px;padding:8px 12px;font-weight:700;transition:all .2s;${savedMode === 'custom' ? 'background:var(--ac);color:#fff;box-shadow:0 2px 6px rgba(0,0,0,.2)' : 'background:transparent;color:var(--fg);opacity:.85'}">
+          ✏️ Edit / Kustomisasi Prompt
+        </button>
+      </div>
+
+      <!-- Tab 1: Standar Content -->
+      <div id="ai_pane_std" style="${savedMode === 'standard' ? '' : 'display:none'}">
+        <div style="background:rgba(16,185,129,.08);border:1px solid rgba(16,185,129,.25);border-radius:10px;padding:12px;margin-bottom:12px">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
+            <span style="color:var(--ok);font-size:16px">✓</span>
+            <b style="font-size:13px;color:var(--ok)">Prompt Analisis Standar Resmi Aktif</b>
+          </div>
+          <p class="muted" style="margin:0;font-size:12px;line-height:1.5">
+            ${isFb 
+              ? 'Menganalisis indeks kepuasan multi-aspek (konten, pembicara, fasilitas, sound system), sintesis ulasan audiens, titik kritis masalah, dan rekomendasi langkah konkret perbaikan panitia.' 
+              : 'Menganalisis performa turnout kehadiran, normalisasi & deduplikasi semantik gereja/sinode, sebaran spektrum denominasi, arus kedatangan (bottleneck), demografi usia, diagnosis no-show, dan rekomendasi taktis.'}
+          </p>
+        </div>
+
+        <div style="margin-bottom:10px">
+          <label style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;font-weight:700;font-size:13px">
+            <span>💬 Tambahan Instruksi Khusus <span class="muted" style="font-weight:400">(Opsional)</span>:</span>
+          </label>
+          <textarea id="ai_input_extra" rows="3" placeholder="${isFb ? 'Contoh: Sorot keluhan seputar pendingin ruangan/AC dan durasi khotbah, atau buat format ringkas untuk laporan rapat evaluasi panitia...' : 'Contoh: Beri perhatian lebih pada jemaat usia 18–30 tahun, usulkan strategi promosi lewat IG/TikTok, atau buat dalam format ringkas untuk rapat gembala...'}" style="width:100%;box-sizing:border-box;border:1px solid var(--bd);background:var(--in);color:var(--fg);border-radius:8px;padding:10px;font-family:inherit;font-size:13px;line-height:1.4;resize:vertical">${esc(savedExtra)}</textarea>
+          <small class="muted" style="display:block;margin-top:4px;font-size:11px">
+            💡 Instruksi ini akan disematkan secara otomatis di akhir prompt standar tanpa merusak kerangka analisis resmi.
+          </small>
+        </div>
+      </div>
+
+      <!-- Tab 2: Custom Content -->
+      <div id="ai_pane_cst" style="${savedMode === 'custom' ? '' : 'display:none'}">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;flex-wrap:wrap;gap:6px">
+          <div>
+            <label style="margin:0;font-weight:700;font-size:13px">✏️ Kerangka Instruksi & Format Laporan AI:</label>
+            <small class="muted" style="display:block;font-size:11px">Data numerik dan daftar mentah acara akan diinjeksikan secara otomatis oleh sistem.</small>
+          </div>
+          <button type="button" id="ai_btn_reset" class="btn sm" style="padding:4px 10px;font-size:11px;display:inline-flex;align-items:center;gap:4px">
+            <span>🔄</span> Reset ke Prompt Standar
+          </button>
+        </div>
+
+        <textarea id="ai_input_custom" rows="11" style="width:100%;box-sizing:border-box;border:1px solid var(--bd);background:var(--in);color:var(--fg);border-radius:8px;padding:10px;font-family:Consolas, Monaco, 'Courier New', monospace;font-size:12px;line-height:1.45;resize:vertical;white-space:pre-wrap">${esc(savedCustom)}</textarea>
+      </div>
+
+      <div style="margin:12px 0 16px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+        <label style="display:flex;align-items:center;gap:8px;font-size:12px;cursor:pointer;color:var(--fg);opacity:.9">
+          <input type="checkbox" id="ai_cb_save" checked style="accent-color:var(--ac);cursor:pointer">
+          Simpan konfigurasi prompt ini untuk analisis berikutnya
+        </label>
+        <button type="button" class="btn sm" data-act="aiSettingsModal" style="display:inline-flex;align-items:center;gap:4px;font-size:11px">
+          ⚙️ Atur API Key
+        </button>
+      </div>
+
+      <div class="acts" style="justify-content:flex-end;gap:8px">
+        <button type="button" class="btn" data-act="cm">Batal</button>
+        <button type="button" class="btn ok" id="ai_btn_run" style="font-weight:700;padding:8px 18px;display:inline-flex;align-items:center;gap:6px">
+          <span>🚀</span> Jalankan Analisis AI
+        </button>
       </div>
     `);
 
-    let analysisText = '', modelName = 'Gemini 2.0 Flash';
-    const curEv = (S_fb.evId && S.aev && S.aev.find(x => x.id === S_fb.evId));
-    const evName = curEv ? curEv.name : 'Semua Acara (Global)';
+    let activeMode = savedMode;
+    const tabStd = $('#ai_tab_btn_std');
+    const tabCst = $('#ai_tab_btn_cst');
+    const paneStd = $('#ai_pane_std');
+    const paneCst = $('#ai_pane_cst');
+    const inputExtra = $('#ai_input_extra');
+    const inputCustom = $('#ai_input_custom');
+    const btnReset = $('#ai_btn_reset');
+    const cbSave = $('#ai_cb_save');
+    const btnRun = $('#ai_btn_run');
 
-    // Coba via server Cloudflare Worker dahulu
-    let serverOk = false;
-    try {
-      const res = await api('feedbackAiAnalyze', { eventId: S_fb.evId, geminiApiKey: localKey });
-      if (res && res.analysis) {
-        analysisText = res.analysis;
-        modelName = res.model || 'Gemini Flash';
-        serverOk = true;
+    const updateTabs = (mode) => {
+      activeMode = mode;
+      if (mode === 'standard') {
+        tabStd.style.background = 'var(--ac)';
+        tabStd.style.color = '#fff';
+        tabStd.style.boxShadow = '0 2px 6px rgba(0,0,0,.2)';
+        tabStd.style.opacity = '1';
+        tabCst.style.background = 'transparent';
+        tabCst.style.color = 'var(--fg)';
+        tabCst.style.boxShadow = 'none';
+        tabCst.style.opacity = '.85';
+        paneStd.style.display = 'block';
+        paneCst.style.display = 'none';
+      } else {
+        tabCst.style.background = 'var(--ac)';
+        tabCst.style.color = '#fff';
+        tabCst.style.boxShadow = '0 2px 6px rgba(0,0,0,.2)';
+        tabCst.style.opacity = '1';
+        tabStd.style.background = 'transparent';
+        tabStd.style.color = 'var(--fg)';
+        tabStd.style.boxShadow = 'none';
+        tabStd.style.opacity = '.85';
+        paneCst.style.display = 'block';
+        paneStd.style.display = 'none';
       }
-    } catch(errServer) {
-      console.warn('Worker feedbackAiAnalyze fallback to client fetch:', errServer);
+    };
+
+    if (tabStd) tabStd.onclick = () => updateTabs('standard');
+    if (tabCst) tabCst.onclick = () => updateTabs('custom');
+
+    if (btnReset) {
+      btnReset.onclick = () => {
+        if (inputCustom) inputCustom.value = defaultInstructions;
+        toast('Prompt dikembalikan ke standar bawaan sistem! 🔄', 0);
+      };
     }
 
-    // Jika server belum di-update / gagal, panggil Gemini langsung dari browser
-    if (!serverOk) {
-      try {
-        const rows = d.rows || [];
-        const textComments = rows
-          .filter(r => r.comment && r.comment.trim() && r.comment.trim() !== 'Tanpa catatan tambahan.')
-          .slice(0, 70)
-          .map((r, i) => `${i + 1}. [Skor ${r.rating_overall||r.rating}★ | Konten ${r.rating_content||5}★ | Panitia ${r.rating_service||5}★ | Venue ${r.rating_venue||5}★ | Sound ${r.rating_sound||5}★]: "${r.comment.trim()}"`)
-          .join('\n');
+    if (btnRun) {
+      btnRun.onclick = () => {
+        const extraVal = inputExtra ? inputExtra.value.trim() : '';
+        const customVal = inputCustom ? inputCustom.value.trim() : '';
+        if (cbSave && cbSave.checked) {
+          ls.s('atk_ai_' + type + '_mode', activeMode);
+          ls.s('atk_ai_' + type + '_extra', extraVal);
+          ls.s('atk_ai_' + type + '_custom', customVal || defaultInstructions);
+        }
+        A.executeAiAnalysis(type, {
+          mode: activeMode,
+          extra: extraVal,
+          customInstructions: customVal || defaultInstructions
+        });
+      };
+    }
+  },
 
-        const prompt = `Anda adalah seorang Konsultan Evaluasi & Spesialis Mutu Acara (Event Quality & Experience Specialist) berpengalaman tinggi.
+  async executeAiAnalysis(type, opts = {}) {
+    const isFb = type === 'feedback';
+    const localKey = (ls.g('atk_gemini_key') || '').trim();
+    if (!localKey) {
+      toast('Google Gemini API Key belum disetel.', 1);
+      return A.aiSettingsModal();
+    }
+
+    const mode = opts.mode || ls.g('atk_ai_' + type + '_mode') || 'standard';
+    const extra = opts.extra !== undefined ? opts.extra : (ls.g('atk_ai_' + type + '_extra') || '');
+    const customInstructions = opts.customInstructions || ls.g('atk_ai_' + type + '_custom') || A.getAiDefaultInstructions(type);
+
+    let evName = 'Semua Acara (Global)';
+    let finalPrompt = '';
+    let targetEvId = '';
+
+    if (isFb) {
+      const d = S_fb.data;
+      if (!d || !d.total) return toast('Belum ada data ulasan peserta untuk dianalisis.', 1);
+      targetEvId = S_fb.evId || '';
+      const curEv = (targetEvId && S.aev && S.aev.find(x => x.id === targetEvId));
+      if (curEv) evName = curEv.name;
+
+      modal(`
+        <button class="btn sm x" data-act="cm">&#10005;</button>
+        <div style="text-align:center;padding:30px 20px">
+          <div style="font-size:42px;margin-bottom:12px;display:inline-block;animation:spin 2s linear infinite">✨</div>
+          <h3 style="margin:0 0 8px">Menghubungi Google Gemini AI...</h3>
+          <p class="muted" style="margin:0 auto 16px;max-width:380px;font-size:13px;line-height:1.5">
+            Sedang menganalisis <b>${d.total} ulasan</b> peserta ${mode === 'custom' ? 'dengan <i>prompt kustom</i>' : 'dengan <i>prompt standar</i>'}...
+          </p>
+          <div style="height:6px;width:240px;background:rgba(255,255,255,.1);border-radius:99px;margin:0 auto 18px;overflow:hidden">
+            <div style="height:100%;width:70%;background:linear-gradient(90deg,#8b5cf6,#6366f1);border-radius:99px;animation:pulse 1s infinite alternate"></div>
+          </div>
+          <button class="btn sm" data-act="cm">Batal</button>
+        </div>
+      `);
+
+      const rows = d.rows || [];
+      const textComments = rows
+        .filter(r => r.comment && r.comment.trim() && r.comment.trim() !== 'Tanpa catatan tambahan.')
+        .slice(0, 70)
+        .map((r, i) => `${i + 1}. [Skor ${r.rating_overall||r.rating}★ | Konten ${r.rating_content||5}★ | Panitia ${r.rating_service||5}★ | Venue ${r.rating_venue||5}★ | Sound ${r.rating_sound||5}★]: "${r.comment.trim()}"`)
+        .join('\n');
+
+      const dataBlock = `Anda adalah seorang Konsultan Evaluasi & Spesialis Mutu Acara (Event Quality & Experience Specialist) berpengalaman tinggi.
 Tugas Anda adalah melakukan analisis mendalam, objektif, tajam, dan menyusun laporan evaluasi resmi yang bernas berdasarkan data survey kepuasan peserta berikut:
 
 ### DATA SURVEI ACARA:
@@ -6365,226 +6604,90 @@ Tugas Anda adalah melakukan analisis mendalam, objektif, tajam, dan menyusun lap
 ### DAFTAR KOMENTAR & MASUKAN ASLI DARI PESERTA:
 ${textComments || '(Tidak ada komentar teks tertulis, analisis didasarkan pada distribusi kuantitatif skor)'}
 
----
-### FORMAT LAPORAN YANG HARUS ANDA SUSUN:
-Susun laporan dalam Bahasa Indonesia profesional, terstruktur rapi, menggunakan format Markdown standar:
+---`;
 
-## 📋 1. Ringkasan Eksekutif (Executive Summary)
-- Berikan sintesis singkat (2-3 paragraf) mengenai gambaran umum sentimen audiens dan kesuksesan acara.
-- Cantumkan label Indeks Kepuasan: (misal: **"Sangat Memuaskan (Outstanding)"**, **"Baik & Positif"**, atau **"Butuh Perhatian Khusus"**).
-
-## 🌟 2. Kekuatan Utama Acara (Top Highlights)
-- Sebutkan 3-5 poin keunggulan yang paling diapresiasi dan berkesan bagi audiens berdasarkan data dan komentar.
-
-## ⚠️ 3. Keluhan Utama & Titik Kritis (Key Pain Points)
-- Rangkum masalah, kendala, atau hal-hal yang paling banyak disorot/dikeluhkan oleh peserta (jujur dan apa adanya tanpa ditutup-tutupi).
-
-## 🎯 4. Evaluasi Mendalam per Aspek Acara
-Berikan catatan evaluatif kualitatif untuk masing-masing:
-- **Konten & Pembicara / Pengisi Acara** (Skor: ${d.aspectAvgs?.content || 5}/5.0)
-- **Pelayanan Panitia, Usher & Alur Masuk** (Skor: ${d.aspectAvgs?.service || 5}/5.0)
-- **Fasilitas Venue, Ruangan & Suhu/Kenyamanan** (Skor: ${d.aspectAvgs?.venue || 5}/5.0)
-- **Sound System, Musik & Multimedia** (Skor: ${d.aspectAvgs?.sound || 5}/5.0)
-
-## 💡 5. Rekomendasi Aksi Konkret (Actionable Next Steps)
-- Berikan 4-6 poin rekomendasi praktis, terukur, dan berurutan prioritas yang harus dilakukan tim panitia untuk penyelenggaraan acara berikutnya.
-
-Tulis dengan gaya bahasa yang profesional, tajam, bernas, dan memotivasi panitia untuk terus berkembang.`;
-
-        const aiModels = await getGeminiCandidateModels(localKey);
-        let clientErr = '';
-        for (const m of aiModels) {
-          const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
-          const timeoutId = controller ? setTimeout(() => controller.abort(), 30000) : null;
-          try {
-            const url = 'https://generativelanguage.googleapis.com/v1beta/models/' + m + ':generateContent?key=' + encodeURIComponent(localKey);
-            const res = await fetch(url, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                contents: [{ parts: [{ text: prompt }] }],
-                generationConfig: { temperature: 0.4, maxOutputTokens: 3500 }
-              }),
-              signal: controller ? controller.signal : undefined
-            });
-            if (timeoutId) clearTimeout(timeoutId);
-            const data = await res.json().catch(() => ({}));
-            if (res.ok) {
-              const parts = data?.candidates?.[0]?.content?.parts || [];
-              const nonThought = parts.filter(p => !p.thought && p.text).map(p => p.text);
-              analysisText = nonThought.length ? nonThought.join('\n\n') : parts.map(p => p.text).filter(Boolean).join('\n\n');
-              if (analysisText) {
-                modelName = m;
-                break;
-              }
-            } else {
-              clientErr = data?.error?.message || `HTTP ${res.status}`;
-              if (clientErr.toLowerCase().includes('api_key_invalid')) break;
-            }
-          } catch(e) {
-            if (timeoutId) clearTimeout(timeoutId);
-            clientErr = e.name === 'AbortError' ? 'Koneksi ke Google Gemini timeout (30s)' : e.message;
-          }
+      if (mode === 'custom') {
+        finalPrompt = dataBlock + '\n' + customInstructions;
+      } else {
+        finalPrompt = dataBlock + '\n' + A.getAiDefaultInstructions('feedback');
+        if (extra) {
+          finalPrompt += '\n\n### INSTRUKSI TAMBAHAN DARI PENGGUNA:\n' + extra;
         }
-        if (!analysisText) throw new Error(clientErr || 'Respon AI kosong');
-      } catch(errClient) {
-        const errMsg = errClient?.message || 'Gagal menghubungi Gemini AI';
-        modal(`
-          <button class="btn sm x" data-act="cm">&#10005;</button>
-          <div style="text-align:center;padding:26px 16px">
-            <div style="font-size:38px;margin-bottom:12px">⚠️</div>
-            <h3 style="margin:0 0 8px;color:var(--er)">Analisis AI Belum Berhasil</h3>
-            <p class="muted" style="margin:0 auto 16px;max-width:380px;font-size:13px;line-height:1.5">
-              ${esc(errMsg)}
-            </p>
-            <div style="display:flex;justify-content:center;gap:8px;flex-wrap:wrap">
-              <button class="btn pri" data-act="fbAiAnalyze">🔄 Coba Lagi</button>
-              <button class="btn" data-act="aiSettingsModal">⚙️ Cek API Key</button>
-              <button class="btn" data-act="cm">${t('close')}</button>
-            </div>
+      }
+    } else {
+      // Analytics
+      const selEv = S.anSelEv || '';
+      targetEvId = selEv;
+      const ords = (S.anOrds || []).filter(o => !selEv || o.event_id === selEv);
+      const activeOrders = ords.filter(o => o.status !== 'cancelled');
+      if (!activeOrders.length) return toast('Belum ada data pesanan tiket untuk dianalisis.', 1);
+
+      const curEv = (selEv && S.aev && S.aev.find(x => x.id === selEv));
+      if (curEv) evName = curEv.name;
+
+      const totalBooked = activeOrders.reduce((a, o) => a + (o.qty || 1), 0);
+      const totalChecked = activeOrders.reduce((a, o) => a + (o.checked_in || 0), 0);
+      const noShow = Math.max(0, totalBooked - totalChecked);
+      const rate = totalBooked ? Math.round((totalChecked / totalBooked) * 100) : 0;
+      const vipCount = activeOrders.filter(o => o.kind === 'invitation').reduce((a, o) => a + (o.qty || 1), 0);
+      const regCount = Math.max(0, totalBooked - vipCount);
+
+      modal(`
+        <button class="btn sm x" data-act="cm">&#10005;</button>
+        <div style="text-align:center;padding:30px 20px">
+          <div style="font-size:42px;margin-bottom:12px;display:inline-block;animation:spin 2s linear infinite">📊</div>
+          <h3 style="margin:0 0 8px">Menghubungi Google Gemini AI...</h3>
+          <p class="muted" style="margin:0 auto 16px;max-width:380px;font-size:13px;line-height:1.5">
+            Sedang menganalisis <b>${totalBooked} tiket</b> dan demografi ${mode === 'custom' ? 'dengan <i>prompt kustom</i>' : 'dengan <i>prompt standar</i>'}...
+          </p>
+          <div style="height:6px;width:240px;background:rgba(255,255,255,.1);border-radius:99px;margin:0 auto 18px;overflow:hidden">
+            <div style="height:100%;width:70%;background:linear-gradient(90deg,#10b981,#3b82f6);border-radius:99px;animation:pulse 1s infinite alternate"></div>
           </div>
-        `);
-        return;
-      }
-    }
-
-    window._lastAiAnalysis = analysisText;
-    modal(`
-      <button class="btn sm x" data-act="cm">&#10005;</button>
-      <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px">
-        <span style="font-size:24px">✨</span>
-        <div>
-          <h2 style="margin:0;font-size:18px">Ulasan AI Komprehensif</h2>
-          <small class="muted">${esc(evName)} · ${d.total} Responden · Model: ${esc(modelName)}</small>
+          <button class="btn sm" data-act="cm">Batal</button>
         </div>
-      </div>
+      `);
 
-      <div style="max-height:65vh;overflow-y:auto;padding:14px;background:var(--in);border:1px solid var(--bd);border-radius:12px;margin:14px 0;line-height:1.6;font-size:14px" id="ai_report_body">
-        ${md2html(analysisText)}
-      </div>
+      const timeBuckets = {};
+      activeOrders.filter(o => o.checked_in_at).forEach(o => {
+        const d = new Date(o.checked_in_at);
+        const m = d.getMinutes() < 30 ? '00' : '30';
+        const slot = String(d.getHours()).padStart(2, '0') + ':' + m;
+        timeBuckets[slot] = (timeBuckets[slot] || 0) + (o.checked_in || 1);
+      });
+      const sortedSlots = Object.keys(timeBuckets).sort();
+      const peakSlot = sortedSlots.length ? sortedSlots.reduce((a, b) => timeBuckets[a] > timeBuckets[b] ? a : b) : '';
+      const peakCount = peakSlot ? timeBuckets[peakSlot] : 0;
 
-      <div class="acts" style="justify-content:space-between;flex-wrap:wrap;gap:8px">
-        <div style="display:flex;gap:6px">
-          <button class="btn ok" data-act="copyAiReport" style="font-weight:700">📋 Salin Laporan AI</button>
-          <button class="btn" data-act="fbAiAnalyze">🔄 Analisis Ulang</button>
-        </div>
-        <div style="display:flex;gap:6px">
-          <button class="btn sm" data-act="aiSettingsModal">⚙️ AI Key</button>
-          <button class="btn" data-act="cm">${t('close')}</button>
-        </div>
-      </div>
-    `);
-  },
+      const churches = {};
+      activeOrders.forEach(o => {
+        const ch = (o.church || o.guest_org || '').trim();
+        if (ch) churches[ch] = (churches[ch] || 0) + (o.qty || 1);
+      });
+      const sortedChurches = Object.entries(churches).sort((a, b) => b[1] - a[1]);
 
-  async copyAiReport() {
-    const text = window._lastAiAnalysis || '';
-    if (!text) return toast('Tidak ada teks laporan untuk disalin.', 1);
-    try {
-      await navigator.clipboard.writeText(text);
-      toast('Laporan evaluasi AI berhasil disalin ke clipboard! 📋', 0);
-    } catch(e) {
-      toast('Gagal menyalin secara otomatis.', 1);
-    }
-  },
+      const ageBuckets = {'<18': 0, '18-25': 0, '26-35': 0, '36-50': 0, '51-60': 0, '>60': 0};
+      const ageLabels = {'<18':'< 18 tahun (Anak/Remaja)','18-25':'18–25 tahun (Pemuda)','26-35':'26–35 tahun (Dewasa Muda)','36-50':'36–50 tahun (Dewasa)','51-60':'51–60 tahun (Pra-Senior)','>60':'> 60 tahun (Senior)'};
+      let totalAgeCount = 0;
+      activeOrders.filter(o => o.age).forEach(o => {
+        const a = parseInt(o.age, 10);
+        const q = o.qty || 1;
+        if (!isNaN(a)) {
+          if (a < 18) ageBuckets['<18'] += q;
+          else if (a <= 25) ageBuckets['18-25'] += q;
+          else if (a <= 35) ageBuckets['26-35'] += q;
+          else if (a <= 50) ageBuckets['36-50'] += q;
+          else if (a <= 60) ageBuckets['51-60'] += q;
+          else ageBuckets['>60'] += q;
+          totalAgeCount += q;
+        }
+      });
 
-  async anAiAnalyze() {
-    const selEv = S.anSelEv || '';
-    const ords = (S.anOrds || []).filter(o => !selEv || o.event_id === selEv);
-    const activeOrders = ords.filter(o => o.status !== 'cancelled');
-    if (!activeOrders.length) {
-      return toast('Belum ada data pesanan tiket untuk dianalisis.', 1);
-    }
+      const timeSlotsText = sortedSlots.map(s => `  * Jam ${s} WIB: ${timeBuckets[s]} orang check-in`).join('\n');
+      const rawChurchesList = sortedChurches.slice(0, 150).map(([c, cnt]) => `- "${c}": ${cnt} jemaat`).join('\n');
+      const ageText = Object.entries(ageBuckets).filter(x => x[1] > 0).map(([k, v]) => `  * ${ageLabels[k]}: ${v} orang (${Math.round((v/totalAgeCount)*100)}%)`).join('\n');
+      const guestbookSamples = activeOrders.filter(o => o.guestbook_message && o.guestbook_message.trim()).slice(0, 15).map((o, i) => `  ${i + 1}. "${o.guestbook_message.trim()}"`).join('\n');
 
-    const localKey = (ls.g('atk_gemini_key') || '').trim();
-    if (!localKey) {
-      toast('Google Gemini API Key belum disetel. Silakan masukkan API Key Anda.', 1);
-      return A.aiSettingsModal();
-    }
-
-    const curEv = (selEv && S.aev && S.aev.find(x => x.id === selEv));
-    const evName = curEv ? curEv.name : 'Semua Acara (Global)';
-
-    const totalBooked = activeOrders.reduce((a, o) => a + (o.qty || 1), 0);
-    const totalChecked = activeOrders.reduce((a, o) => a + (o.checked_in || 0), 0);
-    const noShow = Math.max(0, totalBooked - totalChecked);
-    const rate = totalBooked ? Math.round((totalChecked / totalBooked) * 100) : 0;
-    const vipCount = activeOrders.filter(o => o.kind === 'invitation').reduce((a, o) => a + (o.qty || 1), 0);
-    const regCount = Math.max(0, totalBooked - vipCount);
-
-    modal(`
-      <button class="btn sm x" data-act="cm">&#10005;</button>
-      <div style="text-align:center;padding:30px 20px">
-        <div style="font-size:42px;margin-bottom:12px;display:inline-block;animation:spin 2s linear infinite">📊</div>
-        <h3 style="margin:0 0 8px">Menghubungi Google Gemini AI...</h3>
-        <p class="muted" style="margin:0 auto 16px;max-width:380px;font-size:13px;line-height:1.5">
-          Sedang menganalisis <b>${totalBooked} pesanan tiket</b>, tingkat kehadiran ${rate}%, arus kedatangan, dan demografi audiens...
-        </p>
-        <div style="height:6px;width:240px;background:rgba(255,255,255,.1);border-radius:99px;margin:0 auto 18px;overflow:hidden">
-          <div style="height:100%;width:70%;background:linear-gradient(90deg,#10b981,#3b82f6);border-radius:99px;animation:pulse 1s infinite alternate"></div>
-        </div>
-        <button class="btn sm" data-act="cm">Batal</button>
-      </div>
-    `);
-
-    let analysisText = '', modelName = 'Gemini Flash';
-
-    // 1. Coba via server Cloudflare Worker dahulu
-    let serverOk = false;
-    try {
-      const res = await api('analyticsAiAnalyze', { eventId: selEv, geminiApiKey: localKey });
-      if (res && res.analysis) {
-        analysisText = res.analysis;
-        modelName = res.model || 'Gemini Flash';
-        serverOk = true;
-      }
-    } catch(errServer) {
-      console.warn('Worker analyticsAiAnalyze fallback to client fetch:', errServer);
-    }
-
-    // 2. Fallback: Pemanggilan langsung via browser dengan dynamic model discovery
-    if (!serverOk) {
-      try {
-        const timeBuckets = {};
-        activeOrders.filter(o => o.checked_in_at).forEach(o => {
-          const d = new Date(o.checked_in_at);
-          const m = d.getMinutes() < 30 ? '00' : '30';
-          const slot = String(d.getHours()).padStart(2, '0') + ':' + m;
-          timeBuckets[slot] = (timeBuckets[slot] || 0) + (o.checked_in || 1);
-        });
-        const sortedSlots = Object.keys(timeBuckets).sort();
-        const peakSlot = sortedSlots.length ? sortedSlots.reduce((a, b) => timeBuckets[a] > timeBuckets[b] ? a : b) : '';
-        const peakCount = peakSlot ? timeBuckets[peakSlot] : 0;
-
-        const churches = {};
-        activeOrders.forEach(o => {
-          const ch = (o.church || o.guest_org || '').trim();
-          if (ch) churches[ch] = (churches[ch] || 0) + (o.qty || 1);
-        });
-        const sortedChurches = Object.entries(churches).sort((a, b) => b[1] - a[1]);
-
-        const ageBuckets = {'<18': 0, '18-25': 0, '26-35': 0, '36-50': 0, '51-60': 0, '>60': 0};
-        const ageLabels = {'<18':'< 18 tahun (Anak/Remaja)','18-25':'18–25 tahun (Pemuda)','26-35':'26–35 tahun (Dewasa Muda)','36-50':'36–50 tahun (Dewasa)','51-60':'51–60 tahun (Pra-Senior)','>60':'> 60 tahun (Senior)'};
-        let totalAgeCount = 0;
-        activeOrders.filter(o => o.age).forEach(o => {
-          const a = parseInt(o.age, 10);
-          const q = o.qty || 1;
-          if (!isNaN(a)) {
-            if (a < 18) ageBuckets['<18'] += q;
-            else if (a <= 25) ageBuckets['18-25'] += q;
-            else if (a <= 35) ageBuckets['26-35'] += q;
-            else if (a <= 50) ageBuckets['36-50'] += q;
-            else if (a <= 60) ageBuckets['51-60'] += q;
-            else ageBuckets['>60'] += q;
-            totalAgeCount += q;
-          }
-        });
-
-        const timeSlotsText = sortedSlots.map(s => `  * Jam ${s} WIB: ${timeBuckets[s]} orang check-in`).join('\n');
-        const rawChurchesList = sortedChurches.slice(0, 150).map(([c, cnt]) => `- "${c}": ${cnt} jemaat`).join('\n');
-        const ageText = Object.entries(ageBuckets).filter(x => x[1] > 0).map(([k, v]) => `  * ${ageLabels[k]}: ${v} orang (${Math.round((v/totalAgeCount)*100)}%)`).join('\n');
-        const guestbookSamples = activeOrders.filter(o => o.guestbook_message && o.guestbook_message.trim()).slice(0, 15).map((o, i) => `  ${i + 1}. "${o.guestbook_message.trim()}"`).join('\n');
-
-        const prompt = `Anda adalah seorang Konsultan Ahli Strategi Manajemen Acara & Spesialis Analisis Data Audiens & Ekumenis (Event Intelligence & Church Demographics Specialist) terkemuka.
+      const dataBlock = `Anda adalah seorang Konsultan Ahli Strategi Manajemen Acara & Spesialis Analisis Data Audiens & Ekumenis (Event Intelligence & Church Demographics Specialist) terkemuka.
 Tugas Anda adalah melakukan analisis mendalam, komprehensif, operasional, dan strategis terhadap data kehadiran dan demografi acara berikut, DENGAN FOKUS UTAMA pada normalisasi, deduplikasi semantik, dan analisis demografi gereja/komunitas asal peserta:
 
 ### DATA LAPORAN & KEHADIRAN ACARA:
@@ -6606,55 +6709,54 @@ ${rawChurchesList || '- (Tidak ada data gereja tertulis)'}
 ${ageText || '- (Belum ada data usia)'}
 ${guestbookSamples ? `\n### SAMPEL BUKU TAMU / UCAPAN PESERTA:\n${guestbookSamples}` : ''}
 
----
-### FORMAT LAPORAN ANALISIS EKSEKUTIF YANG HARUS ANDA SUSUN:
-Susun laporan dalam Bahasa Indonesia profesional, bernas, berwawasan tajam, dengan format Markdown standar:
+---`;
 
-## 📊 1. Ringkasan Eksekutif & Health Score Acara
-- Berikan sintesis cepat performa kehadiran acara.
-- Cantumkan **"Attendance Health Score"** (misal: **"Sangat Sukses (90-100%)"**, **"Optimal & Solid"**, atau **"Perlu Strategi Konversi Lebih Baik"**).
-- Berikan ulasan singkat mengenai efektivitas konversi pemesanan ke kehadiran riil.
+      if (mode === 'custom') {
+        finalPrompt = dataBlock + '\n' + customInstructions;
+      } else {
+        finalPrompt = dataBlock + '\n' + A.getAiDefaultInstructions('analytics');
+        if (extra) {
+          finalPrompt += '\n\n### INSTRUKSI TAMBAHAN DARI PENGGUNA:\n' + extra;
+        }
+      }
+    }
 
-## ⛪ 2. Analisis Mendalam Demografi Gereja, Normalisasi & Deduplikasi Entitas
-*(FOKUS UTAMA & WAJIB LENGKAP)*
-- **Estimasi Jumlah Gereja Unik Sebenarnya**:
-  Lakukan deduplikasi semantik dan berikan angka perkiraan riil (misal: *"Meskipun terdata ${sortedChurches.length} variasi nama tertulis, setelah dilakukan normalisasi dan pengelompokan entitas oleh AI, diperkirakan peserta mewakili sekitar ~X gereja / sinode unik"*). Jelaskan alasan penggabungannya secara objektif.
-- **Tabel Pemetaan & Normalisasi Nama Gereja**:
-  Buat tabel Markdown yang merangkum hasil pengelompokan nama gereja yang terdeteksi sama/terafiliasi:
-  | Gereja Standar / Terkonsolidasi | Variasi Nama Input Peserta | Total Jemaat Gabungan | Estimasi % Audiens |
-- **Spektrum Aliran & Rumpun Denominasi**:
-  Petakan sebaran peserta ke dalam rumpun tradisi gereja (Kharismatik / Pentakosta, Protestan Klasik / Arus Utama / PGI, Injili / Reformed, Katolik, Komunitas Independen / Para-Church). Berikan persentase estimasi masing-masing rumpun.
-- **Wawasan Jangkauan Ekumenis**:
-  Evaluasi seberapa luas jangkauan lintas sinode acara ini dan apakah acara berhasil menjadi wadah kesatuan ekumenis yang inklusif atau terkonsentrasi pada komunitas tertentu.
+    let analysisText = '', modelName = 'Gemini Flash';
+    let serverOk = false;
+    const actionName = isFb ? 'feedbackAiAnalyze' : 'analyticsAiAnalyze';
 
-## ⏱️ 3. Analisis Arus Kedatangan & Efisiensi Alur Check-in
-- Analisis pola kedatangan peserta (apakah menumpuk mendekati acara dimulai, tersebar merata, atau terlambat).
-- Evaluasi titik kritis beban antrean (*bottleneck*) di gerbang/meja registrasi dan kapasitas petugas usher/pindai QR.
+    // 1. Coba server Cloudflare Worker
+    try {
+      const res = await api(actionName, {
+        eventId: targetEvId,
+        geminiApiKey: localKey,
+        customPrompt: finalPrompt,
+        additionalInstructions: extra
+      });
+      if (res && res.analysis) {
+        analysisText = res.analysis;
+        modelName = res.model || 'Gemini Flash';
+        serverOk = true;
+      }
+    } catch(errServer) {
+      console.warn(`Worker ${actionName} fallback to client fetch:`, errServer);
+    }
 
-## 👥 4. Karakteristik Demografi Usia Audiens
-- Analisis segmentasi usia audiens dan relevansi acara terhadap kelompok demografi yang mendominasi.
-
-## 📉 5. Diagnosis No-Show & Faktor Retensi
-- Berikan analisis kritis terhadap potensi penyebab ${noShow} peserta batal hadir (${100 - rate}% no-show rate).
-- Strategi pencegahan atau komitmen kehadiran (misal: automated reminder via WhatsApp, sistem deposit/komitmen, batas waktu klaim tiket).
-
-## 🚀 6. Rekomendasi Taktis & Strategis Acara Selanjutnya
-- Berikan 4-5 poin rekomendasi operasional yang terukur untuk panitia (penjadwalan registrasi, penataan jalur masuk, strategi promosi ke segmen usia tertentu, dan kemitraan antar komunitas/sinode).
-
-Tulis secara elegan, objektif, tajam, dan berorientasi pada peningkatan kualitas operasional acara masa depan.`;
-
+    // 2. Fallback client-side browser fetch
+    if (!serverOk) {
+      try {
         const aiModels = await getGeminiCandidateModels(localKey);
         let clientErr = '';
         for (const m of aiModels) {
           const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
-          const timeoutId = controller ? setTimeout(() => controller.abort(), 30000) : null;
+          const timeoutId = controller ? setTimeout(() => controller.abort(), 35000) : null;
           try {
             const url = 'https://generativelanguage.googleapis.com/v1beta/models/' + m + ':generateContent?key=' + encodeURIComponent(localKey);
             const res = await fetch(url, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
-                contents: [{ parts: [{ text: prompt }] }],
+                contents: [{ parts: [{ text: finalPrompt }] }],
                 generationConfig: { temperature: 0.4, maxOutputTokens: 3500 }
               }),
               signal: controller ? controller.signal : undefined
@@ -6675,7 +6777,7 @@ Tulis secara elegan, objektif, tajam, dan berorientasi pada peningkatan kualitas
             }
           } catch(e) {
             if (timeoutId) clearTimeout(timeoutId);
-            clientErr = e.name === 'AbortError' ? 'Koneksi ke Google Gemini timeout (30s)' : e.message;
+            clientErr = e.name === 'AbortError' ? 'Koneksi ke Google Gemini timeout (35s)' : e.message;
           }
         }
         if (!analysisText) throw new Error(clientErr || 'Respon AI kosong');
@@ -6690,7 +6792,7 @@ Tulis secara elegan, objektif, tajam, dan berorientasi pada peningkatan kualitas
               ${esc(errMsg)}
             </p>
             <div style="display:flex;justify-content:center;gap:8px;flex-wrap:wrap">
-              <button class="btn pri" data-act="anAiAnalyze">🔄 Coba Lagi</button>
+              <button class="btn pri" data-act="${isFb ? 'fbAiAnalyze' : 'anAiAnalyze'}">🔄 Konfigurasi & Coba Lagi</button>
               <button class="btn" data-act="aiSettingsModal">⚙️ Cek API Key</button>
               <button class="btn" data-act="cm">${t('close')}</button>
             </div>
@@ -6700,67 +6802,130 @@ Tulis secara elegan, objektif, tajam, dan berorientasi pada peningkatan kualitas
       }
     }
 
-    const churches = {};
-    activeOrders.forEach(o => {
-      const ch = (o.church || o.guest_org || '').trim();
-      if (ch) churches[ch] = (churches[ch] || 0) + (o.qty || 1);
-    });
-    const sortedChurches = Object.entries(churches).sort((a, b) => b[1] - a[1]);
-    const timeBuckets = {};
-    activeOrders.filter(o => o.checked_in_at).forEach(o => {
-      const d = new Date(o.checked_in_at);
-      const m = d.getMinutes() < 30 ? '00' : '30';
-      const slot = String(d.getHours()).padStart(2, '0') + ':' + m;
-      timeBuckets[slot] = (timeBuckets[slot] || 0) + (o.checked_in || 1);
-    });
-    const sortedSlots = Object.keys(timeBuckets).sort();
-    const peakSlot = sortedSlots.length ? sortedSlots.reduce((a, b) => timeBuckets[a] > timeBuckets[b] ? a : b) : '';
+    if (isFb) {
+      window._lastAiAnalysis = analysisText;
+      const d = S_fb.data;
+      modal(`
+        <button class="btn sm x" data-act="cm">&#10005;</button>
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px">
+          <span style="font-size:24px">✨</span>
+          <div style="flex:1">
+            <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+              <h2 style="margin:0;font-size:18px">Laporan Evaluasi Kepuasan AI</h2>
+              <span class="pill ${mode === 'custom' ? 'ac' : 'ok'}" style="font-size:11px;font-weight:700">${mode === 'custom' ? '✏️ Prompt Kustom' : '🌟 Prompt Standar'}</span>
+            </div>
+            <small class="muted">${esc(evName)} · ${d?.total || 0} Responden · Model: ${esc(modelName)}</small>
+          </div>
+        </div>
 
-    window._lastAnalyticsAiReport = analysisText;
-    modal(`
-      <button class="btn sm x" data-act="cm">&#10005;</button>
-      <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px">
-        <span style="font-size:24px">📊</span>
-        <div>
-          <h2 style="margin:0;font-size:18px">Laporan Analisis Eksekutif AI</h2>
-          <small class="muted">${esc(evName)} · ${totalBooked} Tiket · Kehadiran ${rate}% · Model: ${esc(modelName)}</small>
+        <div style="max-height:65vh;overflow-y:auto;padding:14px;background:var(--in);border:1px solid var(--bd);border-radius:12px;margin:14px 0;line-height:1.6;font-size:14px" id="ai_report_body">
+          ${md2html(analysisText)}
         </div>
-      </div>
 
-      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px;margin:12px 0">
-        <div style="background:rgba(255,255,255,.05);padding:8px 12px;border-radius:10px;border:1px solid var(--bd);text-align:center">
-          <small class="muted">Kehadiran</small>
-          <div style="font-weight:700;font-size:16px;color:var(--ok)">${rate}% (${totalChecked})</div>
+        <div class="acts" style="justify-content:space-between;flex-wrap:wrap;gap:8px">
+          <div style="display:flex;gap:6px">
+            <button class="btn ok" data-act="copyAiReport" style="font-weight:700">📋 Salin Laporan AI</button>
+            <button class="btn" data-act="fbAiAnalyze">🔄 Analisis Ulang</button>
+          </div>
+          <div style="display:flex;gap:6px">
+            <button class="btn sm" data-act="aiSettingsModal">⚙️ AI Key</button>
+            <button class="btn" data-act="cm">${t('close')}</button>
+          </div>
         </div>
-        <div style="background:rgba(255,255,255,.05);padding:8px 12px;border-radius:10px;border:1px solid var(--bd);text-align:center">
-          <small class="muted">No-Show</small>
-          <div style="font-weight:700;font-size:16px;color:var(--er)">${noShow} pax</div>
-        </div>
-        <div style="background:rgba(255,255,255,.05);padding:8px 12px;border-radius:10px;border:1px solid var(--bd);text-align:center">
-          <small class="muted">Puncak Arus</small>
-          <div style="font-weight:700;font-size:16px;color:var(--ac)">${peakSlot || '-'} WIB</div>
-        </div>
-        <div style="background:rgba(255,255,255,.05);padding:8px 12px;border-radius:10px;border:1px solid var(--bd);text-align:center">
-          <small class="muted">Komunitas</small>
-          <div style="font-weight:700;font-size:16px;color:#8b5cf6">${sortedChurches.length} variasi nama</div>
-        </div>
-      </div>
+      `);
+    } else {
+      window._lastAnalyticsAiReport = analysisText;
+      const selEv = S.anSelEv || '';
+      const ords = (S.anOrds || []).filter(o => !selEv || o.event_id === selEv);
+      const activeOrders = ords.filter(o => o.status !== 'cancelled');
+      const totalBooked = activeOrders.reduce((a, o) => a + (o.qty || 1), 0);
+      const totalChecked = activeOrders.reduce((a, o) => a + (o.checked_in || 0), 0);
+      const noShow = Math.max(0, totalBooked - totalChecked);
+      const rate = totalBooked ? Math.round((totalChecked / totalBooked) * 100) : 0;
 
-      <div style="max-height:60vh;overflow-y:auto;padding:14px;background:var(--in);border:1px solid var(--bd);border-radius:12px;margin:12px 0;line-height:1.6;font-size:14px" id="an_ai_report_body">
-        ${md2html(analysisText)}
-      </div>
+      const churches = {};
+      activeOrders.forEach(o => {
+        const ch = (o.church || o.guest_org || '').trim();
+        if (ch) churches[ch] = (churches[ch] || 0) + (o.qty || 1);
+      });
+      const sortedChurches = Object.entries(churches).sort((a, b) => b[1] - a[1]);
+      const timeBuckets = {};
+      activeOrders.filter(o => o.checked_in_at).forEach(o => {
+        const d = new Date(o.checked_in_at);
+        const m = d.getMinutes() < 30 ? '00' : '30';
+        const slot = String(d.getHours()).padStart(2, '0') + ':' + m;
+        timeBuckets[slot] = (timeBuckets[slot] || 0) + (o.checked_in || 1);
+      });
+      const sortedSlots = Object.keys(timeBuckets).sort();
+      const peakSlot = sortedSlots.length ? sortedSlots.reduce((a, b) => timeBuckets[a] > timeBuckets[b] ? a : b) : '';
 
-      <div class="acts" style="justify-content:space-between;flex-wrap:wrap;gap:8px">
-        <div style="display:flex;gap:6px">
-          <button class="btn ok" data-act="copyAnalyticsAiReport" style="font-weight:700">📋 Salin Laporan AI</button>
-          <button class="btn" data-act="anAiAnalyze">🔄 Analisis Ulang</button>
+      modal(`
+        <button class="btn sm x" data-act="cm">&#10005;</button>
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px">
+          <span style="font-size:24px">📊</span>
+          <div style="flex:1">
+            <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+              <h2 style="margin:0;font-size:18px">Laporan Analisis Eksekutif AI</h2>
+              <span class="pill ${mode === 'custom' ? 'ac' : 'ok'}" style="font-size:11px;font-weight:700">${mode === 'custom' ? '✏️ Prompt Kustom' : '🌟 Prompt Standar'}</span>
+            </div>
+            <small class="muted">${esc(evName)} · ${totalBooked} Tiket · Kehadiran ${rate}% · Model: ${esc(modelName)}</small>
+          </div>
         </div>
-        <div style="display:flex;gap:6px">
-          <button class="btn sm" data-act="aiSettingsModal">⚙️ AI Key</button>
-          <button class="btn" data-act="cm">${t('close')}</button>
+
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px;margin:12px 0">
+          <div style="background:rgba(255,255,255,.05);padding:8px 12px;border-radius:10px;border:1px solid var(--bd);text-align:center">
+            <small class="muted">Kehadiran</small>
+            <div style="font-weight:700;font-size:16px;color:var(--ok)">${rate}% (${totalChecked})</div>
+          </div>
+          <div style="background:rgba(255,255,255,.05);padding:8px 12px;border-radius:10px;border:1px solid var(--bd);text-align:center">
+            <small class="muted">No-Show</small>
+            <div style="font-weight:700;font-size:16px;color:var(--er)">${noShow} pax</div>
+          </div>
+          <div style="background:rgba(255,255,255,.05);padding:8px 12px;border-radius:10px;border:1px solid var(--bd);text-align:center">
+            <small class="muted">Puncak Arus</small>
+            <div style="font-weight:700;font-size:16px;color:var(--ac)">${peakSlot || '-'} WIB</div>
+          </div>
+          <div style="background:rgba(255,255,255,.05);padding:8px 12px;border-radius:10px;border:1px solid var(--bd);text-align:center">
+            <small class="muted">Komunitas</small>
+            <div style="font-weight:700;font-size:16px;color:#8b5cf6">${sortedChurches.length} variasi nama</div>
+          </div>
         </div>
-      </div>
-    `);
+
+        <div style="max-height:60vh;overflow-y:auto;padding:14px;background:var(--in);border:1px solid var(--bd);border-radius:12px;margin:12px 0;line-height:1.6;font-size:14px" id="an_ai_report_body">
+          ${md2html(analysisText)}
+        </div>
+
+        <div class="acts" style="justify-content:space-between;flex-wrap:wrap;gap:8px">
+          <div style="display:flex;gap:6px">
+            <button class="btn ok" data-act="copyAnalyticsAiReport" style="font-weight:700">📋 Salin Laporan AI</button>
+            <button class="btn" data-act="anAiAnalyze">🔄 Analisis Ulang</button>
+          </div>
+          <div style="display:flex;gap:6px">
+            <button class="btn sm" data-act="aiSettingsModal">⚙️ AI Key</button>
+            <button class="btn" data-act="cm">${t('close')}</button>
+          </div>
+        </div>
+      `);
+    }
+  },
+
+  async fbAiAnalyze() {
+    A.openAiPromptStudio('feedback');
+  },
+
+  async anAiAnalyze() {
+    A.openAiPromptStudio('analytics');
+  },
+
+  async copyAiReport() {
+    const text = window._lastAiAnalysis || '';
+    if (!text) return toast('Tidak ada teks laporan untuk disalin.', 1);
+    try {
+      await navigator.clipboard.writeText(text);
+      toast('Laporan evaluasi AI berhasil disalin ke clipboard! 📋', 0);
+    } catch(e) {
+      toast('Gagal menyalin secara otomatis.', 1);
+    }
   },
 
   async copyAnalyticsAiReport() {

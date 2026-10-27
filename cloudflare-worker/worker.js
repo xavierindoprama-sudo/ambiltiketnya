@@ -2557,7 +2557,13 @@ Berikan catatan evaluatif kualitatif untuk masing-masing:
 
 Tulis dengan gaya bahasa yang profesional, tajam, bernas, dan memotivasi panitia untuk terus berkembang.`;
 
-          const aiRes = await callGemini(key, prompt);
+          let finalPrompt = prompt;
+          if (params.customPrompt && String(params.customPrompt).trim()) {
+            finalPrompt = String(params.customPrompt).trim();
+          } else if (params.additionalInstructions && String(params.additionalInstructions).trim()) {
+            finalPrompt = prompt + '\n\n### INSTRUKSI TAMBAHAN DARI PENGGUNA:\n' + String(params.additionalInstructions).trim();
+          }
+          const aiRes = await callGemini(key, finalPrompt);
           const cacheKey = 'ai_feedback_analysis_' + (evId || 'global');
           const cacheData = {
             analysis: aiRes.text,
@@ -2718,7 +2724,13 @@ Susun laporan dalam Bahasa Indonesia profesional, bernas, berwawasan tajam, deng
 
 Tulis secara elegan, objektif, tajam, dan berorientasi pada peningkatan kualitas operasional acara masa depan.`;
 
-          const aiRes = await callGemini(key, prompt);
+          let finalPrompt = prompt;
+          if (params.customPrompt && String(params.customPrompt).trim()) {
+            finalPrompt = String(params.customPrompt).trim();
+          } else if (params.additionalInstructions && String(params.additionalInstructions).trim()) {
+            finalPrompt = prompt + '\n\n### INSTRUKSI TAMBAHAN DARI PENGGUNA:\n' + String(params.additionalInstructions).trim();
+          }
+          const aiRes = await callGemini(key, finalPrompt);
           const cacheKey = 'ai_analytics_analysis_' + (evId || 'global');
           const cacheData = {
             analysis: aiRes.text,
