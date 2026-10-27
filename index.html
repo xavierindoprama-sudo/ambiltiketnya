@@ -7273,15 +7273,15 @@ ${guestbookSamples ? `\n### SAMPEL BUKU TAMU / UCAPAN PESERTA:\n${guestbookSampl
       <span>Halaman otomatis menyesuaikan dokumen</span>
     </div>
   </div>
-
-  <script>
-    setTimeout(function() {
-      try { window.print(); } catch(e) {}
-    }, 450);
-  </script>
 </body>
 </html>`);
     printWindow.document.close();
+    setTimeout(() => {
+      try {
+        printWindow.focus();
+        printWindow.print();
+      } catch(e) {}
+    }, 500);
   },
 
  dpToggleFs(){
