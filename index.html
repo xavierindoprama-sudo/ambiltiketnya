@@ -3434,9 +3434,11 @@ async function invView(c){
    api('adminEvents'),
    api('invitations'),
    api('waitingList').catch(()=>[]),
-   api('getInvConfig').catch(()=>({maxQty:50}))
+   api('getInvConfig').catch(()=>({maxQty:50})),
+   api('ordersAll').catch(()=>({rows:[]}))
   ]);
   S.aev=r[0];S.inv=r[1];S.waitList=r[2]||[];S.invCfg=r[3]||{maxQty:50};
+  if(r[4]&&r[4].rows)S.ord=r[4].rows;
   if(!S.invSubTab)S.invSubTab='issued';
  }catch(e){return fail(e)}
  mergeInvTix();paintInv();
@@ -3627,6 +3629,207 @@ window.renderImportPreview=function(){
 };
 
 function mergeInvTix(){const ids={};S.inv.forEach(i=>ids[i.id]=1);S.tix=(S.tix||[]).filter(x=>!ids[x.id]).concat(S.inv)}
+function getInvDuplicateAudit(invList = [], waitList = [], orderList = [], eventId = '') {
+  const normPhone = p => {
+    let s = String(p || '').replace(/\D/g, '');
+    if (!s || s.length < 8) return '';
+    if (s.startsWith('0')) s = '62' + s.slice(1);
+    else if (!s.startsWith('62')) s = '62' + s;
+    return s;
+  };
+  const normName = n => {
+    const s = String(n || '').trim().toLowerCase().replace(/[.,\/#!$%\^&\*;:{}=\-_`~()]/g, '').replace(/\s+/g, ' ');
+    return s.length >= 2 ? s : '';
+  };
+
+  const filterEv = list => {
+    if (!eventId) return list;
+    return list.filter(item => String(item.event_id || '').toLowerCase() === String(eventId).toLowerCase());
+  };
+
+  const fWait = filterEv(waitList).filter(w => w.status !== 'promoted' && w.status !== 'cancelled');
+  const fInv = filterEv(invList).filter(o => o.status !== 'cancelled');
+  const fOrd = filterEv(orderList).filter(o => o.status !== 'cancelled' && o.kind !== 'invitation');
+
+  // 1. Internal Waiting List Duplicates
+  const waitPhoneMap = new Map();
+  const waitNameMap = new Map();
+  const waitBothMap = new Map();
+
+  fWait.forEach(w => {
+    const ph = normPhone(w.guest_phone);
+    const nm = normName(w.guest_name);
+    if (ph) {
+      if (!waitPhoneMap.has(ph)) waitPhoneMap.set(ph, []);
+      waitPhoneMap.get(ph).push(w);
+    }
+    if (nm) {
+      if (!waitNameMap.has(nm)) waitNameMap.set(nm, []);
+      waitNameMap.get(nm).push(w);
+    }
+    if (ph && nm) {
+      const k = nm + '|||' + ph;
+      if (!waitBothMap.has(k)) waitBothMap.set(k, []);
+      waitBothMap.get(k).push(w);
+    }
+  });
+
+  const dupWaitBoth = Array.from(waitBothMap.entries()).filter(([_, l]) => l.length > 1);
+  const dupWaitPhone = Array.from(waitPhoneMap.entries()).filter(([_, l]) => l.length > 1);
+  const dupWaitName = Array.from(waitNameMap.entries()).filter(([_, l]) => l.length > 1);
+
+  const dupWaitBothIds = new Set(dupWaitBoth.flatMap(([_, l]) => l.map(w => w.id)));
+  const dupWaitPhoneIds = new Set(dupWaitPhone.flatMap(([_, l]) => l.map(w => w.id)));
+  const dupWaitNameIds = new Set(dupWaitName.flatMap(([_, l]) => l.map(w => w.id)));
+
+  // 2. Internal Invitations Duplicates
+  const invPhoneMap = new Map();
+  const invNameMap = new Map();
+  const invBothMap = new Map();
+
+  fInv.forEach(o => {
+    const ph = normPhone(o.guest_phone || o.whatsapp);
+    const nm = normName(o.guest_name || o.name);
+    if (ph) {
+      if (!invPhoneMap.has(ph)) invPhoneMap.set(ph, []);
+      invPhoneMap.get(ph).push(o);
+    }
+    if (nm) {
+      if (!invNameMap.has(nm)) invNameMap.set(nm, []);
+      invNameMap.get(nm).push(o);
+    }
+    if (ph && nm) {
+      const k = nm + '|||' + ph;
+      if (!invBothMap.has(k)) invBothMap.set(k, []);
+      invBothMap.get(k).push(o);
+    }
+  });
+
+  const dupInvBoth = Array.from(invBothMap.entries()).filter(([_, l]) => l.length > 1);
+  const dupInvPhone = Array.from(invPhoneMap.entries()).filter(([_, l]) => l.length > 1);
+  const dupInvName = Array.from(invNameMap.entries()).filter(([_, l]) => l.length > 1);
+
+  const dupInvBothIds = new Set(dupInvBoth.flatMap(([_, l]) => l.map(o => o.id)));
+  const dupInvPhoneIds = new Set(dupInvPhone.flatMap(([_, l]) => l.map(o => o.id)));
+  const dupInvNameIds = new Set(dupInvName.flatMap(([_, l]) => l.map(o => o.id)));
+
+  // 3. Cross Match: Waiting List vs Issued Invitations
+  const crossWaitInv = [];
+  const waitHasInvIds = new Set();
+  const invHasWaitIds = new Set();
+
+  fWait.forEach(w => {
+    const wPh = normPhone(w.guest_phone);
+    const wNm = normName(w.guest_name);
+    let matchedInv = null;
+    let matchType = '';
+    if (wPh && wNm) {
+      matchedInv = fInv.find(o => normPhone(o.guest_phone || o.whatsapp) === wPh && normName(o.guest_name || o.name) === wNm);
+      if (matchedInv) matchType = 'both';
+    }
+    if (!matchedInv && wPh) {
+      matchedInv = fInv.find(o => normPhone(o.guest_phone || o.whatsapp) === wPh);
+      if (matchedInv) matchType = 'phone';
+    }
+    if (!matchedInv && wNm) {
+      matchedInv = fInv.find(o => normName(o.guest_name || o.name) === wNm);
+      if (matchedInv) matchType = 'name';
+    }
+
+    if (matchedInv) {
+      crossWaitInv.push({ waitItem: w, invItem: matchedInv, matchType });
+      waitHasInvIds.add(w.id);
+      invHasWaitIds.add(matchedInv.id);
+    }
+  });
+
+  // 4. Cross Match: Waiting / Invitation vs Regular Orders
+  const crossWithOrders = [];
+  const waitHasOrderIds = new Set();
+  const invHasOrderIds = new Set();
+
+  if (fOrd && fOrd.length) {
+    fWait.forEach(w => {
+      const wPh = normPhone(w.guest_phone);
+      const wNm = normName(w.guest_name);
+      let matchedOrd = null;
+      let matchType = '';
+      if (wPh && wNm) {
+        matchedOrd = fOrd.find(o => normPhone(o.whatsapp) === wPh && normName(o.name) === wNm);
+        if (matchedOrd) matchType = 'both';
+      }
+      if (!matchedOrd && wPh) {
+        matchedOrd = fOrd.find(o => normPhone(o.whatsapp) === wPh);
+        if (matchedOrd) matchType = 'phone';
+      }
+      if (!matchedOrd && wNm) {
+        matchedOrd = fOrd.find(o => normName(o.name) === wNm);
+        if (matchedOrd) matchType = 'name';
+      }
+      if (matchedOrd) {
+        crossWithOrders.push({ item: w, itemType: 'waiting', orderItem: matchedOrd, matchType });
+        waitHasOrderIds.add(w.id);
+      }
+    });
+
+    fInv.forEach(o => {
+      const iPh = normPhone(o.guest_phone || o.whatsapp);
+      const iNm = normName(o.guest_name || o.name);
+      let matchedOrd = null;
+      let matchType = '';
+      if (iPh && iNm) {
+        matchedOrd = fOrd.find(ro => normPhone(ro.whatsapp) === iPh && normName(ro.name) === iNm);
+        if (matchedOrd) matchType = 'both';
+      }
+      if (!matchedOrd && iPh) {
+        matchedOrd = fOrd.find(ro => normPhone(ro.whatsapp) === iPh);
+        if (matchedOrd) matchType = 'phone';
+      }
+      if (!matchedOrd && iNm) {
+        matchedOrd = fOrd.find(ro => normName(ro.name) === iNm);
+        if (matchedOrd) matchType = 'name';
+      }
+      if (matchedOrd) {
+        crossWithOrders.push({ item: o, itemType: 'invitation', orderItem: matchedOrd, matchType });
+        invHasOrderIds.add(o.id);
+      }
+    });
+  }
+
+  return {
+    waitPhoneMap,
+    waitNameMap,
+    waitBothMap,
+    dupWaitBoth,
+    dupWaitPhone,
+    dupWaitName,
+    dupWaitBothIds,
+    dupWaitPhoneIds,
+    dupWaitNameIds,
+
+    invPhoneMap,
+    invNameMap,
+    invBothMap,
+    dupInvBoth,
+    dupInvPhone,
+    dupInvName,
+    dupInvBothIds,
+    dupInvPhoneIds,
+    dupInvNameIds,
+
+    crossWaitInv,
+    waitHasInvIds,
+    invHasWaitIds,
+
+    crossWithOrders,
+    waitHasOrderIds,
+    invHasOrderIds,
+
+    normPhone,
+    normName
+  };
+}
+
 function paintInv(){
  const c=$('#ac'),keep=$('#ivev')?$('#ivev').value:'';
  const curEvId=getCurEvId();
@@ -3652,13 +3855,18 @@ function paintInv(){
  const curTab=S.invSubTab||'issued';
  const filteredInv=curEvId?(S.inv||[]).filter(o=>String(o.event_id||'').toLowerCase()===String(curEvId).toLowerCase()):(S.inv||[]);
  const filteredWait=curEvId?(S.waitList||[]).filter(w=>String(w.event_id||'').toLowerCase()===String(curEvId).toLowerCase()):(S.waitList||[]);
+ const invAudit = getInvDuplicateAudit(S.inv || [], S.waitList || [], S.ord || [], curEvId);
+ const totalInvDupes = invAudit.dupWaitBoth.length + invAudit.crossWaitInv.length + invAudit.dupInvBoth.length;
  const subNav=`<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:14px;border-bottom:1px solid var(--bd);padding-bottom:10px">
   <div style="display:flex;gap:10px">
    <button class="btn ${curTab==='issued'?'pri':'sm'}" data-act="invSubTab" data-v="issued" style="font-weight:700">📋 ${t('inv_tab_issued')} (${filteredInv.length})</button>
    <button class="btn ${curTab==='waiting'?'pri':'sm'}" data-act="invSubTab" data-v="waiting" style="font-weight:700">⏳ ${t('inv_tab_wait')} ${filteredWait.length?`<span class="pill wn" style="font-size:11px;margin-left:4px;vertical-align:middle">${filteredWait.length}</span>`:''}</button>
   </div>
   <div style="display:flex;gap:6px;flex-wrap:wrap">
-   <button class="btn sm" data-act="dupCheckModal" style="font-weight:700;display:inline-flex;align-items:center;gap:6px;background:var(--card);border:1px solid var(--bd)"><span style="font-size:14px">🔍</span> Cek Duplikasi</button>
+   <button class="btn sm" data-act="dupInvModal" id="btn_dup_inv" style="font-weight:700;display:inline-flex;align-items:center;gap:6px;background:var(--card);border:1px solid var(--bd)">
+     <span style="font-size:14px">🔍</span> Cek Duplikasi Undangan & Waiting List
+     ${totalInvDupes > 0 ? `<span class="pill er" style="font-size:10px;padding:2px 6px">${totalInvDupes} Terdeteksi</span>` : ''}
+   </button>
    <button class="btn sm" data-act="invImportModal" style="font-weight:700;display:inline-flex;align-items:center;gap:6px;border-color:var(--ac);color:var(--ac)"><span style="font-size:14px">📊</span> Impor Excel / CSV</button>
   </div>
  </div>`;
@@ -3675,7 +3883,24 @@ function paintInv(){
    if(w.guest_phone)meta.push('+'+esc(w.guest_phone));
    const metaStr=meta.length?`<div style="font-size:11px;color:var(--mu);margin-top:2px">${meta.join(' · ')}</div>`:'';
    return `<tr>
-    <td data-l="${t('inv_who')}"><b>${esc(w.guest_name)}</b><br><small class="muted">${esc(w.guest_org)}</small>${metaStr}</td>
+    <td data-l="${t('inv_who')}"><b>${esc(w.guest_name)}</b>${(()=>{
+      let pill = '';
+      if (invAudit.waitHasInvIds.has(w.id)) {
+        pill += '<span class="pill er" style="font-size:10px;padding:1px 6px;margin-left:4px;cursor:pointer;font-weight:700" data-act="dupInvModal" data-tab="cross" title="Tamu ini SUDAH diterbitkan undangannya! Klik untuk cek">⚠️ Sudah Ada Undangan Resmi!</span>';
+      } else if (invAudit.dupWaitBothIds.has(w.id)) {
+        pill += '<span class="pill er" style="font-size:10px;padding:1px 6px;margin-left:4px;cursor:pointer;font-weight:700" data-act="dupInvModal" data-tab="wait" title="Calon tamu ini dobel di Waiting List (Nama & No. HP Sama)">🚨 Dobel di Waiting List</span>';
+      } else if (invAudit.dupWaitPhoneIds.has(w.id)) {
+        const cnt = (invAudit.waitPhoneMap.get(invAudit.normPhone(w.guest_phone)) || []).length;
+        pill += `<span class="pill wn" style="font-size:10px;padding:1px 6px;margin-left:4px;cursor:pointer;font-weight:700" data-act="dupInvModal" data-tab="wait" title="Nomor HP terdaftar ${cnt}x di Waiting List">📱 HP Dobel (${cnt}x)</span>`;
+      } else if (invAudit.dupWaitNameIds.has(w.id)) {
+        const cnt = (invAudit.waitNameMap.get(invAudit.normName(w.guest_name)) || []).length;
+        pill += `<span class="pill wn" style="font-size:10px;padding:1px 6px;margin-left:4px;cursor:pointer;font-weight:700" data-act="dupInvModal" data-tab="wait" title="Nama terdaftar ${cnt}x di Waiting List">👤 Nama Dobel (${cnt}x)</span>`;
+      }
+      if (invAudit.waitHasOrderIds.has(w.id)) {
+        pill += '<span class="pill ok" style="font-size:10px;padding:1px 6px;margin-left:4px;cursor:pointer;font-weight:700" data-act="dupInvModal" data-tab="orders" title="Tamu ini sudah memiliki pesanan tiket reguler">🎫 Sudah Beli Tiket Reguler</span>';
+      }
+      return pill;
+    })()}<br><small class="muted">${esc(w.guest_org)}</small>${metaStr}</td>
     <td data-l="${t('c_event')}">${esc(w.event_name||ev.name||'')}</td>
     <td data-l="${t('c_qty')}"><b>${w.qty}</b> ${t('tix')}</td>
     <td data-l="Status Kuota">${canPromote?`<span class="pill ok">✓ Sisa: ${rem}</span>`:`<span class="pill wn">⚠️ Sisa: ${rem} (Kurang)</span>`}</td>
@@ -3713,6 +3938,22 @@ function paintInv(){
    </div>
   </div>
 
+  ${(invAudit.dupWaitBoth.length > 0 || invAudit.crossWaitInv.length > 0) ? `
+    <div style="background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.3);border-radius:10px;padding:12px 14px;margin:14px 0;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px">
+      <div>
+        <b style="color:var(--wn);font-size:13px">⚠️ Peringatan Duplikasi di Daftar Tunggu:</b>
+        <div style="font-size:12px;color:var(--mu);margin-top:2px">
+          ${invAudit.dupWaitBoth.length ? `Terdeteksi <b>${invAudit.dupWaitBoth.length} grup nama & HP kembar</b> di Waiting List. ` : ''}
+          ${invAudit.crossWaitInv.length ? `Ada <b>${invAudit.crossWaitInv.length} orang</b> yang sebetulnya SUDAH punya undangan resmi terbit.` : ''}
+        </div>
+      </div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap">
+        <button class="btn sm" data-act="dupInvModal">🔍 Periksa Detail</button>
+        ${invAudit.dupWaitBoth.length ? `<button class="btn sm dg" data-act="cleanWaitDupes">🧹 Hapus Semua Duplikat</button>` : ''}
+        ${invAudit.crossWaitInv.length ? `<button class="btn sm dg" data-act="cleanWaitHasInv">🧹 Bersihkan yang Sudah Ber-Undangan</button>` : ''}
+      </div>
+    </div>
+  ` : ''}
   <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin:20px 0 12px">
    <h3 style="margin:0">Antrean Waiting List ${curEv?`— ${esc(curEv.name)} `:''}(${filteredWait.length} orang · Total ${totalWaitQty} tiket)</h3>
    ${filteredWait.length?`<button class="btn ok" data-act="promoteAllWait" ${anyCanPromote?'':'disabled'} style="font-weight:700;display:inline-flex;align-items:center;gap:6px">${t('wait_promote_all_btn')}</button>`:''}
@@ -3725,7 +3966,22 @@ function paintInv(){
    if(o.guest_age)meta.push(esc(o.guest_age)+' '+t('years_old'));
    if(o.guest_phone)meta.push('+'+esc(o.guest_phone));
    const metaStr=meta.length?`<div style="font-size:11px;color:var(--mu);margin-top:2px">${meta.join(' · ')}</div>`:'';
-   return `<tr><td data-l="${t('inv_who')}"><b>${esc(o.guest_name)}</b><br><small class="muted">${esc(o.guest_org)}</small>${metaStr}</td><td data-l="${t('c_event')}">${esc(o.name)}</td><td data-l="${t('c_qty')}">${o.qty}</td><td data-l="${t('c_status')}">${stPill(o.status)}</td><td data-l="${t('c_chk')}" class="mono">${o.checked_in}/${o.qty}</td><td><div class="acts" style="margin:0;justify-content:flex-end;gap:4px"><button class="btn sm" data-act="invopen" data-id="${o.id}">${t('view')}</button><button class="btn sm" data-act="invLink" data-id="${o.id}" style="border-color:#d4af37;color:#d4af37" title="Buka Landing Page Undangan Digital">✉️ Undangan</button><button class="btn sm" data-act="copyInvLink" data-id="${o.id}" title="Salin Link Undangan">📋 Salin</button>${o.status==='confirmed'?`<button class="btn sm wa" data-act="waInv" data-id="${o.id}" title="Kirim Undangan Digital lewat WhatsApp">💬 WhatsApp</button>`:''}${o.status!=='cancelled'&&canEdit()?`<button class="btn sm dg" data-act="cxl" data-id="${o.id}">${t('cancel')}</button>`:''}</div></td></tr>`;
+   return `<tr><td data-l="${t('inv_who')}"><b>${esc(o.guest_name)}</b>${(()=>{
+      let pill = '';
+      if (invAudit.invHasWaitIds.has(o.id)) {
+        pill += '<span class="pill wn" style="font-size:10px;padding:1px 6px;margin-left:4px;cursor:pointer;font-weight:700" data-act="dupInvModal" data-tab="cross" title="Tamu ini juga masih ada di Waiting List">⏳ Masih di Waiting List</span>';
+      }
+      if (invAudit.dupInvBothIds.has(o.id)) {
+        pill += '<span class="pill er" style="font-size:10px;padding:1px 6px;margin-left:4px;cursor:pointer;font-weight:700" data-act="dupInvModal" data-tab="inv" title="Undangan ini terbit ganda (Nama & No. HP Sama)">🚨 Undangan Terbit Dobel!</span>';
+      } else if (invAudit.dupInvPhoneIds.has(o.id)) {
+        const cnt = (invAudit.invPhoneMap.get(invAudit.normPhone(o.guest_phone || o.whatsapp)) || []).length;
+        pill += `<span class="pill wn" style="font-size:10px;padding:1px 6px;margin-left:4px;cursor:pointer;font-weight:700" data-act="dupInvModal" data-tab="inv" title="No. HP terdaftar pada ${cnt} undangan">📱 HP Terbit Dobel (${cnt}x)</span>`;
+      }
+      if (invAudit.invHasOrderIds.has(o.id)) {
+        pill += '<span class="pill ok" style="font-size:10px;padding:1px 6px;margin-left:4px;cursor:pointer;font-weight:700" data-act="dupInvModal" data-tab="orders" title="Tamu ini juga punya tiket reguler">🎫 Punya Tiket Reguler</span>';
+      }
+      return pill;
+    })()}<br><small class="muted">${esc(o.guest_org)}</small>${metaStr}</td><td data-l="${t('c_event')}">${esc(o.name)}</td><td data-l="${t('c_qty')}">${o.qty}</td><td data-l="${t('c_status')}">${stPill(o.status)}</td><td data-l="${t('c_chk')}" class="mono">${o.checked_in}/${o.qty}</td><td><div class="acts" style="margin:0;justify-content:flex-end;gap:4px"><button class="btn sm" data-act="invopen" data-id="${o.id}">${t('view')}</button><button class="btn sm" data-act="invLink" data-id="${o.id}" style="border-color:#d4af37;color:#d4af37" title="Buka Landing Page Undangan Digital">✉️ Undangan</button><button class="btn sm" data-act="copyInvLink" data-id="${o.id}" title="Salin Link Undangan">📋 Salin</button>${o.status==='confirmed'?`<button class="btn sm wa" data-act="waInv" data-id="${o.id}" title="Kirim Undangan Digital lewat WhatsApp">💬 WhatsApp</button>`:''}${o.status!=='cancelled'&&canEdit()?`<button class="btn sm dg" data-act="cxl" data-id="${o.id}">${t('cancel')}</button>`:''}</div></td></tr>`;
   }).join('');
 
   bodyHtml=`<div class="card" style="padding:16px;margin:8px 0 18px;border-color:#d4af37"><h3>${t('inv_title')}</h3><div class="fg" style="margin-top:6px"><div style="grid-column:1/-1"><label>${t('inv_event')}</label><select id="ivev">${opts}</select></div><div><label>${t('inv_name')}</label><input id="ivnm" autocomplete="off" placeholder="Nama tamu / PIC"></div><div><label>${t('inv_org')}</label><input id="ivog" autocomplete="off" placeholder="Instansi / Gereja"></div><div id="ivag_wrap" style="${needAge?'':'display:none'}"><label>${t('inv_age')}</label><input id="ivag" type="number" min="1" max="120" autocomplete="off"></div><div><label>${t('inv_phone')}</label><input id="ivph" type="tel" placeholder="0812xxxxxxxx (WhatsApp Aktif)" autocomplete="off" required></div><div><label>${t('inv_qty')}</label><input id="ivq" type="number" min="1" max="${maxQty}" value="1"><small class="muted" style="display:block;margin-top:3px">${t('inv_max_hint')} ${maxQty} ${t('tix')}</small></div></div><div class="acts"><button class="btn pri" data-act="invmake" style="flex:none">${t('inv_make')}</button><button class="btn" data-act="invImportModal" data-target="issued" style="display:inline-flex;align-items:center;gap:6px">📊 Impor Massal Excel</button></div></div>
@@ -7060,6 +7316,461 @@ ${guestbookSamples ? `\n### SAMPEL BUKU TAMU / UCAPAN PESERTA:\n${guestbookSampl
     } catch(e) {
       toast('Gagal menyalin secara otomatis.', 1);
     }
+  },
+
+  async dupInvModal(el) {
+    const curEvId = getCurEvId();
+    const curEv = (S.aev || []).find(e => String(e.id) === String(curEvId));
+    const evTitle = curEv ? curEv.name : 'Semua Acara';
+
+    if (!S.ord || !S.ord.length) {
+      try {
+        const r = await api('ordersAll', { eventId: curEvId });
+        if (r && r.rows) S.ord = r.rows;
+      } catch(e) {}
+    }
+
+    const audit = getInvDuplicateAudit(S.inv || [], S.waitList || [], S.ord || [], curEvId);
+
+    let initialTab = (el && el.dataset && el.dataset.tab) || 'wait';
+    if (initialTab === 'wait' && !audit.dupWaitBoth.length) {
+      if (audit.crossWaitInv.length) initialTab = 'cross';
+      else if (audit.dupInvBoth.length) initialTab = 'inv';
+      else if (audit.crossWithOrders.length) initialTab = 'orders';
+    }
+    let activeTab = initialTab;
+
+    const renderModal = () => {
+      let contentHtml = '';
+      let badgeWait = audit.dupWaitBoth.length ? `<span class="pill er" style="font-size:10px;padding:1px 5px">${audit.dupWaitBoth.length}</span>` : '';
+      let badgeCross = audit.crossWaitInv.length ? `<span class="pill er" style="font-size:10px;padding:1px 5px">${audit.crossWaitInv.length}</span>` : '';
+      let badgeInv = audit.dupInvBoth.length ? `<span class="pill wn" style="font-size:10px;padding:1px 5px">${audit.dupInvBoth.length}</span>` : '';
+      let badgeOrders = audit.crossWithOrders.length ? `<span class="pill ok" style="font-size:10px;padding:1px 5px">${audit.crossWithOrders.length}</span>` : '';
+
+      if (activeTab === 'wait') {
+        if (!audit.dupWaitBoth.length) {
+          contentHtml = `
+            <div style="text-align:center;padding:36px 16px;background:var(--in);border-radius:12px;border:1px dashed var(--bd);margin:14px 0">
+              <div style="font-size:36px;margin-bottom:8px">🎉</div>
+              <h3 style="margin:0 0 6px;font-size:16px;color:var(--ok)">Daftar Tunggu Bersih dari Duplikat!</h3>
+              <p class="muted" style="margin:0;font-size:13px">Tidak ada calon tamu yang terdaftar berulang dengan nama & nomor telepon yang sama di antrean.</p>
+            </div>
+          `;
+        } else {
+          const toDeleteCount = audit.dupWaitBoth.reduce((acc, [_, l]) => acc + (l.length - 1), 0);
+          contentHtml = `
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:8px">
+              <div style="font-size:13px">Ditemukan <b>${audit.dupWaitBoth.length} grup nama & HP kembar</b> (${toDeleteCount} entri duplikat berlebih).</div>
+              <button type="button" class="btn sm dg" data-act="cleanWaitDupes" style="font-weight:700">🧹 Hapus Semua Duplikat (${toDeleteCount})</button>
+            </div>
+          ` + audit.dupWaitBoth.map(([key, list]) => {
+            const first = list[0];
+            const itemsHtml = list.map((w, idx) => {
+              const dateStr = new Date(w.created_at).toLocaleString('id-ID', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+              return `
+                <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 12px;background:var(--card);border-radius:8px;border:1px solid var(--bd);margin-bottom:6px;flex-wrap:wrap;gap:8px">
+                  <div>
+                    <div style="display:flex;align-items:center;gap:6px">
+                      <b>${esc(w.guest_name)}</b>
+                      ${idx === 0 ? '<span class="pill ok" style="font-size:10px">✓ Entri Asli (Tertua)</span>' : '<span class="pill er" style="font-size:10px">⚠️ Duplikat Berlebih</span>'}
+                      <span class="pill" style="font-size:10px">${w.qty} Tiket</span>
+                    </div>
+                    <div style="font-size:12px;color:var(--mu);margin-top:2px">
+                      +${esc(w.guest_phone || '-')} &middot; ${esc(w.guest_org || 'Instansi -')} &middot; Daftar: ${dateStr}
+                    </div>
+                  </div>
+                  <div class="acts" style="margin:0;gap:4px">
+                    ${w.guest_phone ? `<a href="https://wa.me/${w.guest_phone.replace(/\D/g,'')}?text=${encodeURIComponent('Halo ' + w.guest_name + ', kami panitia ingin mengonfirmasi pendaftaran waiting list Anda.')}" target="_blank" class="btn sm wa" style="text-decoration:none">💬 WA</a>` : ''}
+                    <button type="button" class="btn sm dg" data-act="delWait" data-id="${w.id}">Hapus</button>
+                  </div>
+                </div>
+              `;
+            }).join('');
+
+            return `
+              <div style="background:var(--in);border:1px solid var(--bd);border-radius:12px;padding:12px;margin-bottom:12px">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+                  <span style="font-size:13px;font-weight:700">🚨 ${esc(first.guest_name)} &middot; +${esc(first.guest_phone)}</span>
+                  <span class="pill er" style="font-size:10px;font-weight:700">${list.length} Pendaftaran</span>
+                </div>
+                <div>${itemsHtml}</div>
+              </div>
+            `;
+          }).join('');
+        }
+      } else if (activeTab === 'cross') {
+        if (!audit.crossWaitInv.length) {
+          contentHtml = `
+            <div style="text-align:center;padding:36px 16px;background:var(--in);border-radius:12px;border:1px dashed var(--bd);margin:14px 0">
+              <div style="font-size:36px;margin-bottom:8px">🎉</div>
+              <h3 style="margin:0 0 6px;font-size:16px;color:var(--ok)">Sinkronisasi Sempurna!</h3>
+              <p class="muted" style="margin:0;font-size:13px">Tidak ada tamu di Daftar Tunggu yang sebetulnya sudah memiliki undangan resmi.</p>
+            </div>
+          `;
+        } else {
+          contentHtml = `
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:8px">
+              <div style="font-size:13px">Ditemukan <b>${audit.crossWaitInv.length} calon tamu</b> di Daftar Tunggu yang SUDAH memiliki undangan resmi terbit.</div>
+              <button type="button" class="btn sm dg" data-act="cleanWaitHasInv" style="font-weight:700">🧹 Bersihkan Semua (${audit.crossWaitInv.length})</button>
+            </div>
+          ` + audit.crossWaitInv.map(c => {
+            const w = c.waitItem;
+            const inv = c.invItem;
+            const wDate = new Date(w.created_at).toLocaleString('id-ID', { day: 'numeric', month: 'short' });
+            const invDate = new Date(inv.created_at).toLocaleString('id-ID', { day: 'numeric', month: 'short' });
+            return `
+              <div style="background:var(--in);border:1px solid var(--bd);border-radius:12px;padding:12px;margin-bottom:12px">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:6px">
+                  <span style="font-size:14px;font-weight:700">👤 ${esc(w.guest_name)} &middot; +${esc(w.guest_phone || inv.guest_phone || '-')}</span>
+                  <span class="pill er" style="font-size:10px;font-weight:700">⚠️ Sudah Ada Undangan Resmi</span>
+                </div>
+                <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:8px;margin-bottom:8px">
+                  <div style="background:var(--card);padding:10px;border-radius:8px;border:1px dashed var(--wn)">
+                    <div style="font-size:11px;font-weight:700;color:var(--wn);margin-bottom:2px">⏳ Masih di Daftar Tunggu (Perlu Dihapus):</div>
+                    <div style="font-size:12px"><b>${esc(w.guest_name)}</b> &middot; ${w.qty} Tiket &middot; Daftar: ${wDate}</div>
+                    <div style="margin-top:6px">
+                      <button type="button" class="btn sm dg" data-act="delWait" data-id="${w.id}">🗑️ Hapus dari Waiting List</button>
+                    </div>
+                  </div>
+                  <div style="background:var(--card);padding:10px;border-radius:8px;border:1px solid var(--ok)">
+                    <div style="font-size:11px;font-weight:700;color:var(--ok);margin-bottom:2px">📋 Undangan Resmi yang Sudah Terbit:</div>
+                    <div style="font-size:12px">Kode: <b class="mono">${esc(inv.ticket_code)}</b> &middot; ${inv.qty} Tiket (${inv.status}) &middot; Terbit: ${invDate}</div>
+                    <div style="margin-top:6px;display:flex;gap:4px">
+                      <button type="button" class="btn sm" data-act="invopen" data-id="${inv.id}">🎫 Lihat Undangan</button>
+                      <button type="button" class="btn sm" data-act="copyInvLink" data-id="${inv.id}">📋 Salin Link</button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            `;
+          }).join('');
+        }
+      } else if (activeTab === 'inv') {
+        if (!audit.dupInvBoth.length) {
+          contentHtml = `
+            <div style="text-align:center;padding:36px 16px;background:var(--in);border-radius:12px;border:1px dashed var(--bd);margin:14px 0">
+              <div style="font-size:36px;margin-bottom:8px">🎉</div>
+              <h3 style="margin:0 0 6px;font-size:16px;color:var(--ok)">Undangan Terbit Tidak Ada yang Dobel!</h3>
+              <p class="muted" style="margin:0;font-size:13px">Semua undangan resmi yang telah diterbitkan memiliki nama & nomor telepon unik.</p>
+            </div>
+          `;
+        } else {
+          contentHtml = `
+            <div style="font-size:13px;margin-bottom:12px">Ditemukan <b>${audit.dupInvBoth.length} grup undangan terbit ganda</b>:</div>
+          ` + audit.dupInvBoth.map(([key, list]) => {
+            const first = list[0];
+            const itemsHtml = list.map(inv => {
+              const dateStr = new Date(inv.created_at).toLocaleString('id-ID', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+              return `
+                <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 12px;background:var(--card);border-radius:8px;border:1px solid var(--bd);margin-bottom:6px;flex-wrap:wrap;gap:8px">
+                  <div>
+                    <div style="display:flex;align-items:center;gap:6px">
+                      <span class="mono" style="font-weight:700;font-size:13px">${esc(inv.ticket_code)}</span>
+                      ${stPill(inv.status)}
+                      <span class="pill" style="font-size:10px">${inv.qty} Tiket</span>
+                    </div>
+                    <div style="font-size:12px;color:var(--mu);margin-top:2px">
+                      <b>${esc(inv.guest_name)}</b> &middot; +${esc(inv.guest_phone || '-')} &middot; ${esc(inv.guest_org || 'Instansi -')} &middot; Terbit: ${dateStr}
+                    </div>
+                  </div>
+                  <div class="acts" style="margin:0;gap:4px">
+                    <button type="button" class="btn sm" data-act="invopen" data-id="${inv.id}">🎫 Tiket</button>
+                    <button type="button" class="btn sm" data-act="copyInvLink" data-id="${inv.id}">📋 Salin Link</button>
+                    ${inv.status !== 'cancelled' ? `<button type="button" class="btn sm dg" data-act="cxl" data-id="${inv.id}">Batalkan</button>` : ''}
+                  </div>
+                </div>
+              `;
+            }).join('');
+
+            return `
+              <div style="background:var(--in);border:1px solid var(--bd);border-radius:12px;padding:12px;margin-bottom:12px">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+                  <span style="font-size:13px;font-weight:700">📋 ${esc(first.guest_name)} &middot; +${esc(first.guest_phone)}</span>
+                  <span class="pill er" style="font-size:10px;font-weight:700">${list.length} Undangan Terbit</span>
+                </div>
+                <div>${itemsHtml}</div>
+              </div>
+            `;
+          }).join('');
+        }
+      } else if (activeTab === 'orders') {
+        if (!audit.crossWithOrders.length) {
+          contentHtml = `
+            <div style="text-align:center;padding:36px 16px;background:var(--in);border-radius:12px;border:1px dashed var(--bd);margin:14px 0">
+              <div style="font-size:36px;margin-bottom:8px">🎉</div>
+              <h3 style="margin:0 0 6px;font-size:16px;color:var(--ok)">Tidak Ada Bentrok dengan Tiket Reguler!</h3>
+              <p class="muted" style="margin:0;font-size:13px">Tidak ditemukan calon tamu waiting list atau VIP yang memesan tiket reguler ganda.</p>
+            </div>
+          `;
+        } else {
+          contentHtml = `
+            <div style="font-size:13px;margin-bottom:12px">Ditemukan <b>${audit.crossWithOrders.length} tamu</b> yang tercatat di Undangan/Waiting List DAN sudah membeli tiket reguler:</div>
+          ` + audit.crossWithOrders.map(c => {
+            const isWait = c.itemType === 'waiting';
+            const item = c.item;
+            const ord = c.orderItem;
+            return `
+              <div style="background:var(--in);border:1px solid var(--bd);border-radius:12px;padding:12px;margin-bottom:12px">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+                  <span style="font-size:13px;font-weight:700">👤 ${esc(item.guest_name || item.name)} &middot; +${esc(item.guest_phone || ord.whatsapp || '-')}</span>
+                  <span class="pill ok" style="font-size:10px;font-weight:700">Sudah Punya Tiket Reguler</span>
+                </div>
+                <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:8px">
+                  <div style="background:var(--card);padding:8px 10px;border-radius:8px;border:1px solid var(--bd)">
+                    <small class="muted">${isWait ? '⏳ Di Daftar Tunggu' : '📋 Di Undangan VIP'}:</small>
+                    <div style="font-size:12px"><b>${esc(item.guest_name || item.name)}</b> &middot; ${item.qty} Tiket</div>
+                    <div style="margin-top:6px">
+                      ${isWait ? `<button type="button" class="btn sm dg" data-act="delWait" data-id="${item.id}">Hapus dari Waiting List</button>` : `<button type="button" class="btn sm" data-act="invopen" data-id="${item.id}">Lihat VIP</button>`}
+                    </div>
+                  </div>
+                  <div style="background:var(--card);padding:8px 10px;border-radius:8px;border:1px solid var(--ok)">
+                    <small style="color:var(--ok);font-weight:700">🎟️ Tiket Reguler Terkonfirmasi:</small>
+                    <div style="font-size:12px"><b class="mono">${esc(ord.ticket_code)}</b> &middot; ${ord.qty} Tiket (${ord.status})</div>
+                    <div style="margin-top:6px">
+                      <button type="button" class="btn sm" data-act="pass" data-id="${ord.id}">🎫 Lihat E-Tiket</button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            `;
+          }).join('');
+        }
+      }
+
+      return `
+        <button class="btn sm x" data-act="cm">&#10005;</button>
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
+          <span style="font-size:26px">🔍</span>
+          <div>
+            <h2 style="margin:0;font-size:18px">Audit Duplikasi Undangan & Daftar Tunggu</h2>
+            <small class="muted">Acara: <b>${esc(evTitle)}</b> &middot; ${S.waitList.length} Antrean &middot; ${S.inv.length} Undangan</small>
+          </div>
+        </div>
+
+        <!-- Metric Cards -->
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px;margin-bottom:14px">
+          <div style="background:${audit.dupWaitBoth.length ? 'rgba(239,68,68,.1)' : 'var(--in)'};border:1px solid ${audit.dupWaitBoth.length ? 'rgba(239,68,68,.3)' : 'var(--bd)'};padding:10px;border-radius:10px;text-align:center">
+            <small class="muted" style="font-size:11px">⏳ Waiting List Dobel</small>
+            <div style="font-size:18px;font-weight:800;color:${audit.dupWaitBoth.length ? 'var(--er)' : 'var(--ok)'}">${audit.dupWaitBoth.length} Grup</div>
+          </div>
+          <div style="background:${audit.crossWaitInv.length ? 'rgba(239,68,68,.1)' : 'var(--in)'};border:1px solid ${audit.crossWaitInv.length ? 'rgba(239,68,68,.3)' : 'var(--bd)'};padding:10px;border-radius:10px;text-align:center">
+            <small class="muted" style="font-size:11px">⚠️ Sudah Ber-Undangan</small>
+            <div style="font-size:18px;font-weight:800;color:${audit.crossWaitInv.length ? 'var(--er)' : 'var(--ok)'}">${audit.crossWaitInv.length} Orang</div>
+          </div>
+          <div style="background:${audit.dupInvBoth.length ? 'rgba(245,158,11,.1)' : 'var(--in)'};border:1px solid ${audit.dupInvBoth.length ? 'rgba(245,158,11,.3)' : 'var(--bd)'};padding:10px;border-radius:10px;text-align:center">
+            <small class="muted" style="font-size:11px">📋 Undangan Dobel</small>
+            <div style="font-size:18px;font-weight:800;color:${audit.dupInvBoth.length ? 'var(--wn)' : 'var(--ok)'}">${audit.dupInvBoth.length} Grup</div>
+          </div>
+          <div style="background:${audit.crossWithOrders.length ? 'rgba(16,185,129,.1)' : 'var(--in)'};border:1px solid ${audit.crossWithOrders.length ? 'rgba(16,185,129,.3)' : 'var(--bd)'};padding:10px;border-radius:10px;text-align:center">
+            <small class="muted" style="font-size:11px">🎫 Punya Tiket Reguler</small>
+            <div style="font-size:18px;font-weight:800;color:${audit.crossWithOrders.length ? 'var(--ok)' : 'var(--mu)'}">${audit.crossWithOrders.length} Orang</div>
+          </div>
+        </div>
+
+        <!-- Segmented Tabs -->
+        <div style="display:flex;background:var(--in);padding:3px;border-radius:10px;border:1px solid var(--bd);margin-bottom:14px;gap:3px;overflow-x:auto">
+          <button type="button" id="tab_inv_dup_wait" class="btn sm" style="flex:1;border-radius:8px;padding:6px 10px;font-size:12px;font-weight:700;white-space:nowrap;${activeTab === 'wait' ? 'background:var(--ac);color:#fff' : 'background:transparent;color:var(--fg)'}">
+            ⏳ Waiting List Dobel ${badgeWait}
+          </button>
+          <button type="button" id="tab_inv_dup_cross" class="btn sm" style="flex:1;border-radius:8px;padding:6px 10px;font-size:12px;font-weight:700;white-space:nowrap;${activeTab === 'cross' ? 'background:var(--ac);color:#fff' : 'background:transparent;color:var(--fg)'}">
+            ⚠️ Sudah Ber-Undangan ${badgeCross}
+          </button>
+          <button type="button" id="tab_inv_dup_inv" class="btn sm" style="flex:1;border-radius:8px;padding:6px 10px;font-size:12px;font-weight:700;white-space:nowrap;${activeTab === 'inv' ? 'background:var(--ac);color:#fff' : 'background:transparent;color:var(--fg)'}">
+            📋 Undangan Dobel ${badgeInv}
+          </button>
+          <button type="button" id="tab_inv_dup_orders" class="btn sm" style="flex:1;border-radius:8px;padding:6px 10px;font-size:12px;font-weight:700;white-space:nowrap;${activeTab === 'orders' ? 'background:var(--ac);color:#fff' : 'background:transparent;color:var(--fg)'}">
+            🎫 Punya Tiket Reguler ${badgeOrders}
+          </button>
+        </div>
+
+        <!-- Content Area -->
+        <div style="max-height:55vh;overflow-y:auto;padding-right:4px">
+          ${contentHtml}
+        </div>
+
+        <!-- Footer -->
+        <div class="acts" style="justify-content:space-between;flex-wrap:wrap;gap:8px;margin-top:16px;border-top:1px solid var(--bd);padding-top:12px">
+          <button type="button" class="btn ok" id="btn_export_inv_dup" style="font-weight:700;font-size:12px">📥 Ekspor Laporan CSV</button>
+          <button type="button" class="btn" data-act="cm">${t('close')}</button>
+        </div>
+      `;
+    };
+
+    modal(renderModal());
+
+    const bindTabs = () => {
+      const bWait = $('#tab_inv_dup_wait');
+      const bCross = $('#tab_inv_dup_cross');
+      const bInv = $('#tab_inv_dup_inv');
+      const bOrders = $('#tab_inv_dup_orders');
+      const bExp = $('#btn_export_inv_dup');
+
+      if (bWait) bWait.onclick = () => { activeTab = 'wait'; modal(renderModal()); bindTabs(); };
+      if (bCross) bCross.onclick = () => { activeTab = 'cross'; modal(renderModal()); bindTabs(); };
+      if (bInv) bInv.onclick = () => { activeTab = 'inv'; modal(renderModal()); bindTabs(); };
+      if (bOrders) bOrders.onclick = () => { activeTab = 'orders'; modal(renderModal()); bindTabs(); };
+
+      if (bExp) {
+        bExp.onclick = () => A.exportInvDuplicatesCsv(audit, evTitle);
+      }
+    };
+
+    bindTabs();
+  },
+
+  async cleanWaitDupes() {
+    const curEvId = getCurEvId();
+    const audit = getInvDuplicateAudit(S.inv || [], S.waitList || [], S.ord || [], curEvId);
+    const dupEntries = audit.dupWaitBoth;
+    if (!dupEntries.length) {
+      return toast('Tidak ada entri duplikat (Nama & No. HP sama) di Daftar Tunggu.', 0);
+    }
+
+    const toDelete = [];
+    dupEntries.forEach(([k, list]) => {
+      list.slice(1).forEach(item => toDelete.push(item));
+    });
+
+    if (!toDelete.length) return toast('Tidak ada duplikat berlebih untuk dihapus.', 0);
+
+    const confirmMsg = `Ditemukan ${toDelete.length} entri duplikat di Daftar Tunggu dari ${dupEntries.length} grup nama & nomor HP yang sama.\n\nSistem akan mempertahankan 1 pendaftaran tertua dan menghapus ${toDelete.length} entri sisanya. Lanjutkan pembersihan?`;
+    if (!await ask(confirmMsg)) return;
+
+    bz(1, 'Membersihkan duplikat daftar tunggu...');
+    try {
+      let successCount = 0;
+      for (const item of toDelete) {
+        try {
+          await api('waitingDelete', { id: item.id });
+          successCount++;
+        } catch (err) {
+          console.warn('Gagal menghapus item waiting:', item.id, err);
+        }
+      }
+      toast(`Berhasil menghapus ${successCount} entri duplikat di Daftar Tunggu! 🧹`, 0);
+      S.waitList = await api('waitingList');
+      paintInv();
+      A.dupInvModal({ dataset: { tab: 'wait' } });
+    } catch (e) {
+      fail(e);
+    } finally {
+      bz(-1);
+    }
+  },
+
+  async cleanWaitHasInv() {
+    const curEvId = getCurEvId();
+    const audit = getInvDuplicateAudit(S.inv || [], S.waitList || [], S.ord || [], curEvId);
+    const crossList = audit.crossWaitInv;
+    if (!crossList.length) {
+      return toast('Tidak ada calon tamu waiting list yang sudah punya undangan resmi.', 0);
+    }
+
+    const toDelete = crossList.map(c => c.waitItem);
+    const confirmMsg = `Ditemukan ${toDelete.length} calon tamu di Daftar Tunggu yang sebetulnya SUDAH diterbitkan undangannya secara resmi.\n\nHapus ${toDelete.length} entri ini dari antrean Daftar Tunggu agar kuota tidak terpakai dobel?`;
+    if (!await ask(confirmMsg)) return;
+
+    bz(1, 'Membersihkan antrean yang sudah dapat undangan...');
+    try {
+      let successCount = 0;
+      for (const item of toDelete) {
+        try {
+          await api('waitingDelete', { id: item.id });
+          successCount++;
+        } catch (err) {
+          console.warn('Gagal menghapus item waiting:', item.id, err);
+        }
+      }
+      toast(`Berhasil membersihkan ${successCount} antrean yang sudah ber-undangan resmi! 🧹`, 0);
+      S.waitList = await api('waitingList');
+      paintInv();
+      A.dupInvModal({ dataset: { tab: 'cross' } });
+    } catch (e) {
+      fail(e);
+    } finally {
+      bz(-1);
+    }
+  },
+
+  exportInvDuplicatesCsv(audit, evTitle) {
+    if (!audit) audit = getInvDuplicateAudit(S.inv || [], S.waitList || [], S.ord || [], getCurEvId());
+    const rows = [];
+    rows.push(['Kategori Masalah', 'Nama Tamu / PIC', 'Nomor Telepon', 'Instansi / Gereja', 'Jumlah Tiket', 'Status Terdata', 'Catatan Tambahan', 'Acara']);
+
+    audit.dupWaitBoth.forEach(([k, list]) => {
+      list.forEach((w, idx) => {
+        rows.push([
+          'Duplikat di Waiting List (Nama & HP Sama)',
+          w.guest_name,
+          w.guest_phone || '-',
+          w.guest_org || '-',
+          w.qty,
+          idx === 0 ? 'Entri Asli (Tertua)' : 'Duplikat Berlebih (Disarankan Hapus)',
+          `Terdaftar: ${new Date(w.created_at).toLocaleString('id-ID')}`,
+          w.event_name || evTitle
+        ]);
+      });
+    });
+
+    audit.crossWaitInv.forEach(c => {
+      const w = c.waitItem;
+      const inv = c.invItem;
+      rows.push([
+        'Sudah Ada Undangan Resmi (Masih Mengantre di Waiting List)',
+        w.guest_name,
+        w.guest_phone || inv.guest_phone || '-',
+        w.guest_org || inv.guest_org || '-',
+        w.qty,
+        `Di Waiting List: ${w.qty} tiket | Undangan Terbit: ${inv.ticket_code}`,
+        `Sudah berstatus: ${inv.status} (Disarankan hapus dari waiting list)`,
+        w.event_name || evTitle
+      ]);
+    });
+
+    audit.dupInvBoth.forEach(([k, list]) => {
+      list.forEach(inv => {
+        rows.push([
+          'Undangan Resmi Terbit Ganda (Nama & HP Sama)',
+          inv.guest_name,
+          inv.guest_phone || '-',
+          inv.guest_org || '-',
+          inv.qty,
+          `Kode: ${inv.ticket_code} (${inv.status})`,
+          `Terbit: ${new Date(inv.created_at).toLocaleString('id-ID')}`,
+          inv.event_name || evTitle
+        ]);
+      });
+    });
+
+    audit.crossWithOrders.forEach(c => {
+      const item = c.item;
+      const ord = c.orderItem;
+      rows.push([
+        'Beli Tiket Reguler (Juga Ada di Waiting/Undangan)',
+        item.guest_name || item.name,
+        item.guest_phone || ord.whatsapp || '-',
+        item.guest_org || '-',
+        item.qty,
+        `Tiket Reguler: ${ord.ticket_code} (${ord.status})`,
+        `Posisi: ${c.itemType === 'waiting' ? 'Daftar Tunggu' : 'Undangan VIP'}`,
+        item.event_name || evTitle
+      ]);
+    });
+
+    if (rows.length <= 1) {
+      return toast('Tidak ada data duplikasi undangan/waiting list untuk diekspor.', 1);
+    }
+
+    const csvContent = '\uFEFF' + rows.map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\r\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    const safeName = (evTitle || 'Acara').replace(/[^a-zA-Z0-9_\- ]/g, '_').substring(0, 30);
+    a.download = `Audit_Duplikasi_Undangan_WaitingList_${safeName}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    toast('Laporan audit duplikasi undangan & waiting list berhasil diunduh (CSV)! 📥', 0);
   },
 
   async dupCheckModal(initialTab = 'both') {
