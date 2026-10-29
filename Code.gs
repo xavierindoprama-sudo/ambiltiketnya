@@ -534,6 +534,7 @@ const ACTIONS = {
   invitationCreate: { min: 2, fn: invitationCreate },
   waitingList: { min: 2, fn: waitingList },
   waitingCreate: { min: 2, fn: waitingCreate },
+  waitingUpdate: { min: 2, fn: waitingUpdate },
   waitingDelete: { min: 2, fn: waitingDelete },
   waitingPromote: { min: 2, fn: waitingPromote },
   waitingPromoteAll: { min: 2, fn: waitingPromoteAll },
@@ -1421,6 +1422,34 @@ function waitingCreate(u, p) {
     VALUES($1::uuid, $2::uuid, $3, $4, $5, $6, $7, 'waiting', now()) RETURNING id`,
     [ev.id, u.id, name, org, phone, age, qty]);
   return { id: r[0].id, name: name, qty: qty, eventId: ev.id };
+}
+
+function waitingUpdate(u, p) {
+  ensureWaitingSchema();
+  if (!p || !p.id) throw new Error('MISSING_ID');
+  const cfg = getInvConfig(u);
+  const maxAllowed = cfg.maxQty || 50;
+
+  const item = q(`SELECT * FROM invitation_waiting_list WHERE id=$1::uuid`, [p.id])[0];
+  if (!item) throw new Error('NOT_FOUND');
+
+  const name = p.name !== undefined ? String(p.name).trim() : item.guest_name;
+  const org = p.org !== undefined ? String(p.org).trim() : item.guest_org;
+  const phone = p.phone !== undefined ? normPhone(p.phone) : item.guest_phone;
+  const age = p.age !== undefined ? (p.age ? parseInt(p.age, 10) : null) : item.guest_age;
+  let qty = p.qty !== undefined ? parseInt(p.qty, 10) : item.qty;
+
+  if (!name) throw new Error('BAD_NAME');
+  if (p.phone && !phone) throw new Error('BAD_PHONE');
+  if (isNaN(qty) || qty < 1) qty = 1;
+  if (qty > maxAllowed) throw new Error('MAX_QTY_EXCEEDED');
+
+  q(`UPDATE invitation_waiting_list
+     SET guest_name=$1, guest_org=$2, guest_phone=$3, guest_age=$4, qty=$5
+     WHERE id=$6::uuid RETURNING id`,
+    [name, org, phone, age, qty, p.id]);
+
+  return { id: p.id, name: name, org: org, phone: phone, age: age, qty: qty, eventId: item.event_id };
 }
 
 function waitingDelete(u, p) {

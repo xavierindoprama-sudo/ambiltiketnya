@@ -3912,8 +3912,9 @@ function paintInv(){
     <td data-l="${t('c_qty')}"><b>${w.qty}</b> ${t('tix')}</td>
     <td data-l="Status Kuota">${canPromote?`<span class="pill ok">✓ Sisa: ${rem}</span>`:`<span class="pill wn">⚠️ Sisa: ${rem} (Kurang)</span>`}</td>
     <td>
-     <div class="acts" style="margin:0;justify-content:flex-end">
+     <div class="acts" style="margin:0;justify-content:flex-end;gap:4px">
       <button class="btn sm ${canPromote?'ok':'dis'}" data-act="promoteWait" data-id="${w.id}" ${canPromote?'':'disabled'} title="${canPromote?'Terbitkan undangan resmi':'Sisa kuota reguler belum mencukupi'}">${canPromote?`✓ ${t('wait_promote_btn')}`:t('wait_no_quota')}</button>
+      <button class="btn sm" data-act="editWaitModal" data-id="${w.id}" title="Edit nama, nomor WA, atau jumlah tiket">✏️ Edit</button>
       <button class="btn sm dg" data-act="delWait" data-id="${w.id}">${t('wait_delete_btn')}</button>
      </div>
     </td>
@@ -5961,6 +5962,121 @@ const NL=String.fromCharCode(10),find=(a,id)=>a.find(x=>x.id===id),A={
    if(!og||og.length<2)return toast(t('e_BAD_ORG'),1);
    if(!ph||!normPhone(ph))return toast('Nomor WhatsApp aktif wajib diisi (contoh 0812xxxxxxxx)!',1);
    try{const o=await api('invitationCreate',{eventId:ev,name:nm,org:og,qty:qy,phone:normPhone(ph),age:ag},t('loading'));const r=await Promise.all([api('adminEvents'),api('invitations'),api('waitingList').catch(()=>[]),api('getInvConfig').catch(()=>({maxQty:50}))]);S.aev=r[0];S.inv=r[1];S.waitList=r[2]||[];S.invCfg=r[3]||{maxQty:50};mergeInvTix();paintInv();passModal(o,t('inv_made'))}catch(e){fail(e)}},
+  editWaitModal(el) {
+    const id = el.dataset.id;
+    const item = (S.waitList || []).find(w => String(w.id) === String(id));
+    if (!item) return toast('Data antrean tidak ditemukan.', 1);
+
+    const ev = (S.aev || []).find(e => String(e.id) === String(item.event_id)) || {};
+    const needAge = !!(ev && Array.isArray(ev.custom_fields) && ev.custom_fields.some(cf => {
+      const l = (cf.label || '').toLowerCase();
+      return l.includes('usia') || l.includes('umur') || l.includes('age');
+    }));
+    const maxQty = (S.invCfg && S.invCfg.maxQty) || 50;
+
+    modal(`
+      <button class="btn sm x" data-act="cm">&#10005;</button>
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
+        <span style="font-size:24px">✏️</span>
+        <div>
+          <h2 style="margin:0;font-size:18px">Edit Antrean Waiting List</h2>
+          <small class="muted">Acara: <b>${esc(item.event_name || ev.name || '-')}</b></small>
+        </div>
+      </div>
+      <form onsubmit="return false" style="display:flex;flex-direction:column;gap:12px">
+        <input type="hidden" id="edit_wait_id" value="${esc(item.id)}">
+        <input type="hidden" id="edit_wait_ev" value="${esc(item.event_id)}">
+        
+        <div>
+          <label style="font-weight:700;font-size:13px;display:block;margin-bottom:4px">Nama Lengkap Calon Tamu *</label>
+          <input type="text" id="edit_wait_name" value="${esc(item.guest_name || '')}" placeholder="Nama lengkap calon tamu" required style="width:100%;box-sizing:border-box">
+        </div>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+          <div>
+            <label style="font-weight:700;font-size:13px;display:block;margin-bottom:4px">Nomor WhatsApp Aktif *</label>
+            <input type="tel" id="edit_wait_phone" value="${esc(item.guest_phone || '')}" placeholder="Contoh: 08123456789" required style="width:100%;box-sizing:border-box">
+            <small class="muted" style="font-size:11px;display:block;margin-top:2px">Format: 08xx atau 62xx</small>
+          </div>
+          <div>
+            <label style="font-weight:700;font-size:13px;display:block;margin-bottom:4px">Jumlah Tiket *</label>
+            <input type="number" id="edit_wait_qty" min="1" max="${maxQty}" value="${item.qty || 1}" required style="width:100%;box-sizing:border-box">
+            <small class="muted" style="font-size:11px;display:block;margin-top:2px">Maksimal ${maxQty} tiket</small>
+          </div>
+        </div>
+
+        <div>
+          <label style="font-weight:700;font-size:13px;display:block;margin-bottom:4px">Instansi / Gereja / Organisasi</label>
+          <input type="text" id="edit_wait_org" value="${esc(item.guest_org || '')}" placeholder="Asal instansi atau gereja" style="width:100%;box-sizing:border-box">
+        </div>
+
+        ${needAge ? `
+          <div>
+            <label style="font-weight:700;font-size:13px;display:block;margin-bottom:4px">Usia / Umur</label>
+            <input type="number" id="edit_wait_age" min="1" max="120" value="${item.guest_age || ''}" placeholder="Usia (tahun)" style="width:100%;box-sizing:border-box">
+          </div>
+        ` : ''}
+
+        <div class="acts" style="margin-top:10px;justify-content:flex-end;gap:8px">
+          <button type="button" class="btn" data-act="cm">${t('close')}</button>
+          <button type="button" class="btn pri" data-act="waitSave" style="font-weight:700">💾 Simpan Perubahan</button>
+        </div>
+      </form>
+    `);
+  },
+
+  async waitSave() {
+    const id = ($('#edit_wait_id') ? $('#edit_wait_id').value : '').trim();
+    const evId = ($('#edit_wait_ev') ? $('#edit_wait_ev').value : '').trim();
+    const name = ($('#edit_wait_name') ? $('#edit_wait_name').value : '').trim();
+    const phoneRaw = ($('#edit_wait_phone') ? $('#edit_wait_phone').value : '').trim();
+    const qty = parseInt($('#edit_wait_qty') ? $('#edit_wait_qty').value : 1, 10) || 1;
+    const org = ($('#edit_wait_org') ? $('#edit_wait_org').value : '').trim();
+    const ageRaw = ($('#edit_wait_age') ? $('#edit_wait_age').value : '').trim();
+    const maxQty = (S.invCfg && S.invCfg.maxQty) || 50;
+
+    if (!id) return toast('ID antrean tidak valid.', 1);
+    if (!name || name.length < 2) return toast(t('e_BAD_NAME'), 1);
+    const ph = normPhone(phoneRaw);
+    if (!ph) return toast('Nomor WhatsApp aktif wajib diisi (contoh: 0812xxxxxxxx)!', 1);
+    if (qty < 1) return toast('Jumlah tiket minimal 1!', 1);
+    if (qty > maxQty) return toast('Jumlah tiket melebihi batas maksimal (' + maxQty + ' tiket)!', 1);
+
+    bz(1, 'Menyimpan perubahan antrean...');
+    try {
+      try {
+        await api('waitingUpdate', {
+          id,
+          name,
+          phone: ph,
+          qty,
+          org,
+          age: ageRaw ? parseInt(ageRaw, 10) : null
+        });
+      } catch (err) {
+        console.warn('API waitingUpdate failed, attempting fallback recreate:', err);
+        await api('waitingDelete', { id });
+        await api('waitingCreate', {
+          eventId: evId,
+          name,
+          phone: ph,
+          qty,
+          org,
+          age: ageRaw ? parseInt(ageRaw, 10) : null
+        });
+      }
+
+      toast('Data antrean waiting list berhasil disimpan! 💾', 0);
+      cm();
+      S.waitList = await api('waitingList');
+      paintInv();
+    } catch (e) {
+      fail(e);
+    } finally {
+      bz(-1);
+    }
+  },
+
   async waitAdd(){
    const nm=($('#wtnm')?$('#wtnm').value:'').trim(),
          og=($('#wtog')?$('#wtog').value:'').trim(),
@@ -7547,6 +7663,7 @@ ${guestbookSamples ? `\n### SAMPEL BUKU TAMU / UCAPAN PESERTA:\n${guestbookSampl
                   </div>
                   <div class="acts" style="margin:0;gap:4px">
                     ${w.guest_phone ? `<a href="https://wa.me/${w.guest_phone.replace(/\D/g,'')}?text=${encodeURIComponent('Halo ' + w.guest_name + ', kami panitia ingin mengonfirmasi pendaftaran waiting list Anda.')}" target="_blank" class="btn sm wa" style="text-decoration:none">💬 WA</a>` : ''}
+                    <button type="button" class="btn sm" data-act="editWaitModal" data-id="${w.id}" title="Edit nama, nomor WA, atau jumlah tiket">✏️ Edit</button>
                     <button type="button" class="btn sm dg" data-act="delWait" data-id="${w.id}">Hapus</button>
                   </div>
                 </div>
@@ -7594,7 +7711,8 @@ ${guestbookSamples ? `\n### SAMPEL BUKU TAMU / UCAPAN PESERTA:\n${guestbookSampl
                   <div style="background:var(--card);padding:10px;border-radius:8px;border:1px dashed var(--wn)">
                     <div style="font-size:11px;font-weight:700;color:var(--wn);margin-bottom:2px">⏳ Masih di Daftar Tunggu (Perlu Dihapus):</div>
                     <div style="font-size:12px"><b>${esc(w.guest_name)}</b> &middot; ${w.qty} Tiket &middot; Daftar: ${wDate}</div>
-                    <div style="margin-top:6px">
+                    <div style="margin-top:6px;display:flex;gap:4px;flex-wrap:wrap">
+                      <button type="button" class="btn sm" data-act="editWaitModal" data-id="${w.id}">✏️ Edit</button>
                       <button type="button" class="btn sm dg" data-act="delWait" data-id="${w.id}">🗑️ Hapus dari Waiting List</button>
                     </div>
                   </div>
