@@ -3651,69 +3651,70 @@ function getInvDuplicateAudit(invList = [], waitList = [], orderList = [], event
   const fInv = filterEv(invList).filter(o => o.status !== 'cancelled');
   const fOrd = filterEv(orderList).filter(o => o.status !== 'cancelled' && o.kind !== 'invitation');
 
-  // 1. Internal Waiting List Duplicates
-  const waitPhoneMap = new Map();
-  const waitNameMap = new Map();
-  const waitBothMap = new Map();
+  const auditList = list => {
+    const phoneMap = new Map();
+    const nameMap = new Map();
+    const bothMap = new Map();
 
-  fWait.forEach(w => {
-    const ph = normPhone(w.guest_phone);
-    const nm = normName(w.guest_name);
-    if (ph) {
-      if (!waitPhoneMap.has(ph)) waitPhoneMap.set(ph, []);
-      waitPhoneMap.get(ph).push(w);
-    }
-    if (nm) {
-      if (!waitNameMap.has(nm)) waitNameMap.set(nm, []);
-      waitNameMap.get(nm).push(w);
-    }
-    if (ph && nm) {
-      const k = nm + '|||' + ph;
-      if (!waitBothMap.has(k)) waitBothMap.set(k, []);
-      waitBothMap.get(k).push(w);
-    }
-  });
+    list.forEach(item => {
+      const ph = normPhone(item.guest_phone || item.whatsapp);
+      const nm = normName(item.guest_name || item.name);
+      if (ph) {
+        if (!phoneMap.has(ph)) phoneMap.set(ph, []);
+        phoneMap.get(ph).push(item);
+      }
+      if (nm) {
+        if (!nameMap.has(nm)) nameMap.set(nm, []);
+        nameMap.get(nm).push(item);
+      }
+      if (ph && nm) {
+        const k = nm + '|||' + ph;
+        if (!bothMap.has(k)) bothMap.set(k, []);
+        bothMap.get(k).push(item);
+      }
+    });
 
-  const dupWaitBoth = Array.from(waitBothMap.entries()).filter(([_, l]) => l.length > 1);
-  const dupWaitPhone = Array.from(waitPhoneMap.entries()).filter(([_, l]) => l.length > 1);
-  const dupWaitName = Array.from(waitNameMap.entries()).filter(([_, l]) => l.length > 1);
+    const dupPhoneAll = Array.from(phoneMap.entries())
+      .filter(([_, l]) => l.length > 1)
+      .sort((a, b) => b[1].length - a[1].length);
 
-  const dupWaitBothIds = new Set(dupWaitBoth.flatMap(([_, l]) => l.map(w => w.id)));
-  const dupWaitPhoneIds = new Set(dupWaitPhone.flatMap(([_, l]) => l.map(w => w.id)));
-  const dupWaitNameIds = new Set(dupWaitName.flatMap(([_, l]) => l.map(w => w.id)));
+    const dupBoth = Array.from(bothMap.entries())
+      .filter(([_, l]) => l.length > 1)
+      .sort((a, b) => b[1].length - a[1].length);
 
-  // 2. Internal Invitations Duplicates
-  const invPhoneMap = new Map();
-  const invNameMap = new Map();
-  const invBothMap = new Map();
+    const dupPhoneDiff = dupPhoneAll.filter(([ph, l]) => {
+      const distinct = new Set(l.map(i => normName(i.guest_name || i.name)).filter(Boolean));
+      return distinct.size > 1;
+    });
 
-  fInv.forEach(o => {
-    const ph = normPhone(o.guest_phone || o.whatsapp);
-    const nm = normName(o.guest_name || o.name);
-    if (ph) {
-      if (!invPhoneMap.has(ph)) invPhoneMap.set(ph, []);
-      invPhoneMap.get(ph).push(o);
-    }
-    if (nm) {
-      if (!invNameMap.has(nm)) invNameMap.set(nm, []);
-      invNameMap.get(nm).push(o);
-    }
-    if (ph && nm) {
-      const k = nm + '|||' + ph;
-      if (!invBothMap.has(k)) invBothMap.set(k, []);
-      invBothMap.get(k).push(o);
-    }
-  });
+    const dupName = Array.from(nameMap.entries())
+      .filter(([_, l]) => l.length > 1)
+      .sort((a, b) => b[1].length - a[1].length);
 
-  const dupInvBoth = Array.from(invBothMap.entries()).filter(([_, l]) => l.length > 1);
-  const dupInvPhone = Array.from(invPhoneMap.entries()).filter(([_, l]) => l.length > 1);
-  const dupInvName = Array.from(invNameMap.entries()).filter(([_, l]) => l.length > 1);
+    const dupBothIds = new Set(dupBoth.flatMap(([_, l]) => l.map(i => i.id)));
+    const dupPhoneIds = new Set(dupPhoneAll.flatMap(([_, l]) => l.map(i => i.id)));
+    const dupNameIds = new Set(dupName.flatMap(([_, l]) => l.map(i => i.id)));
+    const dupPhoneDiffIds = new Set(dupPhoneDiff.flatMap(([_, l]) => l.map(i => i.id)));
 
-  const dupInvBothIds = new Set(dupInvBoth.flatMap(([_, l]) => l.map(o => o.id)));
-  const dupInvPhoneIds = new Set(dupInvPhone.flatMap(([_, l]) => l.map(o => o.id)));
-  const dupInvNameIds = new Set(dupInvName.flatMap(([_, l]) => l.map(o => o.id)));
+    return {
+      phoneMap,
+      nameMap,
+      bothMap,
+      dupPhoneAll,
+      dupBoth,
+      dupPhoneDiff,
+      dupName,
+      dupBothIds,
+      dupPhoneIds,
+      dupNameIds,
+      dupPhoneDiffIds
+    };
+  };
 
-  // 3. Cross Match: Waiting List vs Issued Invitations
+  const waitRes = auditList(fWait);
+  const invRes = auditList(fInv);
+
+  // Cross Match: Waiting List vs Issued Invitations
   const crossWaitInv = [];
   const waitHasInvIds = new Set();
   const invHasWaitIds = new Set();
@@ -3743,7 +3744,7 @@ function getInvDuplicateAudit(invList = [], waitList = [], orderList = [], event
     }
   });
 
-  // 4. Cross Match: Waiting / Invitation vs Regular Orders
+  // Cross Match: Waiting / Invitation vs Regular Orders
   const crossWithOrders = [];
   const waitHasOrderIds = new Set();
   const invHasOrderIds = new Set();
@@ -3797,30 +3798,33 @@ function getInvDuplicateAudit(invList = [], waitList = [], orderList = [], event
   }
 
   return {
-    waitPhoneMap,
-    waitNameMap,
-    waitBothMap,
-    dupWaitBoth,
-    dupWaitPhone,
-    dupWaitName,
-    dupWaitBothIds,
-    dupWaitPhoneIds,
-    dupWaitNameIds,
+    waitPhoneMap: waitRes.phoneMap,
+    waitNameMap: waitRes.nameMap,
+    waitBothMap: waitRes.bothMap,
+    dupWaitPhoneAll: waitRes.dupPhoneAll,
+    dupWaitBoth: waitRes.dupBoth,
+    dupWaitPhoneDiff: waitRes.dupPhoneDiff,
+    dupWaitName: waitRes.dupName,
+    dupWaitBothIds: waitRes.dupBothIds,
+    dupWaitPhoneIds: waitRes.dupPhoneIds,
+    dupWaitNameIds: waitRes.dupNameIds,
+    dupWaitPhoneDiffIds: waitRes.dupPhoneDiffIds,
 
-    invPhoneMap,
-    invNameMap,
-    invBothMap,
-    dupInvBoth,
-    dupInvPhone,
-    dupInvName,
-    dupInvBothIds,
-    dupInvPhoneIds,
-    dupInvNameIds,
+    invPhoneMap: invRes.phoneMap,
+    invNameMap: invRes.nameMap,
+    invBothMap: invRes.bothMap,
+    dupInvPhoneAll: invRes.dupPhoneAll,
+    dupInvBoth: invRes.dupBoth,
+    dupInvPhoneDiff: invRes.dupPhoneDiff,
+    dupInvName: invRes.dupName,
+    dupInvBothIds: invRes.dupBothIds,
+    dupInvPhoneIds: invRes.dupPhoneIds,
+    dupInvNameIds: invRes.dupNameIds,
+    dupInvPhoneDiffIds: invRes.dupPhoneDiffIds,
 
     crossWaitInv,
     waitHasInvIds,
     invHasWaitIds,
-
     crossWithOrders,
     waitHasOrderIds,
     invHasOrderIds,
@@ -3856,7 +3860,7 @@ function paintInv(){
  const filteredInv=curEvId?(S.inv||[]).filter(o=>String(o.event_id||'').toLowerCase()===String(curEvId).toLowerCase()):(S.inv||[]);
  const filteredWait=curEvId?(S.waitList||[]).filter(w=>String(w.event_id||'').toLowerCase()===String(curEvId).toLowerCase()):(S.waitList||[]);
  const invAudit = getInvDuplicateAudit(S.inv || [], S.waitList || [], S.ord || [], curEvId);
- const totalInvDupes = invAudit.dupWaitBoth.length + invAudit.crossWaitInv.length + invAudit.dupInvBoth.length;
+ const totalInvDupes = invAudit.dupWaitPhoneAll.length + invAudit.crossWaitInv.length + invAudit.dupInvPhoneAll.length;
  const subNav=`<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:14px;border-bottom:1px solid var(--bd);padding-bottom:10px">
   <div style="display:flex;gap:10px">
    <button class="btn ${curTab==='issued'?'pri':'sm'}" data-act="invSubTab" data-v="issued" style="font-weight:700">📋 ${t('inv_tab_issued')} (${filteredInv.length})</button>
@@ -3888,13 +3892,16 @@ function paintInv(){
       if (invAudit.waitHasInvIds.has(w.id)) {
         pill += '<span class="pill er" style="font-size:10px;padding:1px 6px;margin-left:4px;cursor:pointer;font-weight:700" data-act="dupInvModal" data-tab="cross" title="Tamu ini SUDAH diterbitkan undangannya! Klik untuk cek">⚠️ Sudah Ada Undangan Resmi!</span>';
       } else if (invAudit.dupWaitBothIds.has(w.id)) {
-        pill += '<span class="pill er" style="font-size:10px;padding:1px 6px;margin-left:4px;cursor:pointer;font-weight:700" data-act="dupInvModal" data-tab="wait" title="Calon tamu ini dobel di Waiting List (Nama & No. HP Sama)">🚨 Dobel di Waiting List</span>';
+        pill += '<span class="pill er" style="font-size:10px;padding:1px 6px;margin-left:4px;cursor:pointer;font-weight:700" data-act="dupInvModal" data-tab="wait" data-sub="both" title="Calon tamu ini dobel di Waiting List (Nama & No. HP Sama)">🚨 Dobel Identik</span>';
+      } else if (invAudit.dupWaitPhoneDiffIds.has(w.id)) {
+        const cnt = (invAudit.waitPhoneMap.get(invAudit.normPhone(w.guest_phone)) || []).length;
+        pill += `<span class="pill wn" style="font-size:10px;padding:1px 6px;margin-left:4px;cursor:pointer;font-weight:700" data-act="dupInvModal" data-tab="wait" data-sub="diff" title="Nomor HP terdaftar ${cnt}x untuk beberapa nama berbeda">📱 HP Kontak Bersama (${cnt} Nama)</span>`;
       } else if (invAudit.dupWaitPhoneIds.has(w.id)) {
         const cnt = (invAudit.waitPhoneMap.get(invAudit.normPhone(w.guest_phone)) || []).length;
-        pill += `<span class="pill wn" style="font-size:10px;padding:1px 6px;margin-left:4px;cursor:pointer;font-weight:700" data-act="dupInvModal" data-tab="wait" title="Nomor HP terdaftar ${cnt}x di Waiting List">📱 HP Dobel (${cnt}x)</span>`;
+        pill += `<span class="pill wn" style="font-size:10px;padding:1px 6px;margin-left:4px;cursor:pointer;font-weight:700" data-act="dupInvModal" data-tab="wait" data-sub="all" title="Nomor HP terdaftar ${cnt}x di Waiting List">📱 HP Dobel (${cnt}x)</span>`;
       } else if (invAudit.dupWaitNameIds.has(w.id)) {
         const cnt = (invAudit.waitNameMap.get(invAudit.normName(w.guest_name)) || []).length;
-        pill += `<span class="pill wn" style="font-size:10px;padding:1px 6px;margin-left:4px;cursor:pointer;font-weight:700" data-act="dupInvModal" data-tab="wait" title="Nama terdaftar ${cnt}x di Waiting List">👤 Nama Dobel (${cnt}x)</span>`;
+        pill += `<span class="pill wn" style="font-size:10px;padding:1px 6px;margin-left:4px;cursor:pointer;font-weight:700" data-act="dupInvModal" data-tab="wait" data-sub="name" title="Nama terdaftar ${cnt}x di Waiting List">👤 Nama Dobel (${cnt}x)</span>`;
       }
       if (invAudit.waitHasOrderIds.has(w.id)) {
         pill += '<span class="pill ok" style="font-size:10px;padding:1px 6px;margin-left:4px;cursor:pointer;font-weight:700" data-act="dupInvModal" data-tab="orders" title="Tamu ini sudah memiliki pesanan tiket reguler">🎫 Sudah Beli Tiket Reguler</span>';
@@ -3938,18 +3945,19 @@ function paintInv(){
    </div>
   </div>
 
-  ${(invAudit.dupWaitBoth.length > 0 || invAudit.crossWaitInv.length > 0) ? `
+  ${(invAudit.dupWaitPhoneAll.length > 0 || invAudit.crossWaitInv.length > 0) ? `
     <div style="background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.3);border-radius:10px;padding:12px 14px;margin:14px 0;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px">
       <div>
         <b style="color:var(--wn);font-size:13px">⚠️ Peringatan Duplikasi di Daftar Tunggu:</b>
         <div style="font-size:12px;color:var(--mu);margin-top:2px">
-          ${invAudit.dupWaitBoth.length ? `Terdeteksi <b>${invAudit.dupWaitBoth.length} grup nama & HP kembar</b> di Waiting List. ` : ''}
+          ${invAudit.dupWaitBoth.length ? `Terdeteksi <b>${invAudit.dupWaitBoth.length} grup nama & HP identik</b>. ` : ''}
+          ${invAudit.dupWaitPhoneDiff.length ? `Ada <b>${invAudit.dupWaitPhoneDiff.length} nomor HP</b> didaftarkan untuk beberapa nama berbeda. ` : ''}
           ${invAudit.crossWaitInv.length ? `Ada <b>${invAudit.crossWaitInv.length} orang</b> yang sebetulnya SUDAH punya undangan resmi terbit.` : ''}
         </div>
       </div>
       <div style="display:flex;gap:6px;flex-wrap:wrap">
         <button class="btn sm" data-act="dupInvModal">🔍 Periksa Detail</button>
-        ${invAudit.dupWaitBoth.length ? `<button class="btn sm dg" data-act="cleanWaitDupes">🧹 Hapus Semua Duplikat</button>` : ''}
+        ${invAudit.dupWaitBoth.length ? `<button class="btn sm dg" data-act="cleanWaitDupes">🧹 Hapus Duplikat Identik (${invAudit.dupWaitBoth.reduce((acc, [_, l]) => acc + (l.length - 1), 0)})</button>` : ''}
         ${invAudit.crossWaitInv.length ? `<button class="btn sm dg" data-act="cleanWaitHasInv">🧹 Bersihkan yang Sudah Ber-Undangan</button>` : ''}
       </div>
     </div>
@@ -3972,10 +3980,13 @@ function paintInv(){
         pill += '<span class="pill wn" style="font-size:10px;padding:1px 6px;margin-left:4px;cursor:pointer;font-weight:700" data-act="dupInvModal" data-tab="cross" title="Tamu ini juga masih ada di Waiting List">⏳ Masih di Waiting List</span>';
       }
       if (invAudit.dupInvBothIds.has(o.id)) {
-        pill += '<span class="pill er" style="font-size:10px;padding:1px 6px;margin-left:4px;cursor:pointer;font-weight:700" data-act="dupInvModal" data-tab="inv" title="Undangan ini terbit ganda (Nama & No. HP Sama)">🚨 Undangan Terbit Dobel!</span>';
+        pill += '<span class="pill er" style="font-size:10px;padding:1px 6px;margin-left:4px;cursor:pointer;font-weight:700" data-act="dupInvModal" data-tab="inv" data-sub="both" title="Undangan ini terbit ganda (Nama & No. HP Sama)">🚨 Undangan Terbit Dobel Identik!</span>';
+      } else if (invAudit.dupInvPhoneDiffIds.has(o.id)) {
+        const cnt = (invAudit.invPhoneMap.get(invAudit.normPhone(o.guest_phone || o.whatsapp)) || []).length;
+        pill += `<span class="pill wn" style="font-size:10px;padding:1px 6px;margin-left:4px;cursor:pointer;font-weight:700" data-act="dupInvModal" data-tab="inv" data-sub="diff" title="No. HP terdaftar pada ${cnt} undangan untuk beberapa nama berbeda">📱 HP Kontak Bersama (${cnt} Nama)</span>`;
       } else if (invAudit.dupInvPhoneIds.has(o.id)) {
         const cnt = (invAudit.invPhoneMap.get(invAudit.normPhone(o.guest_phone || o.whatsapp)) || []).length;
-        pill += `<span class="pill wn" style="font-size:10px;padding:1px 6px;margin-left:4px;cursor:pointer;font-weight:700" data-act="dupInvModal" data-tab="inv" title="No. HP terdaftar pada ${cnt} undangan">📱 HP Terbit Dobel (${cnt}x)</span>`;
+        pill += `<span class="pill wn" style="font-size:10px;padding:1px 6px;margin-left:4px;cursor:pointer;font-weight:700" data-act="dupInvModal" data-tab="inv" data-sub="all" title="No. HP terdaftar pada ${cnt} undangan">📱 HP Terbit Dobel (${cnt}x)</span>`;
       }
       if (invAudit.invHasOrderIds.has(o.id)) {
         pill += '<span class="pill ok" style="font-size:10px;padding:1px 6px;margin-left:4px;cursor:pointer;font-weight:700" data-act="dupInvModal" data-tab="orders" title="Tamu ini juga punya tiket reguler">🎫 Punya Tiket Reguler</span>';
@@ -7333,46 +7344,116 @@ ${guestbookSamples ? `\n### SAMPEL BUKU TAMU / UCAPAN PESERTA:\n${guestbookSampl
     const audit = getInvDuplicateAudit(S.inv || [], S.waitList || [], S.ord || [], curEvId);
 
     let initialTab = (el && el.dataset && el.dataset.tab) || 'wait';
-    if (initialTab === 'wait' && !audit.dupWaitBoth.length) {
+    if (initialTab === 'wait' && !audit.dupWaitPhoneAll.length) {
       if (audit.crossWaitInv.length) initialTab = 'cross';
-      else if (audit.dupInvBoth.length) initialTab = 'inv';
+      else if (audit.dupInvPhoneAll.length) initialTab = 'inv';
       else if (audit.crossWithOrders.length) initialTab = 'orders';
     }
     let activeTab = initialTab;
+    let waitSubTab = (el && el.dataset && el.dataset.sub) || 'all';
+    let invSubTab = (el && el.dataset && el.dataset.sub) || 'all';
 
     const renderModal = () => {
       let contentHtml = '';
-      let badgeWait = audit.dupWaitBoth.length ? `<span class="pill er" style="font-size:10px;padding:1px 5px">${audit.dupWaitBoth.length}</span>` : '';
+      let badgeWait = audit.dupWaitPhoneAll.length ? `<span class="pill er" style="font-size:10px;padding:1px 5px">${audit.dupWaitPhoneAll.length}</span>` : '';
       let badgeCross = audit.crossWaitInv.length ? `<span class="pill er" style="font-size:10px;padding:1px 5px">${audit.crossWaitInv.length}</span>` : '';
-      let badgeInv = audit.dupInvBoth.length ? `<span class="pill wn" style="font-size:10px;padding:1px 5px">${audit.dupInvBoth.length}</span>` : '';
+      let badgeInv = audit.dupInvPhoneAll.length ? `<span class="pill wn" style="font-size:10px;padding:1px 5px">${audit.dupInvPhoneAll.length}</span>` : '';
       let badgeOrders = audit.crossWithOrders.length ? `<span class="pill ok" style="font-size:10px;padding:1px 5px">${audit.crossWithOrders.length}</span>` : '';
 
       if (activeTab === 'wait') {
-        if (!audit.dupWaitBoth.length) {
-          contentHtml = `
+        let waitListToShow = [];
+        if (waitSubTab === 'both') waitListToShow = audit.dupWaitBoth;
+        else if (waitSubTab === 'diff') waitListToShow = audit.dupWaitPhoneDiff;
+        else if (waitSubTab === 'name') waitListToShow = audit.dupWaitName;
+        else waitListToShow = audit.dupWaitPhoneAll;
+
+        const toDeleteCount = audit.dupWaitBoth.reduce((acc, [_, l]) => acc + (l.length - 1), 0);
+
+        const subFiltersBar = `
+          <div style="display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap">
+            <button type="button" class="btn sm ${waitSubTab==='all'?'pri':''}" id="sub_wait_all" style="font-weight:700;font-size:11px">
+              Semua HP Dobel (${audit.dupWaitPhoneAll.length})
+            </button>
+            <button type="button" class="btn sm ${waitSubTab==='both'?'pri':''}" id="sub_wait_both" style="font-weight:700;font-size:11px">
+              🚨 Nama & HP Sama (${audit.dupWaitBoth.length})
+            </button>
+            <button type="button" class="btn sm ${waitSubTab==='diff'?'pri':''}" id="sub_wait_diff" style="font-weight:700;font-size:11px">
+              📱 HP Sama, Beda Nama (${audit.dupWaitPhoneDiff.length})
+            </button>
+            ${audit.dupWaitName.length ? `
+              <button type="button" class="btn sm ${waitSubTab==='name'?'pri':''}" id="sub_wait_name" style="font-weight:700;font-size:11px">
+                👤 Nama Sama (${audit.dupWaitName.length})
+              </button>
+            ` : ''}
+          </div>
+        `;
+
+        if (!waitListToShow.length) {
+          contentHtml = subFiltersBar + `
             <div style="text-align:center;padding:36px 16px;background:var(--in);border-radius:12px;border:1px dashed var(--bd);margin:14px 0">
               <div style="font-size:36px;margin-bottom:8px">🎉</div>
-              <h3 style="margin:0 0 6px;font-size:16px;color:var(--ok)">Daftar Tunggu Bersih dari Duplikat!</h3>
-              <p class="muted" style="margin:0;font-size:13px">Tidak ada calon tamu yang terdaftar berulang dengan nama & nomor telepon yang sama di antrean.</p>
+              <h3 style="margin:0 0 6px;font-size:16px;color:var(--ok)">Tidak Ditemukan Duplikasi pada Kategori Ini!</h3>
+              <p class="muted" style="margin:0;font-size:13px">Semua data pada filter ini unik dan tidak terdeteksi ganda.</p>
             </div>
           `;
         } else {
-          const toDeleteCount = audit.dupWaitBoth.reduce((acc, [_, l]) => acc + (l.length - 1), 0);
-          contentHtml = `
+          let noticeMsg = '';
+          if (waitSubTab === 'diff') {
+            noticeMsg = `
+              <div style="background:rgba(59,130,246,.08);border:1px solid rgba(59,130,246,.25);border-radius:8px;padding:8px 12px;font-size:12px;color:var(--mu);margin-bottom:12px">
+                💡 <b>Informasi:</b> Calon tamu di bawah ini memiliki <b>nomor HP yang sama</b> tetapi <b>nama pendaftar berbeda</b> (misalnya 1 perwakilan mendaftarkan anggota keluarga atau rekannya). Anda dapat menghubungi via WA atau menghapus salah satu jika ada kekeliruan.
+              </div>
+            `;
+          }
+
+          contentHtml = subFiltersBar + noticeMsg + `
             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:8px">
-              <div style="font-size:13px">Ditemukan <b>${audit.dupWaitBoth.length} grup nama & HP kembar</b> (${toDeleteCount} entri duplikat berlebih).</div>
-              <button type="button" class="btn sm dg" data-act="cleanWaitDupes" style="font-weight:700">🧹 Hapus Semua Duplikat (${toDeleteCount})</button>
+              <div style="font-size:13px">
+                ${waitSubTab === 'both' ? `Ditemukan <b>${audit.dupWaitBoth.length} grup nama & HP identik</b> (${toDeleteCount} entri duplikat berlebih).` :
+                  waitSubTab === 'diff' ? `Ditemukan <b>${audit.dupWaitPhoneDiff.length} nomor HP</b> yang digunakan oleh beberapa calon tamu berbeda.` :
+                  waitSubTab === 'name' ? `Ditemukan <b>${audit.dupWaitName.length} grup nama sama</b> dengan nomor HP berbeda.` :
+                  `Ditemukan <b>${audit.dupWaitPhoneAll.length} nomor HP dobel</b> (${audit.dupWaitBoth.length} identik, ${audit.dupWaitPhoneDiff.length} beda nama).`
+                }
+              </div>
+              ${audit.dupWaitBoth.length ? `
+                <button type="button" class="btn sm dg" data-act="cleanWaitDupes" style="font-weight:700" title="Hanya membersihkan pendaftaran yang Nama & HP-nya identik, tidak menghapus pendaftar beda nama">
+                  🧹 Hapus Duplikat Identik (${toDeleteCount})
+                </button>
+              ` : ''}
             </div>
-          ` + audit.dupWaitBoth.map(([key, list]) => {
+          ` + waitListToShow.map(([key, list]) => {
             const first = list[0];
+            const distinctNames = Array.from(new Set(list.map(w => audit.normName(w.guest_name)).filter(Boolean)));
+            const isIdentical = distinctNames.length <= 1;
+
+            let groupHeader = '';
+            let groupBadge = '';
+            if (waitSubTab === 'name') {
+              groupHeader = `👤 ${esc(first.guest_name)}`;
+              groupBadge = `<span class="pill wn" style="font-size:10px;font-weight:700">${list.length} Nomor HP Berbeda</span>`;
+            } else if (isIdentical) {
+              groupHeader = `🚨 ${esc(first.guest_name)} &middot; +${esc(first.guest_phone || key)}`;
+              groupBadge = `<span class="pill er" style="font-size:10px;font-weight:700">Nama & HP Identik (${list.length} Pendaftaran)</span>`;
+            } else {
+              groupHeader = `📱 +${esc(first.guest_phone || key)} &middot; Kontak Bersama`;
+              groupBadge = `<span class="pill wn" style="font-size:10px;font-weight:700">${distinctNames.length} Nama Berbeda (${list.length} Pendaftaran)</span>`;
+            }
+
             const itemsHtml = list.map((w, idx) => {
               const dateStr = new Date(w.created_at).toLocaleString('id-ID', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+              let tagPill = '';
+              if (isIdentical) {
+                tagPill = idx === 0 ? '<span class="pill ok" style="font-size:10px">✓ Entri Asli (Tertua)</span>' : '<span class="pill er" style="font-size:10px">⚠️ Duplikat Berlebih</span>';
+              } else {
+                tagPill = `<span class="pill in" style="font-size:10px">👤 Calon Tamu #${idx + 1}</span>`;
+              }
+
               return `
                 <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 12px;background:var(--card);border-radius:8px;border:1px solid var(--bd);margin-bottom:6px;flex-wrap:wrap;gap:8px">
                   <div>
                     <div style="display:flex;align-items:center;gap:6px">
                       <b>${esc(w.guest_name)}</b>
-                      ${idx === 0 ? '<span class="pill ok" style="font-size:10px">✓ Entri Asli (Tertua)</span>' : '<span class="pill er" style="font-size:10px">⚠️ Duplikat Berlebih</span>'}
+                      ${tagPill}
                       <span class="pill" style="font-size:10px">${w.qty} Tiket</span>
                     </div>
                     <div style="font-size:12px;color:var(--mu);margin-top:2px">
@@ -7390,8 +7471,8 @@ ${guestbookSamples ? `\n### SAMPEL BUKU TAMU / UCAPAN PESERTA:\n${guestbookSampl
             return `
               <div style="background:var(--in);border:1px solid var(--bd);border-radius:12px;padding:12px;margin-bottom:12px">
                 <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
-                  <span style="font-size:13px;font-weight:700">🚨 ${esc(first.guest_name)} &middot; +${esc(first.guest_phone)}</span>
-                  <span class="pill er" style="font-size:10px;font-weight:700">${list.length} Pendaftaran</span>
+                  <span style="font-size:13px;font-weight:700">${groupHeader}</span>
+                  ${groupBadge}
                 </div>
                 <div>${itemsHtml}</div>
               </div>
@@ -7446,19 +7527,66 @@ ${guestbookSamples ? `\n### SAMPEL BUKU TAMU / UCAPAN PESERTA:\n${guestbookSampl
           }).join('');
         }
       } else if (activeTab === 'inv') {
-        if (!audit.dupInvBoth.length) {
-          contentHtml = `
+        let invListToShow = [];
+        if (invSubTab === 'both') invListToShow = audit.dupInvBoth;
+        else if (invSubTab === 'diff') invListToShow = audit.dupInvPhoneDiff;
+        else if (invSubTab === 'name') invListToShow = audit.dupInvName;
+        else invListToShow = audit.dupInvPhoneAll;
+
+        const subFiltersBarInv = `
+          <div style="display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap">
+            <button type="button" class="btn sm ${invSubTab==='all'?'pri':''}" id="sub_inv_all" style="font-weight:700;font-size:11px">
+              Semua HP Dobel (${audit.dupInvPhoneAll.length})
+            </button>
+            <button type="button" class="btn sm ${invSubTab==='both'?'pri':''}" id="sub_inv_both" style="font-weight:700;font-size:11px">
+              🚨 Nama & HP Sama (${audit.dupInvBoth.length})
+            </button>
+            <button type="button" class="btn sm ${invSubTab==='diff'?'pri':''}" id="sub_inv_diff" style="font-weight:700;font-size:11px">
+              📱 HP Sama, Beda Nama (${audit.dupInvPhoneDiff.length})
+            </button>
+            ${audit.dupInvName.length ? `
+              <button type="button" class="btn sm ${invSubTab==='name'?'pri':''}" id="sub_inv_name" style="font-weight:700;font-size:11px">
+                👤 Nama Sama (${audit.dupInvName.length})
+              </button>
+            ` : ''}
+          </div>
+        `;
+
+        if (!invListToShow.length) {
+          contentHtml = subFiltersBarInv + `
             <div style="text-align:center;padding:36px 16px;background:var(--in);border-radius:12px;border:1px dashed var(--bd);margin:14px 0">
               <div style="font-size:36px;margin-bottom:8px">🎉</div>
-              <h3 style="margin:0 0 6px;font-size:16px;color:var(--ok)">Undangan Terbit Tidak Ada yang Dobel!</h3>
-              <p class="muted" style="margin:0;font-size:13px">Semua undangan resmi yang telah diterbitkan memiliki nama & nomor telepon unik.</p>
+              <h3 style="margin:0 0 6px;font-size:16px;color:var(--ok)">Undangan Terbit Bersih dari Duplikat!</h3>
+              <p class="muted" style="margin:0;font-size:13px">Semua undangan resmi yang telah diterbitkan memiliki nomor telepon dan nama yang unik.</p>
             </div>
           `;
         } else {
-          contentHtml = `
-            <div style="font-size:13px;margin-bottom:12px">Ditemukan <b>${audit.dupInvBoth.length} grup undangan terbit ganda</b>:</div>
-          ` + audit.dupInvBoth.map(([key, list]) => {
+          contentHtml = subFiltersBarInv + `
+            <div style="font-size:13px;margin-bottom:12px">
+              ${invSubTab === 'both' ? `Ditemukan <b>${audit.dupInvBoth.length} grup undangan terbit ganda</b> dengan nama & HP identik:` :
+                invSubTab === 'diff' ? `Ditemukan <b>${audit.dupInvPhoneDiff.length} nomor HP</b> yang diterbitkan untuk beberapa nama tamu undangan berbeda:` :
+                invSubTab === 'name' ? `Ditemukan <b>${audit.dupInvName.length} grup nama undangan sama</b> dengan nomor HP berbeda:` :
+                `Ditemukan <b>${audit.dupInvPhoneAll.length} nomor HP terdaftar ganda</b> pada undangan terbit:`
+              }
+            </div>
+          ` + invListToShow.map(([key, list]) => {
             const first = list[0];
+            const distinctNames = Array.from(new Set(list.map(i => audit.normName(i.guest_name || i.name)).filter(Boolean)));
+            const isIdentical = distinctNames.length <= 1;
+
+            let groupHeader = '';
+            let groupBadge = '';
+            if (invSubTab === 'name') {
+              groupHeader = `👤 ${esc(first.guest_name || first.name)}`;
+              groupBadge = `<span class="pill wn" style="font-size:10px;font-weight:700">${list.length} Undangan Terbit</span>`;
+            } else if (isIdentical) {
+              groupHeader = `📋 ${esc(first.guest_name || first.name)} &middot; +${esc(first.guest_phone || first.whatsapp || key)}`;
+              groupBadge = `<span class="pill er" style="font-size:10px;font-weight:700">Nama & HP Identik (${list.length} Undangan)</span>`;
+            } else {
+              groupHeader = `📱 +${esc(first.guest_phone || first.whatsapp || key)} &middot; Kontak Bersama`;
+              groupBadge = `<span class="pill wn" style="font-size:10px;font-weight:700">${distinctNames.length} Tamu Berbeda (${list.length} Undangan)</span>`;
+            }
+
             const itemsHtml = list.map(inv => {
               const dateStr = new Date(inv.created_at).toLocaleString('id-ID', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
               return `
@@ -7470,7 +7598,7 @@ ${guestbookSamples ? `\n### SAMPEL BUKU TAMU / UCAPAN PESERTA:\n${guestbookSampl
                       <span class="pill" style="font-size:10px">${inv.qty} Tiket</span>
                     </div>
                     <div style="font-size:12px;color:var(--mu);margin-top:2px">
-                      <b>${esc(inv.guest_name)}</b> &middot; +${esc(inv.guest_phone || '-')} &middot; ${esc(inv.guest_org || 'Instansi -')} &middot; Terbit: ${dateStr}
+                      <b>${esc(inv.guest_name || inv.name)}</b> &middot; +${esc(inv.guest_phone || inv.whatsapp || '-')} &middot; ${esc(inv.guest_org || 'Instansi -')} &middot; Terbit: ${dateStr}
                     </div>
                   </div>
                   <div class="acts" style="margin:0;gap:4px">
@@ -7485,8 +7613,8 @@ ${guestbookSamples ? `\n### SAMPEL BUKU TAMU / UCAPAN PESERTA:\n${guestbookSampl
             return `
               <div style="background:var(--in);border:1px solid var(--bd);border-radius:12px;padding:12px;margin-bottom:12px">
                 <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
-                  <span style="font-size:13px;font-weight:700">📋 ${esc(first.guest_name)} &middot; +${esc(first.guest_phone)}</span>
-                  <span class="pill er" style="font-size:10px;font-weight:700">${list.length} Undangan Terbit</span>
+                  <span style="font-size:13px;font-weight:700">${groupHeader}</span>
+                  ${groupBadge}
                 </div>
                 <div>${itemsHtml}</div>
               </div>
@@ -7547,23 +7675,27 @@ ${guestbookSamples ? `\n### SAMPEL BUKU TAMU / UCAPAN PESERTA:\n${guestbookSampl
           </div>
         </div>
 
-        <!-- Metric Cards -->
+        <!-- Metric Cards (Clickable) -->
         <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px;margin-bottom:14px">
-          <div style="background:${audit.dupWaitBoth.length ? 'rgba(239,68,68,.1)' : 'var(--in)'};border:1px solid ${audit.dupWaitBoth.length ? 'rgba(239,68,68,.3)' : 'var(--bd)'};padding:10px;border-radius:10px;text-align:center">
+          <div id="card_metric_wait" style="background:${audit.dupWaitPhoneAll.length ? 'rgba(239,68,68,.1)' : 'var(--in)'};border:1px solid ${audit.dupWaitPhoneAll.length ? 'rgba(239,68,68,.3)' : 'var(--bd)'};padding:10px;border-radius:10px;text-align:center;cursor:pointer" title="Klik untuk lihat rincian Waiting List">
             <small class="muted" style="font-size:11px">⏳ Waiting List Dobel</small>
-            <div style="font-size:18px;font-weight:800;color:${audit.dupWaitBoth.length ? 'var(--er)' : 'var(--ok)'}">${audit.dupWaitBoth.length} Grup</div>
+            <div style="font-size:18px;font-weight:800;color:${audit.dupWaitPhoneAll.length ? 'var(--er)' : 'var(--ok)'}">${audit.dupWaitPhoneAll.length} Grup</div>
+            <div style="font-size:10px;color:var(--mu);margin-top:2px">${audit.dupWaitBoth.length} Identik &middot; ${audit.dupWaitPhoneDiff.length} Beda Nama</div>
           </div>
-          <div style="background:${audit.crossWaitInv.length ? 'rgba(239,68,68,.1)' : 'var(--in)'};border:1px solid ${audit.crossWaitInv.length ? 'rgba(239,68,68,.3)' : 'var(--bd)'};padding:10px;border-radius:10px;text-align:center">
+          <div id="card_metric_cross" style="background:${audit.crossWaitInv.length ? 'rgba(239,68,68,.1)' : 'var(--in)'};border:1px solid ${audit.crossWaitInv.length ? 'rgba(239,68,68,.3)' : 'var(--bd)'};padding:10px;border-radius:10px;text-align:center;cursor:pointer" title="Klik untuk lihat calon tamu yang sudah ber-undangan">
             <small class="muted" style="font-size:11px">⚠️ Sudah Ber-Undangan</small>
             <div style="font-size:18px;font-weight:800;color:${audit.crossWaitInv.length ? 'var(--er)' : 'var(--ok)'}">${audit.crossWaitInv.length} Orang</div>
+            <div style="font-size:10px;color:var(--mu);margin-top:2px">Masih di Waiting List</div>
           </div>
-          <div style="background:${audit.dupInvBoth.length ? 'rgba(245,158,11,.1)' : 'var(--in)'};border:1px solid ${audit.dupInvBoth.length ? 'rgba(245,158,11,.3)' : 'var(--bd)'};padding:10px;border-radius:10px;text-align:center">
+          <div id="card_metric_inv" style="background:${audit.dupInvPhoneAll.length ? 'rgba(245,158,11,.1)' : 'var(--in)'};border:1px solid ${audit.dupInvPhoneAll.length ? 'rgba(245,158,11,.3)' : 'var(--bd)'};padding:10px;border-radius:10px;text-align:center;cursor:pointer" title="Klik untuk lihat rincian Undangan Dobel">
             <small class="muted" style="font-size:11px">📋 Undangan Dobel</small>
-            <div style="font-size:18px;font-weight:800;color:${audit.dupInvBoth.length ? 'var(--wn)' : 'var(--ok)'}">${audit.dupInvBoth.length} Grup</div>
+            <div style="font-size:18px;font-weight:800;color:${audit.dupInvPhoneAll.length ? 'var(--wn)' : 'var(--ok)'}">${audit.dupInvPhoneAll.length} Grup</div>
+            <div style="font-size:10px;color:var(--mu);margin-top:2px">${audit.dupInvBoth.length} Identik &middot; ${audit.dupInvPhoneDiff.length} Beda Nama</div>
           </div>
-          <div style="background:${audit.crossWithOrders.length ? 'rgba(16,185,129,.1)' : 'var(--in)'};border:1px solid ${audit.crossWithOrders.length ? 'rgba(16,185,129,.3)' : 'var(--bd)'};padding:10px;border-radius:10px;text-align:center">
+          <div id="card_metric_orders" style="background:${audit.crossWithOrders.length ? 'rgba(16,185,129,.1)' : 'var(--in)'};border:1px solid ${audit.crossWithOrders.length ? 'rgba(16,185,129,.3)' : 'var(--bd)'};padding:10px;border-radius:10px;text-align:center;cursor:pointer" title="Klik untuk lihat tamu yang punya tiket reguler">
             <small class="muted" style="font-size:11px">🎫 Punya Tiket Reguler</small>
             <div style="font-size:18px;font-weight:800;color:${audit.crossWithOrders.length ? 'var(--ok)' : 'var(--mu)'}">${audit.crossWithOrders.length} Orang</div>
+            <div style="font-size:10px;color:var(--mu);margin-top:2px">Waiting / VIP Beli Reguler</div>
           </div>
         </div>
 
@@ -7605,10 +7737,40 @@ ${guestbookSamples ? `\n### SAMPEL BUKU TAMU / UCAPAN PESERTA:\n${guestbookSampl
       const bOrders = $('#tab_inv_dup_orders');
       const bExp = $('#btn_export_inv_dup');
 
+      const cardWait = $('#card_metric_wait');
+      const cardCross = $('#card_metric_cross');
+      const cardInv = $('#card_metric_inv');
+      const cardOrders = $('#card_metric_orders');
+
       if (bWait) bWait.onclick = () => { activeTab = 'wait'; modal(renderModal()); bindTabs(); };
       if (bCross) bCross.onclick = () => { activeTab = 'cross'; modal(renderModal()); bindTabs(); };
       if (bInv) bInv.onclick = () => { activeTab = 'inv'; modal(renderModal()); bindTabs(); };
       if (bOrders) bOrders.onclick = () => { activeTab = 'orders'; modal(renderModal()); bindTabs(); };
+
+      if (cardWait) cardWait.onclick = () => { activeTab = 'wait'; modal(renderModal()); bindTabs(); };
+      if (cardCross) cardCross.onclick = () => { activeTab = 'cross'; modal(renderModal()); bindTabs(); };
+      if (cardInv) cardInv.onclick = () => { activeTab = 'inv'; modal(renderModal()); bindTabs(); };
+      if (cardOrders) cardOrders.onclick = () => { activeTab = 'orders'; modal(renderModal()); bindTabs(); };
+
+      // Sub-filters for Waiting
+      const swAll = $('#sub_wait_all');
+      const swBoth = $('#sub_wait_both');
+      const swDiff = $('#sub_wait_diff');
+      const swName = $('#sub_wait_name');
+      if (swAll) swAll.onclick = () => { waitSubTab = 'all'; modal(renderModal()); bindTabs(); };
+      if (swBoth) swBoth.onclick = () => { waitSubTab = 'both'; modal(renderModal()); bindTabs(); };
+      if (swDiff) swDiff.onclick = () => { waitSubTab = 'diff'; modal(renderModal()); bindTabs(); };
+      if (swName) swName.onclick = () => { waitSubTab = 'name'; modal(renderModal()); bindTabs(); };
+
+      // Sub-filters for Invitations
+      const siAll = $('#sub_inv_all');
+      const siBoth = $('#sub_inv_both');
+      const siDiff = $('#sub_inv_diff');
+      const siName = $('#sub_inv_name');
+      if (siAll) siAll.onclick = () => { invSubTab = 'all'; modal(renderModal()); bindTabs(); };
+      if (siBoth) siBoth.onclick = () => { invSubTab = 'both'; modal(renderModal()); bindTabs(); };
+      if (siDiff) siDiff.onclick = () => { invSubTab = 'diff'; modal(renderModal()); bindTabs(); };
+      if (siName) siName.onclick = () => { invSubTab = 'name'; modal(renderModal()); bindTabs(); };
 
       if (bExp) {
         bExp.onclick = () => A.exportInvDuplicatesCsv(audit, evTitle);
@@ -7623,7 +7785,7 @@ ${guestbookSamples ? `\n### SAMPEL BUKU TAMU / UCAPAN PESERTA:\n${guestbookSampl
     const audit = getInvDuplicateAudit(S.inv || [], S.waitList || [], S.ord || [], curEvId);
     const dupEntries = audit.dupWaitBoth;
     if (!dupEntries.length) {
-      return toast('Tidak ada entri duplikat (Nama & No. HP sama) di Daftar Tunggu.', 0);
+      return toast('Tidak ada entri duplikat identik (Nama & No. HP sama) di Daftar Tunggu.', 0);
     }
 
     const toDelete = [];
@@ -7633,10 +7795,10 @@ ${guestbookSamples ? `\n### SAMPEL BUKU TAMU / UCAPAN PESERTA:\n${guestbookSampl
 
     if (!toDelete.length) return toast('Tidak ada duplikat berlebih untuk dihapus.', 0);
 
-    const confirmMsg = `Ditemukan ${toDelete.length} entri duplikat di Daftar Tunggu dari ${dupEntries.length} grup nama & nomor HP yang sama.\n\nSistem akan mempertahankan 1 pendaftaran tertua dan menghapus ${toDelete.length} entri sisanya. Lanjutkan pembersihan?`;
+    const confirmMsg = `Ditemukan ${toDelete.length} entri duplikat identik di Daftar Tunggu dari ${dupEntries.length} grup nama & nomor HP yang sama.\n\nSistem akan mempertahankan 1 pendaftaran tertua dan menghapus ${toDelete.length} entri sisanya.\n(Data dengan nama berbeda TIDAK akan dihapus).\n\nLanjutkan pembersihan?`;
     if (!await ask(confirmMsg)) return;
 
-    bz(1, 'Membersihkan duplikat daftar tunggu...');
+    bz(1, 'Membersihkan duplikat identik daftar tunggu...');
     try {
       let successCount = 0;
       for (const item of toDelete) {
@@ -7647,10 +7809,10 @@ ${guestbookSamples ? `\n### SAMPEL BUKU TAMU / UCAPAN PESERTA:\n${guestbookSampl
           console.warn('Gagal menghapus item waiting:', item.id, err);
         }
       }
-      toast(`Berhasil menghapus ${successCount} entri duplikat di Daftar Tunggu! 🧹`, 0);
+      toast(`Berhasil menghapus ${successCount} entri duplikat identik di Daftar Tunggu! 🧹`, 0);
       S.waitList = await api('waitingList');
       paintInv();
-      A.dupInvModal({ dataset: { tab: 'wait' } });
+      A.dupInvModal({ dataset: { tab: 'wait', sub: 'both' } });
     } catch (e) {
       fail(e);
     } finally {
@@ -7697,10 +7859,11 @@ ${guestbookSamples ? `\n### SAMPEL BUKU TAMU / UCAPAN PESERTA:\n${guestbookSampl
     const rows = [];
     rows.push(['Kategori Masalah', 'Nama Tamu / PIC', 'Nomor Telepon', 'Instansi / Gereja', 'Jumlah Tiket', 'Status Terdata', 'Catatan Tambahan', 'Acara']);
 
+    // 1. Identical Waiting
     audit.dupWaitBoth.forEach(([k, list]) => {
       list.forEach((w, idx) => {
         rows.push([
-          'Duplikat di Waiting List (Nama & HP Sama)',
+          'Waiting List (Nama & HP Identik)',
           w.guest_name,
           w.guest_phone || '-',
           w.guest_org || '-',
@@ -7712,6 +7875,39 @@ ${guestbookSamples ? `\n### SAMPEL BUKU TAMU / UCAPAN PESERTA:\n${guestbookSampl
       });
     });
 
+    // 2. Different names same phone in Waiting
+    audit.dupWaitPhoneDiff.forEach(([ph, list]) => {
+      list.forEach((w, idx) => {
+        rows.push([
+          'Waiting List (No. HP Sama, Nama Berbeda / Kontak Bersama)',
+          w.guest_name,
+          w.guest_phone || ph || '-',
+          w.guest_org || '-',
+          w.qty,
+          `Pendaftar #${idx + 1} pada No. HP ini`,
+          `Terdaftar: ${new Date(w.created_at).toLocaleString('id-ID')}`,
+          w.event_name || evTitle
+        ]);
+      });
+    });
+
+    // 3. Same name different phone in Waiting
+    audit.dupWaitName.forEach(([nm, list]) => {
+      list.forEach((w, idx) => {
+        rows.push([
+          'Waiting List (Nama Sama, No. HP Berbeda)',
+          w.guest_name,
+          w.guest_phone || '-',
+          w.guest_org || '-',
+          w.qty,
+          `Entri #${idx + 1}`,
+          `Terdaftar: ${new Date(w.created_at).toLocaleString('id-ID')}`,
+          w.event_name || evTitle
+        ]);
+      });
+    });
+
+    // 4. Cross Wait vs Inv
     audit.crossWaitInv.forEach(c => {
       const w = c.waitItem;
       const inv = c.invItem;
@@ -7727,12 +7923,13 @@ ${guestbookSamples ? `\n### SAMPEL BUKU TAMU / UCAPAN PESERTA:\n${guestbookSampl
       ]);
     });
 
+    // 5. Identical Inv
     audit.dupInvBoth.forEach(([k, list]) => {
       list.forEach(inv => {
         rows.push([
-          'Undangan Resmi Terbit Ganda (Nama & HP Sama)',
-          inv.guest_name,
-          inv.guest_phone || '-',
+          'Undangan Resmi (Nama & HP Identik)',
+          inv.guest_name || inv.name,
+          inv.guest_phone || inv.whatsapp || '-',
           inv.guest_org || '-',
           inv.qty,
           `Kode: ${inv.ticket_code} (${inv.status})`,
@@ -7742,6 +7939,23 @@ ${guestbookSamples ? `\n### SAMPEL BUKU TAMU / UCAPAN PESERTA:\n${guestbookSampl
       });
     });
 
+    // 6. Different names same phone in Inv
+    audit.dupInvPhoneDiff.forEach(([ph, list]) => {
+      list.forEach((inv, idx) => {
+        rows.push([
+          'Undangan Resmi (No. HP Sama, Nama Berbeda / Kontak Bersama)',
+          inv.guest_name || inv.name,
+          inv.guest_phone || inv.whatsapp || ph || '-',
+          inv.guest_org || '-',
+          inv.qty,
+          `Undangan #${idx + 1}: ${inv.ticket_code} (${inv.status})`,
+          `Terbit: ${new Date(inv.created_at).toLocaleString('id-ID')}`,
+          inv.event_name || evTitle
+        ]);
+      });
+    });
+
+    // 7. Cross with orders
     audit.crossWithOrders.forEach(c => {
       const item = c.item;
       const ord = c.orderItem;
@@ -7772,7 +7986,6 @@ ${guestbookSamples ? `\n### SAMPEL BUKU TAMU / UCAPAN PESERTA:\n${guestbookSampl
     a.remove();
     toast('Laporan audit duplikasi undangan & waiting list berhasil diunduh (CSV)! 📥', 0);
   },
-
   async dupCheckModal(initialTab = 'both') {
     let orders = S.ord;
     if (!orders || !orders.length) {
