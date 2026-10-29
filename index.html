@@ -5805,9 +5805,66 @@ const NL=String.fromCharCode(10),find=(a,id)=>a.find(x=>x.id===id),A={
    passModal(o,r.status==='confirmed'?t('ok')+' '+(r.emailed?t('emailed'):'')+(wa?' '+t('wa_auto'):''):t('okp'));
    if(wa)waGo(await waHref(o),w);else if(w)try{w.close()}catch(x){}}
   catch(e){if(w)try{w.close()}catch(x){}fail(e);userTab()}},
- async pass(el){try{let o=S.tix&&find(S.tix,el.dataset.id);if(!o){S.tix=await api('myTickets');o=find(S.tix,el.dataset.id)}if(o)passModal(o)}catch(e){fail(e)}},print(el){const o=S.tix&&find(S.tix,el.dataset.id);if(!o)return;
-  try{const w=window.open('','_blank');if(!w)return toast(t('popup_blocked'),1);w.document.open();w.document.write(printHtml(o));w.document.close();setTimeout(()=>{try{w.focus();w.print()}catch(e){}},500)}catch(e){toast(t('popup_blocked'),1)}},
- async wa(el){const o=find(S.tix,el.dataset.id);if(!o)return;const w=openWait();waGo(await waHref(o),w)},
+ async pass(el){
+  try{
+    const id = el.dataset.id;
+    let o = (S.ord && S.ord.find(x => String(x.id) === String(id)))
+         || (S.tix && S.tix.find(x => String(x.id) === String(id)))
+         || (S.inv && S.inv.find(x => String(x.id) === String(id)));
+    if(!o){
+      try{
+        const r = await api('orderDetail', { id });
+        if(r && r.id) o = r;
+      }catch(x){}
+    }
+    if(!o){
+      try{
+        S.tix = await api('myTickets');
+        o = S.tix && S.tix.find(x => String(x.id) === String(id));
+      }catch(x){}
+    }
+    if(o){
+      const evId = o.event_id;
+      const ev = (S.aev && S.aev.find(e => String(e.id) === String(evId)))
+              || (S.ev && S.ev.find(e => String(e.id) === String(evId)));
+      if(ev){
+        if(!o.name) o.name = ev.name;
+        if(!o.event_date) o.event_date = ev.event_date;
+        if(!o.location) o.location = ev.venue || ev.location;
+        if(!o.event_time) o.event_time = ev.event_time;
+      }
+      if(!S.tix) S.tix = [];
+      const exIdx = S.tix.findIndex(x => String(x.id) === String(o.id));
+      if(exIdx >= 0) S.tix[exIdx] = o; else S.tix.push(o);
+      passModal(o);
+    } else {
+      toast('Detail tiket tidak ditemukan.', 1);
+    }
+  }catch(e){fail(e)}
+},print(el){
+  const id = el.dataset.id;
+  const o = (S.tix && S.tix.find(x => String(x.id) === String(id)))
+         || (S.ord && S.ord.find(x => String(x.id) === String(id)))
+         || (S.inv && S.inv.find(x => String(x.id) === String(id)));
+  if(!o) return;
+  try{
+    const w = window.open('','_blank');
+    if(!w) return toast(t('popup_blocked'),1);
+    w.document.open();
+    w.document.write(printHtml(o));
+    w.document.close();
+    setTimeout(()=>{try{w.focus();w.print()}catch(e){}},500);
+  }catch(e){toast(t('popup_blocked'),1)}
+},
+ async wa(el){
+  const id = el.dataset.id;
+  const o = (S.tix && S.tix.find(x => String(x.id) === String(id)))
+         || (S.ord && S.ord.find(x => String(x.id) === String(id)))
+         || (S.inv && S.inv.find(x => String(x.id) === String(id)));
+  if(!o) return;
+  const w = openWait();
+  waGo(await waHref(o), w);
+},
  xdesc(el){el.classList.toggle('open')},
  async legal(el){const k=el.dataset.v,ti=t(LGK[k]);legalModal(ti,'','<p class="muted">'+t('loading')+'</p>');
   try{const r=await pub('legalPublic',{key:k});legalModal(r.title,r.updated,r.html)}catch(e){legalModal(ti,'','<p>'+esc(errMsg(e))+'</p>')}},
@@ -5816,8 +5873,36 @@ const NL=String.fromCharCode(10),find=(a,id)=>a.find(x=>x.id===id),A={
  async lgsave(){try{await api('legalSave',{key:S.lgk,text:$('#lgt').value},t('loading'));toast(t('saved'));S.lg=await api('legalGet');paintLegal()}catch(e){fail(e)}},
  async lgreset(){if(!await ask(t('lg_ask_reset')))return;try{await api('legalSave',{key:S.lgk,reset:true},t('loading'));toast(t('saved'));S.lg=await api('legalGet');paintLegal()}catch(e){fail(e)}},cm2,bg2(el,e){if(e.target===el)cm2()},
  evTerms(el){const e=S.ev&&find(S.ev,el.dataset.id);if(!e||!e.terms)return;modal2('<button class="btn sm x" data-act="cm2">&#10005;</button><h2>'+t('ev_terms')+'</h2><p class="muted" style="margin:0">'+esc(e.name)+'</p><div class="tcb">'+esc(e.terms)+'</div><div class="acts"><button class="btn pri" data-act="cm2">'+t('close')+'</button></div>')},
- async dlpng(el){const o=find(S.tix,el.dataset.id);if(!o)return;const f=await ticketImg(o);if(!f)return toast(t('e_E_GENERIC'),1);const a=document.createElement('a');a.href=URL.createObjectURL(f);a.download=f.name;document.body.append(a);a.click();a.remove()},
- async dl(el){bz(1,t('preparing'));try{let o=S.tix&&find(S.tix,el.dataset.id);if(!o){S.tix=await api('myTickets');o=find(S.tix,el.dataset.id)}if(!o)throw new Error('NOT_FOUND');await generateTicketPdf(o)}catch(e){fail(e)}finally{bz(-1,t('preparing'))}},
+ async dlpng(el){
+  const id = el.dataset.id;
+  const o = (S.tix && S.tix.find(x => String(x.id) === String(id)))
+         || (S.ord && S.ord.find(x => String(x.id) === String(id)))
+         || (S.inv && S.inv.find(x => String(x.id) === String(id)));
+  if(!o) return;
+  const f = await ticketImg(o);
+  if(!f) return toast(t('e_E_GENERIC'),1);
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(f);
+  a.download = f.name;
+  document.body.append(a);
+  a.click();
+  a.remove();
+},
+ async dl(el){
+  bz(1,t('preparing'));
+  try{
+    const id = el.dataset.id;
+    let o = (S.tix && S.tix.find(x => String(x.id) === String(id)))
+         || (S.ord && S.ord.find(x => String(x.id) === String(id)))
+         || (S.inv && S.inv.find(x => String(x.id) === String(id)));
+    if(!o){
+      S.tix = await api('myTickets');
+      o = S.tix && S.tix.find(x => String(x.id) === String(id));
+    }
+    if(!o) throw new Error('NOT_FOUND');
+    await generateTicketPdf(o);
+  }catch(e){fail(e)}finally{bz(-1,t('preparing'))}
+},
  scOpen(){openScannerModal()},scClose(){closeScannerModal()},scTorch(){toggleTorch()},scAudio(){toggleAudio()},scFlip(){toggleCamera()},scFs(){toggleFullscreen()},cpRefresh(){A_cpRefresh()},cpExport(){A_cpExport()},cpManageModal(el){cpManageModal(el.dataset.id)},cpAddAdmin(){cpEditFormModal(null)},cpEditAdmin(el){const id=el.dataset.id,key=el.dataset.key,cp=S_cpAdmin.checkpoints.find(x=>(id&&x.id===id)||(key&&x.checkpoint_key===key));cpEditFormModal(cp)},cpDeleteAdmin(el){A_cpDeleteAdmin(el)},cpToggleActive(el){A_cpToggleActive(el)},cpSaveAdminSubmit(el){A_cpSaveAdminSubmit(el)},cpResetDefaults(){A_cpResetDefaults()},cpShowQr(el){const id=el.dataset.id,key=el.dataset.key,cp=S_cpAdmin.checkpoints.find(x=>(id&&x.id===id)||(key&&x.checkpoint_key===key));cpShowQrModal(cp)},copySessionLink(el){navigator.clipboard.writeText(el.dataset.url).then(()=>toast('Tautan presensi disalin!',0)).catch(()=>toast('Gagal menyalin',1))},openSelfScan(el){openSelfScanModal(el.dataset.code)},closeSelfScan(){closeSelfScanModal()},evForm(el){evForm(el.dataset.id)},paid(el){S.paid=el.dataset.v==='1';document.querySelectorAll('[data-act=paid]').forEach(b=>b.classList.toggle('on',b===el));const p=$('#pr');p.disabled=!S.paid;if(!S.paid)p.value=0},
  async saveEv(){
   const f=$('#ef'),d=Object.fromEntries(new FormData(f));
@@ -7654,8 +7739,9 @@ ${guestbookSamples ? `\n### SAMPEL BUKU TAMU / UCAPAN PESERTA:\n${guestbookSampl
                   <div style="background:var(--card);padding:8px 10px;border-radius:8px;border:1px solid var(--ok)">
                     <small style="color:var(--ok);font-weight:700">🎟️ Tiket Reguler Terkonfirmasi:</small>
                     <div style="font-size:12px"><b class="mono">${esc(ord.ticket_code)}</b> &middot; ${ord.qty} Tiket (${ord.status})</div>
-                    <div style="margin-top:6px">
-                      <button type="button" class="btn sm" data-act="pass" data-id="${ord.id}">🎫 Lihat E-Tiket</button>
+                    <div style="margin-top:6px;display:flex;gap:4px;flex-wrap:wrap">
+                      <button type="button" class="btn sm pri" data-act="pass" data-id="${ord.id}" style="font-weight:700">🎫 Lihat E-Tiket</button>
+                      <a class="btn sm" href="${location.pathname}?tiket=${encodeURIComponent(ord.ticket_code)}" target="_blank" style="text-decoration:none;display:inline-flex;align-items:center;gap:3px" title="Buka e-tiket di tab baru">🔗 Tab Baru &#8599;</a>
                     </div>
                   </div>
                 </div>
