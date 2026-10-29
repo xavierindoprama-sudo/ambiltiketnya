@@ -299,7 +299,7 @@ let S={token:'',user:null,mode:'user',tab:'catalog',view:'dash',hist:[],res:null
 function applyTheme(){const d=TH==='system'?(matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light'):TH;document.documentElement.dataset.theme=d}
 matchMedia('(prefers-color-scheme:dark)').addEventListener('change',applyTheme);
 /* loading */
-let nb=0,no=0;function bz(d,m){nb=Math.max(0,nb+d);$('#bar').classList.toggle('on',nb>0);if(m){no=Math.max(0,no+d);$('#busy').classList.toggle('on',no>0);if(d>0)$('#bm').textContent=m}}
+let nb=0,no=0;function bz(d,m){nb=Math.max(0,nb+d);$('#bar').classList.toggle('on',nb>0);if(m||(d<0&&no>0)){no=Math.max(0,no+d);$('#busy').classList.toggle('on',no>0);if(d>0&&m)$('#bm').textContent=m}}
 function api(a,p,m){return new Promise((ok,bad)=>{bz(1,m);rpc('api',[S.token,a,p||{}]).then(r=>{bz(-1,m);if(r&&r.ok)ok(r.data);else if(r&&r.error==='AUTH'){toast(t('e_AUTH'),1);logout(1)}else bad(new Error(r?r.error:'E_GENERIC'))},()=>{bz(-1,m);bad(new Error('E_GENERIC'))})})}
 const toast=(m,e)=>{const d=document.createElement('div');d.className='toast'+(e?' e':'');d.textContent=m;$('#toasts').append(d);setTimeout(()=>d.remove(),3800)};
 const fail=e=>toast((e&&e.message&&D['e_'+e.message])?t('e_'+e.message):(e&&e.message?e.message:t('e_E_GENERIC')),1);
@@ -6042,7 +6042,8 @@ const NL=String.fromCharCode(10),find=(a,id)=>a.find(x=>x.id===id),A={
     if (qty < 1) return toast('Jumlah tiket minimal 1!', 1);
     if (qty > maxQty) return toast('Jumlah tiket melebihi batas maksimal (' + maxQty + ' tiket)!', 1);
 
-    bz(1, 'Menyimpan perubahan antrean...');
+    const busyMsg = 'Menyimpan perubahan antrean...';
+    bz(1, busyMsg);
     try {
       try {
         await api('waitingUpdate', {
@@ -6073,7 +6074,7 @@ const NL=String.fromCharCode(10),find=(a,id)=>a.find(x=>x.id===id),A={
     } catch (e) {
       fail(e);
     } finally {
-      bz(-1);
+      bz(-1, busyMsg);
     }
   },
 
@@ -8002,7 +8003,8 @@ ${guestbookSamples ? `\n### SAMPEL BUKU TAMU / UCAPAN PESERTA:\n${guestbookSampl
     const confirmMsg = `Ditemukan ${toDelete.length} entri duplikat identik di Daftar Tunggu dari ${dupEntries.length} grup nama & nomor HP yang sama.\n\nSistem akan mempertahankan 1 pendaftaran tertua dan menghapus ${toDelete.length} entri sisanya.\n(Data dengan nama berbeda TIDAK akan dihapus).\n\nLanjutkan pembersihan?`;
     if (!await ask(confirmMsg)) return;
 
-    bz(1, 'Membersihkan duplikat identik daftar tunggu...');
+    const busyMsg = 'Membersihkan duplikat identik daftar tunggu...';
+    bz(1, busyMsg);
     try {
       let successCount = 0;
       for (const item of toDelete) {
@@ -8020,7 +8022,7 @@ ${guestbookSamples ? `\n### SAMPEL BUKU TAMU / UCAPAN PESERTA:\n${guestbookSampl
     } catch (e) {
       fail(e);
     } finally {
-      bz(-1);
+      bz(-1, busyMsg);
     }
   },
 
@@ -8036,7 +8038,8 @@ ${guestbookSamples ? `\n### SAMPEL BUKU TAMU / UCAPAN PESERTA:\n${guestbookSampl
     const confirmMsg = `Ditemukan ${toDelete.length} calon tamu di Daftar Tunggu yang sebetulnya SUDAH diterbitkan undangannya secara resmi.\n\nHapus ${toDelete.length} entri ini dari antrean Daftar Tunggu agar kuota tidak terpakai dobel?`;
     if (!await ask(confirmMsg)) return;
 
-    bz(1, 'Membersihkan antrean yang sudah dapat undangan...');
+    const busyMsg = 'Membersihkan antrean yang sudah dapat undangan...';
+    bz(1, busyMsg);
     try {
       let successCount = 0;
       for (const item of toDelete) {
@@ -8054,7 +8057,7 @@ ${guestbookSamples ? `\n### SAMPEL BUKU TAMU / UCAPAN PESERTA:\n${guestbookSampl
     } catch (e) {
       fail(e);
     } finally {
-      bz(-1);
+      bz(-1, busyMsg);
     }
   },
 
