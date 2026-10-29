@@ -5986,6 +5986,7 @@ const NL=String.fromCharCode(10),find=(a,id)=>a.find(x=>x.id===id),A={
       <form onsubmit="return false" style="display:flex;flex-direction:column;gap:12px">
         <input type="hidden" id="edit_wait_id" value="${esc(item.id)}">
         <input type="hidden" id="edit_wait_ev" value="${esc(item.event_id)}">
+        <input type="hidden" id="edit_wait_created_at" value="${esc(item.created_at || '')}">
         
         <div>
           <label style="font-weight:700;font-size:13px;display:block;margin-bottom:4px">Nama Lengkap Calon Tamu *</label>
@@ -6028,6 +6029,7 @@ const NL=String.fromCharCode(10),find=(a,id)=>a.find(x=>x.id===id),A={
   async waitSave() {
     const id = ($('#edit_wait_id') ? $('#edit_wait_id').value : '').trim();
     const evId = ($('#edit_wait_ev') ? $('#edit_wait_ev').value : '').trim();
+    const createdAt = ($('#edit_wait_created_at') ? $('#edit_wait_created_at').value : '').trim();
     const name = ($('#edit_wait_name') ? $('#edit_wait_name').value : '').trim();
     const phoneRaw = ($('#edit_wait_phone') ? $('#edit_wait_phone').value : '').trim();
     const qty = parseInt($('#edit_wait_qty') ? $('#edit_wait_qty').value : 1, 10) || 1;
@@ -6063,7 +6065,8 @@ const NL=String.fromCharCode(10),find=(a,id)=>a.find(x=>x.id===id),A={
           phone: ph,
           qty,
           org,
-          age: ageRaw ? parseInt(ageRaw, 10) : null
+          age: ageRaw ? parseInt(ageRaw, 10) : null,
+          createdAt: createdAt || undefined
         });
       }
 

@@ -1753,9 +1753,29 @@ export default {
           const phone = normPhone(params.phone);
           if (!phone) throw new Error('BAD_PHONE');
           const age = params.age ? parseInt(params.age, 10) : null;
+          const createdAtSql = params.createdAt ? '$8::timestamptz' : 'now()';
+          const qParams = [params.eventId, u.id, name, org, phone, age, qty];
+          if (params.createdAt) qParams.push(params.createdAt);
           const r = await neonQuery(env, `INSERT INTO invitation_waiting_list(event_id, created_by, guest_name, guest_org, guest_phone, guest_age, qty, status, created_at)
-            VALUES($1::uuid, $2::uuid, $3, $4, $5, $6, $7, 'waiting', now()) RETURNING id`, [params.eventId, u.id, name, org, phone, age, qty]);
+            VALUES($1::uuid, $2::uuid, $3, $4, $5, $6, $7, 'waiting', ${createdAtSql}) RETURNING id`, qParams);
           return json({ ok: true, data: { id: r[0].id } });
+        }
+
+        if (action === 'waitingUpdate') {
+          needRole(2);
+          const id = params.id;
+          if (!id) throw new Error('MISSING_ID');
+          const name = String(params.name || '').trim();
+          const org = String(params.org || '').trim();
+          const qty = parseInt(params.qty, 10) || 1;
+          const phone = normPhone(params.phone);
+          if (params.phone && !phone) throw new Error('BAD_PHONE');
+          const age = params.age ? parseInt(params.age, 10) : null;
+          if (!name) throw new Error('BAD_NAME');
+          await neonQuery(env, `UPDATE invitation_waiting_list
+            SET guest_name = $1, guest_org = $2, guest_phone = $3, guest_age = $4, qty = $5
+            WHERE id = $6::uuid`, [name, org, phone, age, qty, id]);
+          return json({ ok: true, data: { id: id } });
         }
 
         if (action === 'waitingDelete') {
