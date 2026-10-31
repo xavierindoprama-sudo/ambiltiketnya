@@ -82,6 +82,7 @@ label{display:block;font-size:12px;font-weight:600;color:var(--mu);margin:12px 0
 .bar2{display:flex;gap:10px;flex-wrap:wrap;margin:12px 0}.bar2>*{width:auto;flex:1;min-width:min(100%,150px)}
 .er{display:flex;gap:12px;align-items:center;padding:12px 16px;margin-bottom:10px}.er img{width:64px;height:44px;border-radius:9px;object-fit:cover;background:var(--in)}
 .sw{position:relative;width:44px;height:24px;flex:none}.sw input{opacity:0;width:100%;height:100%;position:absolute;margin:0;cursor:pointer;z-index:1}.sw i{position:absolute;inset:0;background:var(--bd);border-radius:99px;transition:.2s}.sw i:after{content:"";position:absolute;left:3px;top:3px;width:18px;height:18px;border-radius:50%;background:#fff;transition:.2s}.sw input:checked+i{background:var(--ok)}.sw input:checked+i:after{left:23px}
+.sw-sm{position:relative;width:34px;height:18px;display:inline-block;flex:none;margin:0;vertical-align:middle}.sw-sm input{opacity:0;width:100%;height:100%;position:absolute;inset:0;margin:0;cursor:pointer;z-index:2}.sw-sm i{position:absolute;inset:0;background:rgba(255,255,255,.35);border-radius:99px;transition:.2s}.sw-sm i:after{content:"";position:absolute;left:2px;top:2px;width:14px;height:14px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.3);transition:.2s}.sw-sm input:checked+i{background:var(--ok,#10b981)}.sw-sm input:checked+i:after{left:18px}
 .sc-modal{display:none;position:fixed;inset:0;z-index:90;background:rgba(5,7,18,.88);backdrop-filter:blur(10px);align-items:center;justify-content:center;padding:12px}
 .sc-modal.on{display:flex}
 .sc-box{position:relative;width:min(460px,100%);height:min(680px,94vh);border-radius:24px;overflow:hidden;background:#000;box-shadow:0 24px 60px rgba(0,0,0,.6);border:1px solid rgba(255,255,255,.15);display:flex;flex-direction:column}
@@ -1846,9 +1847,9 @@ async function evList(c){
 
           <!-- Active Switch on Top Right -->
           ${canEdit()?`
-            <div style="position:absolute;right:10px;top:10px;background:rgba(0,0,0,.5);backdrop-filter:blur(6px);padding:4px 6px 4px 8px;border-radius:20px;display:inline-flex;align-items:center;gap:6px" title="${e.is_active?'Acara Aktif (Bisa Mendaftar)':'Acara Dinonaktifkan (Pendaftaran Ditutup)'}">
-              <span style="font-size:10px;font-weight:700;color:${e.is_active?'#4ade80':'#cbd5e1'}">${e.is_active?'AKTIF':'NONAKTIF'}</span>
-              <label class="sw" style="width:34px;height:18px"><input type="checkbox" data-ch="tgl" data-id="${e.id}" ${e.is_active?'checked':''}><i></i></label>
+            <div style="position:absolute;right:10px;top:10px;z-index:2;background:rgba(15,23,42,.75);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);border:1px solid rgba(255,255,255,.18);padding:3px 6px 3px 10px;border-radius:99px;display:inline-flex;align-items:center;gap:8px;box-shadow:0 4px 12px rgba(0,0,0,.3)" title="${e.is_active?'Acara Aktif (Pendaftaran Dibuka)':'Acara Nonaktif (Pendaftaran Ditutup)'}">
+              <span style="font-size:11px;font-weight:800;letter-spacing:.5px;color:${e.is_active?'#4ade80':'#94a3b8'}">${e.is_active?'AKTIF':'NONAKTIF'}</span>
+              <label class="sw-sm"><input type="checkbox" data-ch="tgl" data-id="${e.id}" ${e.is_active?'checked':''}><i></i></label>
             </div>
           `:''}
 
@@ -9188,7 +9189,26 @@ document.addEventListener('input',e=>{
 });
 document.addEventListener('keydown',e=>{if(e.key==='Enter'&&e.target&&e.target.id==='cipw'){const b=document.querySelector('[data-act=cisubmit]');b&&b.click()}});
 document.addEventListener('change',async e=>{const el=e.target,k=el.dataset.ch;if(!k)return;
- if(k==='ordsz'){ls.s('ordsz',el.value);S.ordPage=1;paintOrders()}else if(k==='usrsz'){ls.s('usrsz',el.value);S.usrPage=1;paintUsers()}else if(k==='sel'){S.sel=el.value;paintDash()}else if(k==='tgl'){try{await api('toggleEvent',{id:el.dataset.id,active:el.checked})}catch(x){el.checked=!el.checked;fail(x)}}
+ if(k==='ordsz'){ls.s('ordsz',el.value);S.ordPage=1;paintOrders()}else if(k==='usrsz'){ls.s('usrsz',el.value);S.usrPage=1;paintUsers()}else if(k==='sel'){S.sel=el.value;paintDash()}else if(k==='tgl'){
+  const span = el.closest('div') && el.closest('div').querySelector('span');
+  if(span){
+    span.textContent = el.checked ? 'AKTIF' : 'NONAKTIF';
+    span.style.color = el.checked ? '#4ade80' : '#94a3b8';
+  }
+  try{
+    await api('toggleEvent',{id:el.dataset.id,active:el.checked});
+    const evObj = S.aev && S.aev.find(x => String(x.id) === String(el.dataset.id));
+    if(evObj) evObj.is_active = el.checked;
+    toast(el.checked ? 'Pendaftaran acara diaktifkan! ✓' : 'Pendaftaran acara dinonaktifkan', 0);
+  }catch(x){
+    el.checked = !el.checked;
+    if(span){
+      span.textContent = el.checked ? 'AKTIF' : 'NONAKTIF';
+      span.style.color = el.checked ? '#4ade80' : '#94a3b8';
+    }
+    fail(x);
+  }
+}
  else if(k==='role'){try{await api('setRole',{id:el.dataset.id,role:el.value});toast(t('saved'));const u=S.usr&&S.usr.find(x=>x.id===el.dataset.id);if(u)u.role=el.value}catch(x){fail(x);usrView($('#ac'))}}
  else if(k==='userOrg'){try{await api('userAssignOrganizer',{userId:el.dataset.id,organizerId:el.value||null});toast('Penyelenggara EO pengguna diperbarui');const u=S.usr&&S.usr.find(x=>x.id===el.dataset.id);if(u)u.organizer_id=el.value}catch(x){fail(x);usrView($('#ac'))}}
  else if(k==='dpEvSel'){S_dp.evId=el.value;setCurEvId(el.value);const g=$('#global_ev_selector');if(g)g.value=el.value;try{await dpLoadData();paintDoorprize()}catch(x){fail(x)}}
