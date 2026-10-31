@@ -1788,8 +1788,171 @@ function paintOfflineStatus(){const badge=$('#off_badge_area'),info=$('#off_info
  if(info){if(!evIds.length)info.innerHTML='<span class="muted">Belum ada data acara yang disimpan di HP.</span>';
   else{const totalTix=evIds.reduce((a,k)=>a+(store[k].count||0),0);info.innerHTML=`<span style="color:var(--ok)">✓ <b>${totalTix}</b> ${t('off_cached_cnt')} (${evIds.map(k=>esc(store[k].eventName)).join(', ')})</span>`}}}
 
-async function evList(c){try{if(!S.aev)S.aev=await api('adminEvents')}catch(e){return fail(e)}
- c.innerHTML=(canEdit()?`<div class="acts"><button class="btn pri" data-act="evForm" style="flex:none">+ ${t('new_ev')}</button></div>`:'')+S.aev.map(e=>`<div class="card er"><img src="${esc(e.banner_url)}" onerror="this.style.visibility='hidden'"><div style="flex:1;min-width:0"><b>${esc(e.name)}</b>${e.organizer_name?`<span class="badge" style="background:var(--card-sub);font-size:11px;margin-left:6px;padding:2px 8px;border-radius:10px">🏢 ${esc(e.organizer_name)}</span>`:''}<div class="muted">${fd(e.event_date)} &#183; Online: ${e.sold}/${e.quota} ${t('tix')}${e.walkin_quota?` &#183; Walk-in: ${e.walkin_sold||0}/${e.walkin_quota}`:''} &#183; ${rp(e.is_paid?e.price:0)}</div></div>${canEdit()?`<label class="sw"><input type="checkbox" data-ch="tgl" data-id="${e.id}" ${e.is_active?'checked':''}><i></i></label>${hasMod(e,'guestbook')?`<a class="btn sm" href="${location.pathname}?stage=greeting&ev=${e.id}" target="_blank" title="Buka Layar Panggung Ucapan (Live Wall)">📺 Layar Ucapan</a>`:""}<button class="btn sm" data-act="cpManageModal" data-id="${e.id}" title="Kelola Pos Check-In &amp; Fasilitas">📍 Pos Check-In</button><button class="btn sm" data-act="sendToGateHub" data-id="${e.id}" title="Kirim data tiket acara ini langsung ke Gate Hub Laptop" style="font-weight:700;color:var(--ok)">💻 Gate Hub</button><button class="btn sm" data-act="gatelink" data-id="${e.id}" title="${t('gate_pass')}">📋 ${t('gate_pass')}</button><button class="btn sm ${getCurEvId()===e.id?'ok':'pri'}" data-act="focusEv" data-id="${e.id}" title="Kelola dan fokuskan ke acara ini" style="font-weight:700">${getCurEvId()===e.id?'✓ Dikelola':'🎯 Kelola'}</button><button class="btn sm" data-act="evForm" data-id="${e.id}">${t('edit')}</button>`:stPill(e.is_active?'confirmed':'cancelled')}</div>`).join('')}
+async function evList(c){
+  try{if(!S.aev)S.aev=await api('adminEvents')}catch(e){return fail(e)}
+  if(!c)c=$('#ac');
+  if(!c)return;
+
+  const viewMode=S.evViewMode||ls.g('atk_ev_view_mode')||'grid';
+  const curEvId=getCurEvId();
+
+  let topBar=`
+  <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:16px">
+    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+      ${canEdit()?`<button class="btn pri" data-act="evForm" style="flex:none;font-weight:700;box-shadow:0 2px 8px rgba(91,78,240,.3)">+ ${t('new_ev')}</button>`:''}
+      <span class="muted" style="font-size:13px;font-weight:600">Total: <b>${S.aev.length}</b> Acara</span>
+    </div>
+    <div style="display:flex;align-items:center;gap:4px;background:var(--in);padding:3px;border-radius:10px;border:1px solid var(--bd)">
+      <button class="btn sm ${viewMode==='grid'?'pri':''}" data-act="setEvViewMode" data-v="grid" style="padding:5px 12px;font-size:12px;font-weight:700;display:inline-flex;align-items:center;gap:4px" title="Tampilan Katalog Kartu (Mirip Dashboard User)">
+        <span>🖼️</span> Katalog Kartu
+      </button>
+      <button class="btn sm ${viewMode==='list'?'pri':''}" data-act="setEvViewMode" data-v="list" style="padding:5px 12px;font-size:12px;font-weight:700;display:inline-flex;align-items:center;gap:4px" title="Tampilan Daftar Ringkas">
+        <span>📋</span> Baris Ringkas
+      </button>
+    </div>
+  </div>`;
+
+  if(!S.aev.length){
+    c.innerHTML=topBar+`<div class="card" style="padding:36px 20px;text-align:center"><div style="font-size:36px;margin-bottom:8px">📅</div><p class="muted" style="margin:0">${t('none')}</p></div>`;
+    return;
+  }
+
+  if(viewMode==='grid'){
+    const cardsHtml='<div class="grid" style="margin-top:4px">'+S.aev.map(e=>{
+      const isRsvp=hasMod(e,'rsvp')&&!hasMod(e,'ticketing');
+      const isFocused=String(curEvId)===String(e.id);
+      const onlineSold=parseInt(e.sold,10)||0;
+      const onlineQuota=parseInt(e.quota,10)||0;
+      const walkinSold=parseInt(e.walkin_sold,10)||0;
+      const walkinQuota=parseInt(e.walkin_quota,10)||0;
+      const totalSold=onlineSold+walkinSold;
+      const totalQuota=onlineQuota+walkinQuota;
+      const remaining=Math.max(0,onlineQuota-onlineSold);
+      const percentSold=onlineQuota?Math.min(100,Math.round((onlineSold/onlineQuota)*100)):0;
+
+      return `
+      <article class="card ev" style="position:relative;display:flex;flex-direction:column;border-radius:16px;overflow:hidden;box-shadow:0 4px 18px rgba(0,0,0,.06);transition:transform .2s,box-shadow .2s;${isFocused?'border:2px solid var(--ac);box-shadow:0 6px 24px rgba(91,78,240,.25)':''}">
+        
+        <!-- Banner Top Image -->
+        <div class="ban" style="height:170px;position:relative;background:linear-gradient(135deg,#3b2f9e,#8b5cf6);overflow:hidden">
+          ${e.banner_url?`<img loading="lazy" decoding="async" src="${esc(e.banner_url)}" onerror="this.remove()" style="width:100%;height:100%;object-fit:cover;display:block">`:''}
+          
+          <!-- Badges on Banner -->
+          <div class="bd" style="position:absolute;left:10px;top:10px;display:flex;gap:5px;flex-wrap:wrap;max-width:calc(100% - 60px)">
+            <span class="pill ${isRsvp?'ok':''}" style="font-weight:700">${isRsvp?'✉️ RSVP':rp(e.is_paid?e.price:0)}</span>
+            ${e.organizer_name?`<span class="pill" style="background:rgba(0,0,0,.6);color:#fff;backdrop-filter:blur(4px);font-size:10px">🏢 ${esc(e.organizer_name)}</span>`:''}
+            ${isFocused?`<span class="pill ok" style="font-weight:800;font-size:10px">✓ Dikelola</span>`:''}
+          </div>
+
+          <!-- Active Switch on Top Right -->
+          ${canEdit()?`
+            <div style="position:absolute;right:10px;top:10px;background:rgba(0,0,0,.5);backdrop-filter:blur(6px);padding:4px 6px 4px 8px;border-radius:20px;display:inline-flex;align-items:center;gap:6px" title="${e.is_active?'Acara Aktif (Bisa Mendaftar)':'Acara Dinonaktifkan (Pendaftaran Ditutup)'}">
+              <span style="font-size:10px;font-weight:700;color:${e.is_active?'#4ade80':'#cbd5e1'}">${e.is_active?'AKTIF':'NONAKTIF'}</span>
+              <label class="sw" style="width:34px;height:18px"><input type="checkbox" data-ch="tgl" data-id="${e.id}" ${e.is_active?'checked':''}><i></i></label>
+            </div>
+          `:''}
+
+          <!-- Date & Time Overlay -->
+          <div class="dt" style="position:absolute;left:0;right:0;bottom:0;padding:26px 12px 10px;color:#fff;font-size:12px;font-weight:600;background:linear-gradient(transparent,rgba(0,0,0,.85));display:flex;justify-content:space-between;align-items:flex-end">
+            <span>📅 ${fd(e.event_date,{day:'numeric',month:'short',year:'numeric'})}</span>
+            <span style="opacity:.9">${tm(e)}</span>
+          </div>
+        </div>
+
+        <!-- Event Body -->
+        <div class="eb" style="padding:14px 16px;flex:1;display:flex;flex-direction:column">
+          <div class="cat" style="font-size:11px;font-weight:700;color:var(--ac);text-transform:uppercase;letter-spacing:.5px">${esc(e.category||'Acara Umum')}</div>
+          <h3 style="font-size:16px;margin:3px 0 6px;line-height:1.3;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">${esc(e.name)}</h3>
+          
+          <div class="ds" style="color:var(--mu);font-size:12px;line-height:1.4;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;min-height:34px;margin-bottom:8px">
+            ${esc(e.description||e.location||'-')}
+          </div>
+
+          <!-- Quota Progress Indicator -->
+          <div style="margin-top:auto;padding-top:8px;border-top:1px dashed var(--bd)">
+            <div class="row" style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px">
+              <span class="muted">${isRsvp?'Terisi:':t('booked')}:</span>
+              <b><span class="mono" style="color:var(--tx)">${onlineSold}</span> / ${onlineQuota} ${t('tix')} <span class="muted" style="font-size:11px">(${percentSold}%)</span></b>
+            </div>
+            <div class="qb" style="height:6px;border-radius:9px;background:var(--bd);overflow:hidden;margin:4px 0 8px">
+              <i style="display:block;height:100%;width:${percentSold}%;background:linear-gradient(90deg,var(--ac),var(--ac2))"></i>
+            </div>
+            ${walkinQuota?`
+              <div style="font-size:11px;color:var(--mu);margin-bottom:8px;display:flex;justify-content:space-between">
+                <span>Walk-in (Venue):</span>
+                <b>${walkinSold}/${walkinQuota} tiket</b>
+              </div>
+            `:''}
+          </div>
+
+          <!-- Main Actions -->
+          <div style="display:flex;gap:6px;margin-top:10px">
+            <button class="btn sm ${isFocused?'ok':'pri'}" data-act="focusEv" data-id="${e.id}" style="flex:1;font-weight:700;padding:7px 10px;font-size:12px;justify-content:center" title="Buka data dan fokuskan ke acara ini">
+              ${isFocused?'✓ Sedang Dikelola':'🎯 Kelola Acara'}
+            </button>
+            ${canEdit()?`
+              <button class="btn sm" data-act="evForm" data-id="${e.id}" style="padding:7px 10px;font-size:12px" title="${t('edit')}">
+                ✏️ ${t('edit')}
+              </button>
+            `:''}
+          </div>
+
+          <!-- Quick Secondary Operational Actions -->
+          ${canEdit()?`
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;margin-top:6px">
+              <button class="btn sm" data-act="cpManageModal" data-id="${e.id}" style="font-size:11px;padding:4px 6px;justify-content:center;background:var(--card-sub);border-color:var(--bd)" title="Kelola Pos Check-In & Fasilitas">
+                📍 Pos Check-In
+              </button>
+              <button class="btn sm" data-act="sendToGateHub" data-id="${e.id}" style="font-size:11px;padding:4px 6px;justify-content:center;color:var(--ok);background:var(--card-sub);border-color:var(--bd);font-weight:700" title="Kirim data tiket acara ini langsung ke Gate Hub Laptop">
+                💻 Gate Hub
+              </button>
+              <button class="btn sm" data-act="gatelink" data-id="${e.id}" style="font-size:11px;padding:4px 6px;justify-content:center;background:var(--card-sub);border-color:var(--bd)" title="${t('gate_pass')}">
+                📋 Link Gerbang
+              </button>
+              ${hasMod(e,'guestbook')?`
+                <a class="btn sm" href="${location.pathname}?stage=greeting&ev=${e.id}" target="_blank" style="font-size:11px;padding:4px 6px;justify-content:center;text-decoration:none;background:var(--card-sub);border-color:var(--bd)" title="Buka Layar Panggung Ucapan (Live Wall)">
+                  📺 Layar Ucapan
+                </a>
+              `:`
+                <a class="btn sm" href="${location.pathname}?ev=${e.id}" target="_blank" style="font-size:11px;padding:4px 6px;justify-content:center;text-decoration:none;background:var(--card-sub);border-color:var(--bd);color:var(--mu)" title="Pratinjau Halaman Publik Acara">
+                  🔗 Halaman Publik
+                </a>
+              `}
+            </div>
+          `:''}
+
+        </div>
+      </article>`;
+    }).join('')+'</div>';
+
+    c.innerHTML=topBar+cardsHtml;
+  } else {
+    // List Mode
+    const listHtml=S.aev.map(e=>`
+      <div class="card er" style="border-radius:12px;margin-bottom:10px;${String(curEvId)===String(e.id)?'border-left:4px solid var(--ac)':''}">
+        <img src="${esc(e.banner_url)}" onerror="this.style.visibility='hidden'" style="width:64px;height:44px;border-radius:8px;object-fit:cover;background:var(--in)">
+        <div style="flex:1;min-width:0">
+          <b>${esc(e.name)}</b>
+          ${e.organizer_name?`<span class="badge" style="background:var(--card-sub);font-size:11px;margin-left:6px;padding:2px 8px;border-radius:10px">🏢 ${esc(e.organizer_name)}</span>`:''}
+          <div class="muted" style="font-size:12px;margin-top:2px">
+            ${fd(e.event_date)} &#183; Online: ${e.sold}/${e.quota} ${t('tix')}${e.walkin_quota?` &#183; Walk-in: ${e.walkin_sold||0}/${e.walkin_quota}`:''} &#183; ${rp(e.is_paid?e.price:0)}
+          </div>
+        </div>
+        ${canEdit()?`
+          <label class="sw" title="${e.is_active?'Acara Aktif':'Acara Nonaktif'}"><input type="checkbox" data-ch="tgl" data-id="${e.id}" ${e.is_active?'checked':''}><i></i></label>
+          ${hasMod(e,'guestbook')?`<a class="btn sm" href="${location.pathname}?stage=greeting&ev=${e.id}" target="_blank" title="Buka Layar Panggung Ucapan (Live Wall)">📺 Layar Ucapan</a>`:""}
+          <button class="btn sm" data-act="cpManageModal" data-id="${e.id}" title="Kelola Pos Check-In &amp; Fasilitas">📍 Pos Check-In</button>
+          <button class="btn sm" data-act="sendToGateHub" data-id="${e.id}" title="Kirim data tiket acara ini langsung ke Gate Hub Laptop" style="font-weight:700;color:var(--ok)">💻 Gate Hub</button>
+          <button class="btn sm" data-act="gatelink" data-id="${e.id}" title="${t('gate_pass')}">📋 ${t('gate_pass')}</button>
+          <button class="btn sm ${getCurEvId()===e.id?'ok':'pri'}" data-act="focusEv" data-id="${e.id}" title="Kelola dan fokuskan ke acara ini" style="font-weight:700">${getCurEvId()===e.id?'✓ Dikelola':'🎯 Kelola'}</button>
+          <button class="btn sm" data-act="evForm" data-id="${e.id}">${t('edit')}</button>
+        `:stPill(e.is_active?'confirmed':'cancelled')}
+      </div>
+    `).join('');
+
+    c.innerHTML=topBar+listHtml;
+  }
+}
 function compressImageToWebp(file, maxW = 1200, maxH = 675, quality = 0.82) {
   return new Promise((resolve, reject) => {
     if (!file || !file.type.startsWith('image/')) return reject(new Error('File bukan gambar'));
@@ -6141,6 +6304,7 @@ const NL=String.fromCharCode(10),find=(a,id)=>a.find(x=>x.id===id),A={
    }catch(e){fail(e)}
   },
  clearCurEv(){setCurEvId('');renderAdmin();toast('Menampilkan data semua acara',0)},
+ setEvViewMode(el){const m=el.dataset.v||'grid';S.evViewMode=m;ls.s('atk_ev_view_mode',m);evList($('#ac'))},
  focusEv(el){const evId=el.dataset.id;setCurEvId(evId);const ev=S.aev&&S.aev.find(e=>e.id===evId);S.view='orders';renderAdmin();toast('Mengelola acara: '+(ev?ev.name:''),0)},
 
   invImportModal(el){
