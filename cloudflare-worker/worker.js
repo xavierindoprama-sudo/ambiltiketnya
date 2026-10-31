@@ -1327,17 +1327,37 @@ export default {
         if (action === 'saveProfile') {
           const wa = normPhone(params.whatsapp), age = parseInt(params.age, 10), church = String(params.church || '').trim();
           const name = String(params.name || '').trim();
+          const picture = params.picture !== undefined ? String(params.picture || '').trim() : undefined;
           if (name && name.length < 2) throw new Error('BAD_NAME');
           if (!wa) throw new Error('BAD_PHONE');
           if (!(age >= 1 && age <= 120)) throw new Error('BAD_AGE');
           if (church.length < 2) throw new Error('BAD_CHURCH');
-          if (name) {
-            await neonQuery(env, `UPDATE users SET name=$1,whatsapp=$2,age=$3::int,church=$4 WHERE id=$5::uuid`, [name, wa, age, church, u.id]);
+          
+          if (picture !== undefined) {
+            await neonQuery(env, `UPDATE users SET name=$1, whatsapp=$2, age=$3::int, church=$4, picture=$5 WHERE id=$6::uuid`, [name || u.name, wa, age, church, picture || null, u.id]);
+          } else if (name) {
+            await neonQuery(env, `UPDATE users SET name=$1, whatsapp=$2, age=$3::int, church=$4 WHERE id=$5::uuid`, [name, wa, age, church, u.id]);
           } else {
-            await neonQuery(env, `UPDATE users SET whatsapp=$1,age=$2::int,church=$3 WHERE id=$4::uuid`, [wa, age, church, u.id]);
+            await neonQuery(env, `UPDATE users SET whatsapp=$1, age=$2::int, church=$3 WHERE id=$4::uuid`, [wa, age, church, u.id]);
           }
           const updated = (await neonQuery(env, `SELECT id,name,email,whatsapp,age,church,role,picture FROM users WHERE id=$1::uuid`, [u.id]))[0];
           return json({ ok: true, data: { ...updated, needProfile: false } });
+        }
+
+        if (action === 'changePassword') {
+          const oldPw = String(params.oldPassword || '');
+          const newPw = String(params.newPassword || '');
+          if (!newPw || newPw.length < 6) throw new Error('BAD_NEW_PASSWORD');
+          const row = (await neonQuery(env, `SELECT password_hash FROM users WHERE id=$1::uuid`, [u.id]))[0];
+          if (!row) throw new Error('NOT_FOUND');
+          const isGoogleUser = !row.password_hash || row.password_hash.startsWith('dummy-');
+          if (!isGoogleUser) {
+            const ok = await checkPw(oldPw, row.password_hash);
+            if (!ok) throw new Error('INVALID_OLD_PASSWORD');
+          }
+          const newHash = await hashPw(newPw, crypto.randomUUID());
+          await neonQuery(env, `UPDATE users SET password_hash=$1 WHERE id=$2::uuid`, [newHash, u.id]);
+          return json({ ok: true, data: { success: true } });
         }
 
         if (action === 'events') {
