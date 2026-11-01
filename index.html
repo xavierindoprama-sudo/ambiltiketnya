@@ -3222,6 +3222,10 @@ function changeDashStepQty(delta){
 }
 function cancelDashPartialCheckin(){
  _cooldown=false;
+ _lastCode=null;
+ _lastTime=0;
+ const fr=$('#sc_frame');
+ if(fr)fr.className='sc-frame';
  const resArea=$('#sc_res');
  if(resArea&&_scanning)resArea.innerHTML='<div class="sc-card ready"><div style="display:flex;align-items:center;gap:10px;justify-content:center"><span class="sc-pdot"></span><span style="font-size:14px;font-weight:600;letter-spacing:.5px">'+t('v_ready')+'</span></div></div>';
 }
@@ -3232,6 +3236,9 @@ async function submitDashPartialCheckin(code, all){
  const qtyToEnter=Math.min(max,Math.max(1,isNaN(val)?1:val));
  doValidate(code, qtyToEnter, true);
 }
+window.changeDashStepQty = changeDashStepQty;
+window.cancelDashPartialCheckin = cancelDashPartialCheckin;
+window.submitDashPartialCheckin = submitDashPartialCheckin;
 function scCardHtml(r){
  const isOk=r.result==='VALID',isPartialConfirm=r.result==='CONFIRM_PARTIAL',isAlready=r.result==='ALREADY_CLAIMED',isNotCheckIn=r.result==='NOT_CHECKED_IN',isWn=r.result==='USED'||isAlready||isNotCheckIn||r.result==='UNPAID'||isPartialConfirm,cls=isOk?'ok':isWn?'wn':'no',ic=isOk?'✓':isPartialConfirm?'👥':(r.result==='USED'||isAlready)?'⚠':isNotCheckIn?'⛔':'✕';
  let title=t('v_'+r.result)||r.result;
@@ -3252,15 +3259,15 @@ function scCardHtml(r){
    <div style="margin-top:12px;padding:12px;background:rgba(0,0,0,.35);border-radius:10px;text-align:center">
      <div style="font-size:12px;font-weight:700;color:#fcd34d;margin-bottom:8px">BERAPA ORANG YANG HADIR SEKARANG?</div>
      <div style="display:flex;align-items:center;justify-content:center;gap:12px;margin-bottom:12px">
-       <button type="button" class="btn sm" onclick="changeDashStepQty(-1)" style="font-size:20px;width:38px;height:38px;border-radius:8px;padding:0;font-weight:900">-</button>
+       <button type="button" class="btn sm" onclick="changeDashStepQty(-1)" data-act="changeDashStepQty" data-delta="-1" style="font-size:20px;width:38px;height:38px;border-radius:8px;padding:0;font-weight:900">-</button>
        <input id="dash_step_entered_qty" type="number" min="1" max="${r.remaining}" value="${r.remaining}" style="width:70px;text-align:center;font-size:22px;font-weight:900;border-radius:8px;padding:4px">
-       <button type="button" class="btn sm" onclick="changeDashStepQty(1)" style="font-size:20px;width:38px;height:38px;border-radius:8px;padding:0;font-weight:900">+</button>
+       <button type="button" class="btn sm" onclick="changeDashStepQty(1)" data-act="changeDashStepQty" data-delta="1" style="font-size:20px;width:38px;height:38px;border-radius:8px;padding:0;font-weight:900">+</button>
      </div>
      <div style="display:flex;gap:8px">
-       <button type="button" class="btn pri" onclick="submitDashPartialCheckin('${esc(r.code)}', false)" style="flex:1">✓ Masuk Sesuai Input</button>
-       <button type="button" class="btn wn" onclick="submitDashPartialCheckin('${esc(r.code)}', true)" style="flex:1;background:#f59e0b;color:#000;font-weight:700">Semua (${r.remaining})</button>
+       <button type="button" class="btn pri" onclick="submitDashPartialCheckin('${esc(r.code)}', false)" data-act="submitDashPartialCheckin" data-code="${esc(r.code)}" data-all="false" style="flex:1">✓ Masuk Sesuai Input</button>
+       <button type="button" class="btn wn" onclick="submitDashPartialCheckin('${esc(r.code)}', true)" data-act="submitDashPartialCheckin" data-code="${esc(r.code)}" data-all="true" style="flex:1;background:#f59e0b;color:#000;font-weight:700">Semua (${r.remaining})</button>
      </div>
-     <button type="button" class="btn sm" onclick="cancelDashPartialCheckin()" style="margin-top:8px;background:transparent;border:none;color:var(--mu);font-size:11px;cursor:pointer">✕ Batal / Lewati</button>
+     <button type="button" class="btn sm" onclick="cancelDashPartialCheckin()" data-act="cancelDashPartialCheckin" style="margin-top:8px;background:transparent;border:none;color:var(--mu);font-size:11px;cursor:pointer">✕ Batal / Lewati</button>
    </div>
   </div>`;
  }
@@ -6738,7 +6745,7 @@ const NL=String.fromCharCode(10),find=(a,id)=>a.find(x=>x.id===id),A={
     await generateTicketPdf(o);
   }catch(e){fail(e)}finally{bz(-1,t('preparing'))}
 },
- scOpen(){openScannerModal()},scClose(){closeScannerModal()},scTorch(){toggleTorch()},scAudio(){toggleAudio()},scFlip(){toggleCamera()},scFs(){toggleFullscreen()},cpRefresh(){A_cpRefresh()},cpExport(){A_cpExport()},cpManageModal(el){cpManageModal(el.dataset.id)},cpAddAdmin(){cpEditFormModal(null)},cpEditAdmin(el){const id=el.dataset.id,key=el.dataset.key,cp=S_cpAdmin.checkpoints.find(x=>(id&&x.id===id)||(key&&x.checkpoint_key===key));cpEditFormModal(cp)},cpDeleteAdmin(el){A_cpDeleteAdmin(el)},cpToggleActive(el){A_cpToggleActive(el)},cpSaveAdminSubmit(el){A_cpSaveAdminSubmit(el)},cpResetDefaults(){A_cpResetDefaults()},cpShowQr(el){const id=el.dataset.id,key=el.dataset.key,cp=S_cpAdmin.checkpoints.find(x=>(id&&x.id===id)||(key&&x.checkpoint_key===key));cpShowQrModal(cp)},copySessionLink(el){navigator.clipboard.writeText(el.dataset.url).then(()=>toast('Tautan presensi disalin!',0)).catch(()=>toast('Gagal menyalin',1))},openSelfScan(el){openSelfScanModal(el.dataset.code)},closeSelfScan(){closeSelfScanModal()},evForm(el){evForm(el.dataset.id)},paid(el){S.paid=el.dataset.v==='1';document.querySelectorAll('[data-act=paid]').forEach(b=>b.classList.toggle('on',b===el));const p=$('#pr');p.disabled=!S.paid;if(!S.paid)p.value=0},
+ scOpen(){openScannerModal()},cancelDashPartialCheckin(){cancelDashPartialCheckin()},changeDashStepQty(el){changeDashStepQty(parseInt(el.dataset.delta||0,10))},submitDashPartialCheckin(el){submitDashPartialCheckin(el.dataset.code,el.dataset.all==='true')},scClose(){closeScannerModal()},scTorch(){toggleTorch()},scAudio(){toggleAudio()},scFlip(){toggleCamera()},scFs(){toggleFullscreen()},cpRefresh(){A_cpRefresh()},cpExport(){A_cpExport()},cpManageModal(el){cpManageModal(el.dataset.id)},cpAddAdmin(){cpEditFormModal(null)},cpEditAdmin(el){const id=el.dataset.id,key=el.dataset.key,cp=S_cpAdmin.checkpoints.find(x=>(id&&x.id===id)||(key&&x.checkpoint_key===key));cpEditFormModal(cp)},cpDeleteAdmin(el){A_cpDeleteAdmin(el)},cpToggleActive(el){A_cpToggleActive(el)},cpSaveAdminSubmit(el){A_cpSaveAdminSubmit(el)},cpResetDefaults(){A_cpResetDefaults()},cpShowQr(el){const id=el.dataset.id,key=el.dataset.key,cp=S_cpAdmin.checkpoints.find(x=>(id&&x.id===id)||(key&&x.checkpoint_key===key));cpShowQrModal(cp)},copySessionLink(el){navigator.clipboard.writeText(el.dataset.url).then(()=>toast('Tautan presensi disalin!',0)).catch(()=>toast('Gagal menyalin',1))},openSelfScan(el){openSelfScanModal(el.dataset.code)},closeSelfScan(){closeSelfScanModal()},evForm(el){evForm(el.dataset.id)},paid(el){S.paid=el.dataset.v==='1';document.querySelectorAll('[data-act=paid]').forEach(b=>b.classList.toggle('on',b===el));const p=$('#pr');p.disabled=!S.paid;if(!S.paid)p.value=0},
  async saveEv(){
   const f=$('#ef'),d=Object.fromEntries(new FormData(f));
   d.one_order_per_account=f.one_order_per_account.checked;
