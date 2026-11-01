@@ -3278,7 +3278,8 @@ async function handleScanCode(raw){const code=String(raw||'').trim().toUpperCase
  if(_cooldown)return;
  _cooldown=true;_lastCode=code;_lastTime=now;if(_resTimer){clearTimeout(_resTimer);_resTimer=null}
  const fr=$('#sc_frame'),resArea=$('#sc_res');
- try{let r;
+ let r;
+ try{
   const curCp=($('#sc_cp_sel')?$('#sc_cp_sel').value:($('#scan_view_cp_sel')?$('#scan_view_cp_sel').value:'main_gate'));
   if(!navigator.onLine){r=offlineValidate(code)}
   else{
