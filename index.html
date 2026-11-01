@@ -5727,6 +5727,131 @@ function paintOrganizers(){
  `;
 }
 
+function initOrgImageUploader(type, maxW, maxH, quality) {
+  const fileInput = document.getElementById('org_' + type + '_file');
+  const dropZone = document.getElementById('org_' + type + '_drop');
+  const urlInput = document.getElementById('org_' + type + '_url');
+  const preview = document.getElementById('org_' + type + '_preview');
+  const badge = document.getElementById('org_' + type + '_badge');
+  const clearBtn = document.getElementById('org_' + type + '_clear');
+
+  async function processFile(file) {
+    if (!file) return;
+    if (!file.type || !file.type.startsWith('image/')) {
+      return toast('Harap pilih berkas gambar (JPG, PNG, WebP)', 1);
+    }
+    toast('Mengompresi gambar ke WebP...', 0);
+    try {
+      const res = await compressImageToWebp(file, maxW, maxH, quality);
+      if (urlInput) urlInput.value = res.dataUrl;
+      if (preview) {
+        if (type === 'logo') {
+          preview.innerHTML = '<img src="' + res.dataUrl + '" style="width:100%;height:100%;object-fit:cover">';
+        } else {
+          preview.innerHTML = '';
+          preview.style.background = "url('" + res.dataUrl + "') center/cover no-repeat";
+        }
+      }
+      if (badge) {
+        badge.textContent = '✓ WebP (' + res.compressedSizeKb + ' KB)';
+        badge.style.display = 'inline-block';
+      }
+      if (clearBtn) clearBtn.style.display = 'inline-flex';
+      toast((type === 'logo' ? 'Logo' : 'Banner') + ' WebP berhasil diproses! (' + res.compressedSizeKb + ' KB)', 0);
+    } catch (err) {
+      toast(err.message || 'Gagal memproses gambar', 1);
+    }
+  }
+
+  if (fileInput) {
+    fileInput.addEventListener('change', function() {
+      if (this.files && this.files[0]) processFile(this.files[0]);
+    });
+  }
+
+  if (dropZone) {
+    ['dragenter', 'dragover'].forEach(eventName => {
+      dropZone.addEventListener(eventName, e => {
+        e.preventDefault();
+        e.stopPropagation();
+        dropZone.style.borderColor = 'var(--ac)';
+        dropZone.style.background = 'rgba(91,78,240,0.06)';
+      });
+    });
+
+    ['dragleave', 'drop'].forEach(eventName => {
+      dropZone.addEventListener(eventName, e => {
+        e.preventDefault();
+        e.stopPropagation();
+        dropZone.style.borderColor = 'var(--bd)';
+        dropZone.style.background = 'var(--card)';
+      });
+    });
+
+    dropZone.addEventListener('drop', e => {
+      const dt = e.dataTransfer;
+      if (dt && dt.files && dt.files[0]) {
+        processFile(dt.files[0]);
+      }
+    });
+
+    dropZone.addEventListener('click', e => {
+      if (e.target.tagName !== 'BUTTON' && e.target.tagName !== 'INPUT' && e.target.tagName !== 'LABEL') {
+        if (fileInput) fileInput.click();
+      }
+    });
+  }
+
+  if (clearBtn) {
+    clearBtn.addEventListener('click', () => {
+      if (urlInput) urlInput.value = '';
+      if (fileInput) fileInput.value = '';
+      if (preview) {
+        if (type === 'logo') {
+          preview.innerHTML = '<span style="font-size:28px;opacity:.6">🏢</span>';
+        } else {
+          preview.innerHTML = '<span style="font-size:12px;color:var(--mu)">🖼️ Pratinjau Banner (1200x630)</span>';
+          preview.style.background = 'var(--card)';
+        }
+      }
+      if (badge) badge.style.display = 'none';
+      clearBtn.style.display = 'none';
+      toast((type === 'logo' ? 'Logo' : 'Banner') + ' dihapus', 0);
+    });
+  }
+
+  if (urlInput) {
+    urlInput.addEventListener('input', () => {
+      const val = urlInput.value.trim();
+      if (!val) {
+        if (preview) {
+          if (type === 'logo') preview.innerHTML = '<span style="font-size:28px;opacity:.6">🏢</span>';
+          else {
+            preview.innerHTML = '<span style="font-size:12px;color:var(--mu)">🖼️ Pratinjau Banner (1200x630)</span>';
+            preview.style.background = 'var(--card)';
+          }
+        }
+        if (badge) badge.style.display = 'none';
+        if (clearBtn) clearBtn.style.display = 'none';
+        return;
+      }
+      if (preview) {
+        if (type === 'logo') {
+          preview.innerHTML = '<img src="' + esc(val) + '" style="width:100%;height:100%;object-fit:cover" onerror="this.src=\'\';this.alt=\'URL Rusak\'">';
+        } else {
+          preview.innerHTML = '';
+          preview.style.background = "url('" + esc(val) + "') center/cover no-repeat";
+        }
+      }
+      if (badge) {
+        badge.textContent = '✓ URL Terpasang';
+        badge.style.display = 'inline-block';
+      }
+      if (clearBtn) clearBtn.style.display = 'inline-flex';
+    });
+  }
+}
+
 function openOrgModal(orgId){
  const o = orgId ? (S_orgs || []).find(x => x.id === orgId) : null;
  const title = o ? 'Edit Penyelenggara' : 'Tambah Penyelenggara Baru';
@@ -5743,9 +5868,57 @@ function openOrgModal(orgId){
    </div>
    <div><label>Email Kontak</label><input name="contact_email" type="email" value="${esc(o ? o.contact_email : '')}" placeholder="panitia@domain.com"></div>
    <div><label>Deskripsi / Profil Singkat</label><textarea name="description" rows="3" placeholder="Profil atau bio singkat penyelenggara...">${esc(o ? o.description : '')}</textarea></div>
-   <div class="fg">
-     <div><label>URL Logo / Avatar</label><input name="logo_url" value="${esc(o ? o.logo_url : '')}" placeholder="https://..."></div>
-     <div><label>URL Banner / Cover</label><input name="banner_url" value="${esc(o ? o.banner_url : '')}" placeholder="https://..."></div>
+   
+   <!-- Upload & URL Logo / Avatar -->
+   <div style="background:var(--in,rgba(0,0,0,.03));border:1px solid var(--bd);border-radius:12px;padding:12px;margin:12px 0">
+     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+       <label style="margin:0;font-size:12px;font-weight:700">Logo / Avatar Penyelenggara</label>
+       <span id="org_logo_badge" class="pill ok" style="display:${o && o.logo_url ? 'inline-block' : 'none'};font-size:10px;padding:2px 7px">✓ Terpasang</span>
+     </div>
+     <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+       <div id="org_logo_preview" style="width:68px;height:68px;border-radius:14px;border:2px dashed var(--bd);background:var(--card);display:grid;place-items:center;overflow:hidden;flex-shrink:0;position:relative">
+         ${o && o.logo_url ? `<img src="${esc(o.logo_url)}" style="width:100%;height:100%;object-fit:cover" onerror="this.remove()">` : `<span style="font-size:28px;opacity:.6">🏢</span>`}
+       </div>
+       <div id="org_logo_drop" style="flex:1;min-width:180px;border:2px dashed var(--bd);border-radius:12px;padding:10px 14px;text-align:center;background:var(--card);cursor:pointer;transition:.2s">
+         <div style="font-size:12px;font-weight:600;color:var(--tx)">Tarik & lepas foto logo ke sini</div>
+         <div style="font-size:11px;color:var(--mu);margin-top:2px">atau klik tombol di bawah (WebP otomatis, maks. 400x400)</div>
+         <div style="margin-top:8px;display:flex;gap:6px;justify-content:center;flex-wrap:wrap">
+           <label class="btn sm pri" style="cursor:pointer;margin:0;padding:4px 10px;font-size:11.5px">
+             📁 Pilih Logo
+             <input type="file" id="org_logo_file" accept="image/*" style="display:none">
+           </label>
+           <button type="button" class="btn sm dg" id="org_logo_clear" style="display:${o && o.logo_url ? 'inline-flex' : 'none'};padding:4px 9px;font-size:11.5px">Hapus</button>
+         </div>
+       </div>
+     </div>
+     <div style="margin-top:8px">
+       <input id="org_logo_url" name="logo_url" value="${esc(o ? o.logo_url : '')}" placeholder="Atau tempel URL gambar eksternal (https://...)" style="font-size:12px;padding:7px 10px">
+     </div>
+   </div>
+
+   <!-- Upload & URL Banner / Cover -->
+   <div style="background:var(--in,rgba(0,0,0,.03));border:1px solid var(--bd);border-radius:12px;padding:12px;margin:12px 0">
+     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+       <label style="margin:0;font-size:12px;font-weight:700">Banner / Sampul Penyelenggara</label>
+       <span id="org_banner_badge" class="pill ok" style="display:${o && o.banner_url ? 'inline-block' : 'none'};font-size:10px;padding:2px 7px">✓ Terpasang</span>
+     </div>
+     <div id="org_banner_preview" style="width:100%;height:100px;border-radius:12px;border:2px dashed var(--bd);background:${o && o.banner_url ? `url('${esc(o.banner_url)}') center/cover no-repeat` : 'var(--card)'};display:grid;place-items:center;overflow:hidden;margin-bottom:8px;position:relative">
+       ${!(o && o.banner_url) ? `<span style="font-size:12px;color:var(--mu)">🖼️ Pratinjau Banner (Rasio 16:9 / 1200x630)</span>` : ''}
+     </div>
+     <div id="org_banner_drop" style="border:2px dashed var(--bd);border-radius:12px;padding:10px 14px;text-align:center;background:var(--card);cursor:pointer;transition:.2s">
+       <div style="font-size:12px;font-weight:600;color:var(--tx)">Tarik & lepas foto banner ke sini</div>
+       <div style="font-size:11px;color:var(--mu);margin-top:2px">atau klik tombol di bawah (WebP otomatis, maks. 1200x630)</div>
+       <div style="margin-top:8px;display:flex;gap:6px;justify-content:center;flex-wrap:wrap">
+         <label class="btn sm pri" style="cursor:pointer;margin:0;padding:4px 10px;font-size:11.5px">
+           🖼️ Pilih Banner
+           <input type="file" id="org_banner_file" accept="image/*" style="display:none">
+         </label>
+         <button type="button" class="btn sm dg" id="org_banner_clear" style="display:${o && o.banner_url ? 'inline-flex' : 'none'};padding:4px 9px;font-size:11.5px">Hapus</button>
+       </div>
+     </div>
+     <div style="margin-top:8px">
+       <input id="org_banner_url" name="banner_url" value="${esc(o ? o.banner_url : '')}" placeholder="Atau tempel URL gambar banner eksternal (https://...)" style="font-size:12px;padding:7px 10px">
+     </div>
    </div>
    
    <div style="background:var(--in,rgba(0,0,0,.03));border:1px solid var(--bd);border-radius:10px;padding:12px;margin:12px 0">
@@ -5768,6 +5941,9 @@ function openOrgModal(orgId){
    </div>
  </form>
  `);
+
+ initOrgImageUploader('logo', 400, 400, 0.85);
+ initOrgImageUploader('banner', 1200, 630, 0.82);
 }
 
 async function publicEoView(slug){
