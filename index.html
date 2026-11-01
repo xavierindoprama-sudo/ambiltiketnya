@@ -70,7 +70,7 @@ label{display:block;font-size:12px;font-weight:600;color:var(--mu);margin:12px 0
 .main{padding:20px;min-width:0}.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,170px),1fr));gap:14px;margin:14px 0}.stat{padding:16px;display:flex;justify-content:space-between;align-items:center}.stat b{font:700 30px Outfit;display:block}.stat small{color:var(--mu)}
 .ring{--p:0;--c:var(--ac);width:54px;height:54px;border-radius:50%;background:conic-gradient(var(--c) calc(var(--p)*1%),var(--bd) 0);display:grid;place-items:center;font-size:11px;font-weight:700}.ring span{background:var(--card);width:42px;height:42px;border-radius:50%;display:grid;place-items:center}
 .charts{display:grid;grid-template-columns:minmax(0,2fr) minmax(0,1fr);gap:14px}.bars{display:flex;align-items:stretch;gap:12px;height:230px;border-bottom:1px solid var(--bd);overflow-x:auto;padding-top:4px}.bc{flex:1;min-width:72px;display:flex;flex-direction:column;text-align:center;font-size:11px;color:var(--mu)}.bc .vl{font-weight:700;color:var(--tx)}.bc .pr{flex:1;min-height:0;display:flex;gap:4px;align-items:flex-end;justify-content:center}.bc .pr i{width:22px;min-height:3px;border-radius:6px 6px 0 0;background:var(--ac);transition:height .6s}.bc .pr i+i{background:var(--ok)}.bl{padding-top:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.lgd{display:flex;gap:14px;flex-wrap:wrap;font-size:12px;color:var(--mu);margin:6px 0}.lgd i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:6px}.stat>div:first-child{min-width:0}.ring{flex:none}.fg{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px}
-.donut{width:160px;height:160px;max-width:100%;border-radius:50%;margin:10px auto;display:grid;place-items:center;background:conic-gradient(var(--ok) calc(var(--p)*1%),var(--ac) 0);box-sizing:border-box}.donut span{background:var(--card);width:calc(100% - 36px);height:calc(100% - 36px);border-radius:50%;display:grid;place-items:center;font:700 24px Outfit;text-align:center;line-height:1.1}
+.donut{width:160px;height:160px;aspect-ratio:1/1;border-radius:50%;margin:12px auto;display:grid;place-items:center;background:conic-gradient(var(--ok) calc(var(--p)*1%),var(--ac) 0);box-sizing:border-box;flex:none}.donut span{background:var(--card);width:112px;height:112px;aspect-ratio:1/1;border-radius:50%;display:grid;place-items:center;font:700 24px Outfit;text-align:center;line-height:1.1;box-sizing:border-box}
 .ch-bubble-wrap{display:flex;flex-wrap:wrap;justify-content:center;align-items:center;gap:12px;padding:12px 4px;min-height:220px;position:relative}
 .ch-bubble{border-radius:50%;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:6px;cursor:pointer;color:#fff;user-select:none;transition:transform .24s cubic-bezier(.34,1.56,.64,1),box-shadow .24s,filter .24s;position:relative}
 .ch-bubble:hover{transform:translateY(-8px) scale(1.1)!important;z-index:10;filter:brightness(1.15)}
@@ -171,8 +171,8 @@ body{font-size:13.2px;line-height:1.45}
 
 /* Tablet Charts & Layout: Single column to prevent donut & bar squeezing */
 .charts,.two{grid-template-columns:minmax(0,1fr);gap:14px}
-.donut{width:min(160px,100%);height:min(160px,100%);max-width:100%;margin:10px auto;box-sizing:border-box}
-.donut span{width:calc(100% - 36px);height:calc(100% - 36px);font-size:22px}
+.donut{width:160px;height:160px;aspect-ratio:1/1;margin:12px auto;flex:none}
+.donut span{width:112px;height:112px;aspect-ratio:1/1;font-size:24px}
 
 .grid{gap:14px;grid-template-columns:repeat(auto-fill,minmax(min(100%,270px),1fr))}
 .ban{height:145px}
