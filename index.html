@@ -948,6 +948,18 @@ function renderAdmin(){
    `:''}
  </div>`: '';
 
+ const mbarHtml = (S.view==='dash')
+  ? '<header class="mbar"><div class="m-brand"><i>'+ico(ICN.ticket)+'</i><span>ambiltiketnya<b>.online</b></span></div><span class="sp"></span><div class="m-top-actions"><button class="ib" data-act="themecycle" title="Ubah Tema">'+IC[TH]+'</button><button class="ib" data-act="langtoggle" title="Bahasa">'+L.toUpperCase()+'</button><button class="ib" data-act="sbopen" title="Menu Lengkap">'+ico(ICN.menu)+'</button></div></header>'
+  : '<header class="mbar"><button class="ib" data-act="view" data-v="dash" title="Kembali ke Beranda">'+ico(ICN.left)+'</button><b style="font:700 15px Outfit;color:var(--tx);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:180px">'+pageTitle+'</b><span class="sp"></span><div class="m-top-actions"><button class="ib" data-act="themecycle" title="Ubah Tema">'+IC[TH]+'</button><button class="ib" data-act="sbopen" title="Menu Lengkap">'+ico(ICN.menu)+'</button></div></header>';
+
+ const mBottomNavHtml = '<nav class="m-bottom-nav">'
+  + '<button class="m-nav-item '+(S.view==='dash'?'active':'')+'" data-act="view" data-v="dash"><div class="m-nav-ic">'+ico(ICN.dash)+'</div><span>Beranda</span></button>'
+  + '<button class="m-nav-item '+(S.view==='orders'?'active':'')+'" data-act="view" data-v="orders"><div class="m-nav-ic">'+ico(ICN.orders)+'</div><span>'+(isRsvp?'Peserta':'Pesanan')+'</span></button>'
+  + '<div class="m-nav-center-wrap"><button class="m-nav-qr" data-act="scOpen" title="Scan Tiket"><div class="m-nav-qr-btn">'+ico(ICN.scan)+'<span>SCAN</span></div></button></div>'
+  + '<button class="m-nav-item '+(S.view==='analytics'?'active':'')+'" data-act="view" data-v="analytics"><div class="m-nav-ic">'+ico(ICN.analytics)+'</div><span>Laporan</span></button>'
+  + '<button class="m-nav-item" data-act="openProfileModal"><div class="m-nav-ic">'+ico(ICN.user)+'</div><span>Akun</span></button>'
+  + '</nav>';
+
  $('#app').innerHTML='<div class="app'+(col?' col':'')+'" id="shell"><aside class="sb"><div class="sb-top"><div class="logo"><i>'+ico(ICN.ticket)+'</i><span class="sb-txt">ambiltiketnya<b>.online</b></span></div><button class="ib sb-tg" data-act="sbtoggle" title="Menu">'+ico(ICN.left)+'</button><button class="ib sb-x" data-act="sbclose">'+ico(ICN.close)+'</button></div>'
  +'<nav class="sb-nav">'+navGroups.map((g,idx)=>{
   const visible=g.items.filter(n=>rk()>=n[1]);
@@ -965,17 +977,6 @@ function renderAdmin(){
   return sep+gTitle+btns;
  }).join('')+'<div class="sb-sep"></div>'+it(0,ICN.user,t('asuser'),'mode','user')+'</nav>'
  +'<div class="sb-bot"><div class="uc" data-act="openProfileModal" style="cursor:pointer" title="Klik untuk edit profil">'+avt(S.user)+'<div class="sb-txt"><b>'+esc(S.user.name)+'</b><small>'+t('r_'+S.user.role)+'</small></div></div><div class="sb-full">'+ctl()+'<button class="btn sm" data-act="aiSettingsModal" style="width:100%;margin-top:8px;display:flex;align-items:center;justify-content:center;gap:6px;font-size:12px;font-weight:700;background:rgba(139,92,246,.12);border:1px solid rgba(139,92,246,.35);color:#c7d2fe"><span>✨</span> <span>Pengaturan AI Key</span></button></div><div class="sb-mini"><button class="ib" data-act="themecycle" title="'+t('theme')+'">'+IC[TH]+'</button><button class="ib" data-act="langtoggle">'+L.toUpperCase()+'</button></div>'+it(0,ICN.out,t('logout'),'logout','','dg')+'</div></aside><div class="sb-bg" data-act="sbclose"></div>'
- const mbarHtml = (S.view==='dash')
-  ? '<header class="mbar"><div class="m-brand"><i>'+ico(ICN.ticket)+'</i><span>ambiltiketnya<b>.online</b></span></div><span class="sp"></span><div class="m-top-actions"><button class="ib" data-act="themecycle" title="Ubah Tema">'+IC[TH]+'</button><button class="ib" data-act="langtoggle" title="Bahasa">'+L.toUpperCase()+'</button><button class="ib" data-act="sbopen" title="Menu Lengkap">'+ico(ICN.menu)+'</button></div></header>'
-  : '<header class="mbar"><button class="ib" data-act="view" data-v="dash" title="Kembali ke Beranda">'+ico(ICN.left)+'</button><b style="font:700 15px Outfit;color:var(--tx);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:180px">'+pageTitle+'</b><span class="sp"></span><div class="m-top-actions"><button class="ib" data-act="themecycle" title="Ubah Tema">'+IC[TH]+'</button><button class="ib" data-act="sbopen" title="Menu Lengkap">'+ico(ICN.menu)+'</button></div></header>';
-
- const mBottomNavHtml = '<nav class="m-bottom-nav">'
-  + '<button class="m-nav-item '+(S.view==='dash'?'active':'')+'" data-act="view" data-v="dash"><div class="m-nav-ic">'+ico(ICN.dash)+'</div><span>Beranda</span></button>'
-  + '<button class="m-nav-item '+(S.view==='orders'?'active':'')+'" data-act="view" data-v="orders"><div class="m-nav-ic">'+ico(ICN.orders)+'</div><span>'+(isRsvp?'Peserta':'Pesanan')+'</span></button>'
-  + '<div class="m-nav-center-wrap"><button class="m-nav-qr" data-act="scOpen" title="Scan Tiket"><div class="m-nav-qr-btn">'+ico(ICN.scan)+'<span>SCAN</span></div></button></div>'
-  + '<button class="m-nav-item '+(S.view==='analytics'?'active':'')+'" data-act="view" data-v="analytics"><div class="m-nav-ic">'+ico(ICN.analytics)+'</div><span>Laporan</span></button>'
-  + '<button class="m-nav-item" data-act="openProfileModal"><div class="m-nav-ic">'+ico(ICN.user)+'</div><span>Akun</span></button>'
-  + '</nav>';
  +'<div class="mw">'+mbarHtml+'<section class="card main"><h2 class="ptitle">'+pageTitle+'</h2>'+evContextBar+'<div id="ac">'+skel(1)+'</div></section></div>'+mBottomNavHtml+'</div>';adminView()}
 async function adminView(){
   const c=$('#ac');
@@ -992,7 +993,7 @@ async function adminView(){
   }catch(e){fail(e)}
 }
 async function dash(c){try{S.st=await api('stats')}catch(e){return fail(e)}paintDash()}
-function paintDash(){const c=$('#ac'),sel=S.sel||'',r=S.st.filter(x=>!sel||x.id===sel),sm=k=>r.reduce((a,x)=>a+x[k],0),bk=sm('booked'),ck=sm('checked'),q=sm('quota'),ac=r.filter(x=>x.is_active).length,mx=Math.max(1,...r.map(x=>x.booked));
+function paintDash(){const c=$('#ac');if(!c)return;const sel=S.sel||'',r=S.st.filter(x=>!sel||x.id===sel),sm=k=>r.reduce((a,x)=>a+x[k],0),bk=sm('booked'),ck=sm('checked'),q=sm('quota'),ac=r.filter(x=>x.is_active).length,mx=Math.max(1,...r.map(x=>x.booked));
  const st=(ic,v,l,s,p,col)=>`<div class="card stat"><div><b>${v}</b><small>${l}</small><br><small>${s}</small></div><div class="ring" style="--p:${p};--c:${col}"><span>${p}%</span></div></div>`;
  const pctBooked = pc(bk, q);
  const pctCheckin = pc(ck, bk);
