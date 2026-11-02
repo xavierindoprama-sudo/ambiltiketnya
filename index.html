@@ -152,7 +152,7 @@ label{display:block;font-size:12px;font-weight:600;color:var(--mu);margin:12px 0
 .sb-bot{display:flex;flex-direction:column;gap:8px;border-top:1px solid var(--bd);padding-top:12px}.uc{display:flex;gap:10px;align-items:center;min-width:0}.uc>div{min-width:0}.uc b,.uc small{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.uc small{color:var(--mu);font-size:11px}
 .sb-full{display:flex;flex-wrap:wrap;gap:6px}.sb-mini{display:none;flex-direction:column;gap:6px;align-items:center}
 .col .sb-txt,.col .ni span,.col .sb-full,.col .uc>div{display:none}.col .sb-mini{display:flex}.col .ni{justify-content:center;padding:11px 0}.col .sb-top{flex-direction:column;align-items:center;gap:10px}.col .sb-tg{margin-left:0}.col .uc{justify-content:center}
-.mw{padding:18px;min-width:0}.mbar,.sb-bg{display:none}.ptitle{margin-bottom:6px}
+.mw{padding:18px;min-width:0}.mbar,.sb-bg{display:none}.ptitle{margin-bottom:6px}.m-only{display:none!important}.m-only-flex{display:none!important}.m-bottom-nav{display:none!important}
 /* Micro-refinements: sleek scrollbar & tactile feel */
 ::-webkit-scrollbar{width:6px;height:6px}
 ::-webkit-scrollbar-track{background:transparent}
@@ -226,6 +226,86 @@ table.rt, .rt tbody, .rt tr{display:block;width:100%;max-width:100%;box-sizing:b
 
 @media(max-width:640px){
 body{font-size:12.3px;line-height:1.4}
+.m-only{display:block!important}
+.m-only-flex{display:flex!important}
+.d-only{display:none!important}
+.mw{padding-bottom:76px!important}
+.main{padding-bottom:76px!important}
+
+/* Mobile App Bar Header */
+.mbar{padding:8px 12px;margin:-10px -10px 12px;display:flex;align-items:center;justify-content:space-between;gap:8px;background:var(--bg-glass,var(--bg));backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border-bottom:1px solid var(--top-bd,var(--bd))}
+.m-brand{display:flex;align-items:center;gap:7px;font:800 15px Outfit,sans-serif;color:var(--tx);letter-spacing:-0.02em}
+.m-brand i{display:flex;align-items:center;color:var(--ac)}
+.m-brand b{color:var(--ac);font-weight:800}
+.m-top-actions{display:flex;align-items:center;gap:5px;margin-left:auto}
+.m-top-actions .ib{width:32px;height:32px;border-radius:9px;background:var(--card-sub,rgba(255,255,255,0.05));border:1px solid var(--bd);display:flex;align-items:center;justify-content:center;color:var(--tx)}
+
+/* Greeting Section */
+.m-greeting-box{margin:2px 0 10px}
+.m-greeting-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:2px}
+.m-greeting-badge{font-size:9.5px;font-weight:800;letter-spacing:0.05em;padding:2px 7px;border-radius:6px;background:rgba(59,130,246,0.15);color:#60a5fa;border:1px solid rgba(59,130,246,0.3);text-transform:uppercase}
+.m-greeting-title{font:800 18px Outfit,sans-serif;letter-spacing:-0.02em;margin:3px 0 0;color:var(--tx);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+/* Hero Active Card (myBCA Account Card Style) */
+.m-hero-card{background:linear-gradient(135deg,rgba(30,58,138,0.85) 0%,rgba(15,23,42,0.95) 100%);border:1px solid rgba(59,130,246,0.35);border-radius:18px;padding:14px 16px;margin-bottom:14px;box-shadow:0 8px 24px rgba(0,0,0,0.18),inset 0 1px 0 rgba(255,255,255,0.12);color:#fff;position:relative;overflow:hidden}
+[data-theme="light"] .m-hero-card{background:linear-gradient(135deg,#1e40af 0%,#2563eb 60%,#3b82f6 100%);border-color:rgba(255,255,255,0.2);box-shadow:0 10px 25px rgba(37,99,235,0.25)}
+.m-hero-card::after{content:'';position:absolute;right:-25px;bottom:-35px;width:140px;height:140px;border-radius:50%;background:radial-gradient(circle,rgba(255,255,255,0.12) 0%,rgba(255,255,255,0) 70%);pointer-events:none}
+.m-hero-top{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:10px}
+.m-hero-badge{font-size:10px;font-weight:800;letter-spacing:0.04em;padding:3px 8px;border-radius:999px;background:rgba(255,255,255,0.18);color:#fff;border:1px solid rgba(255,255,255,0.25);backdrop-filter:blur(4px);display:inline-flex;align-items:center;gap:4px}
+.m-hero-select{background:rgba(0,0,0,0.25);border:1px solid rgba(255,255,255,0.25);color:#fff;border-radius:8px;padding:3px 8px;font-size:11px;font-weight:600;max-width:170px;cursor:pointer}
+.m-hero-select option{background:#0f172a;color:#fff}
+.m-hero-mid{margin-bottom:12px}
+.m-hero-lbl{font-size:10.5px;color:rgba(255,255,255,0.75);font-weight:600;margin-bottom:2px}
+.m-hero-val{font:800 21px Outfit,sans-serif;letter-spacing:-0.02em;color:#fff;display:flex;align-items:baseline;gap:6px}
+.m-hero-val small{font-size:11.5px;font-weight:500;color:rgba(255,255,255,0.85)}
+.m-hero-bar{width:100%;height:6px;background:rgba(255,255,255,0.2);border-radius:999px;overflow:hidden;margin-top:8px}
+.m-hero-bar-fill{height:100%;background:linear-gradient(90deg,#38bdf8,#4ade80);border-radius:999px;transition:width 0.3s ease}
+.m-hero-bot{display:flex;align-items:center;justify-content:space-between;padding-top:10px;border-top:1px solid rgba(255,255,255,0.15);font-size:11px;color:rgba(255,255,255,0.9)}
+.m-hero-stat b{font-weight:700;color:#fff}
+
+/* Banner Promo / Alert Strip */
+.m-banner-strip{background:var(--card-sub,rgba(255,255,255,0.04));border:1px solid var(--bd);border-radius:14px;padding:9px 12px;margin-bottom:16px;display:flex;align-items:center;justify-content:space-between;gap:8px;cursor:pointer;transition:transform 0.1s ease,border-color 0.15s ease}
+.m-banner-strip:active{transform:scale(0.98);border-color:var(--ac)}
+.m-banner-content{display:flex;align-items:center;gap:9px;min-width:0}
+.m-banner-icon{font-size:18px;flex:none}
+.m-banner-txt{min-width:0}
+.m-banner-txt b{display:block;font-size:11.5px;color:var(--tx);line-height:1.25;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.m-banner-txt small{display:block;font-size:10px;color:var(--mu);line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.m-banner-pill{padding:4px 9px;border-radius:999px;background:var(--ac);color:#fff;font-size:10px;font-weight:800;letter-spacing:0.03em;flex:none}
+
+/* Main Menu 4-Column Circular Grid */
+.m-menu-section{margin-bottom:18px}
+.m-menu-hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
+.m-menu-hdr h3{font:700 14px Outfit,sans-serif;margin:0;color:var(--tx)}
+.m-menu-subtle{background:transparent;border:none;font-size:11px;font-weight:600;color:var(--ac);cursor:pointer;padding:2px 4px}
+.m-menu-grid{display:grid;grid-template-columns:repeat(4,1fr);row-gap:14px;column-gap:6px}
+.m-menu-item{display:flex;flex-direction:column;align-items:center;text-align:center;cursor:pointer;user-select:none;-webkit-tap-highlight-color:transparent}
+.m-menu-item:active .m-menu-ic{transform:scale(0.91)}
+.m-menu-ic{width:48px;height:48px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:#fff;margin-bottom:6px;transition:transform 0.12s ease;position:relative}
+.m-menu-ic svg{width:21px;height:21px;stroke-width:2.1}
+.m-menu-badge{position:absolute;top:-2px;right:-2px;background:#ef4444;color:#fff;font-size:9px;font-weight:800;border-radius:999px;padding:1px 5px;border:2px solid var(--bg);line-height:1.2}
+.m-menu-item span{font-size:10.5px;font-weight:600;color:var(--tx);line-height:1.2;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+
+/* Section Title */
+.m-section-title{margin:16px 0 8px;display:flex;align-items:center;justify-content:space-between}
+.m-section-title h3{font:700 13.5px Outfit,sans-serif;margin:0;color:var(--tx)}
+
+/* Sticky Bottom Navigation Bar */
+.m-bottom-nav{display:flex!important;position:fixed;bottom:0;left:0;right:0;z-index:120;height:62px;background:var(--bg-glass,rgba(15,23,42,0.94));backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);border-top:1px solid var(--top-bd,var(--bd));box-shadow:0 -4px 20px rgba(0,0,0,0.12);align-items:center;justify-content:space-around;padding:0 4px calc(env(safe-area-inset-bottom,0px));box-sizing:border-box}
+.m-nav-item{flex:1;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;background:transparent;border:none;color:var(--mu,#94a3b8);cursor:pointer;padding:2px 0;-webkit-tap-highlight-color:transparent;transition:color 0.12s ease}
+.m-nav-item:active{transform:scale(0.93)}
+.m-nav-item.active{color:var(--ac,#3b82f6);font-weight:700}
+.m-nav-ic{display:flex;align-items:center;justify-content:center;height:22px}
+.m-nav-ic svg{width:20px;height:20px}
+.m-nav-item span{font-size:10px;line-height:1.1}
+
+/* Center Elevated QR Scan Button */
+.m-nav-center-wrap{flex:1;display:flex;justify-content:center;align-items:center;position:relative;height:100%}
+.m-nav-qr{position:relative;top:-14px;background:transparent;border:none;padding:0;cursor:pointer;display:flex;flex-direction:column;align-items:center;-webkit-tap-highlight-color:transparent}
+.m-nav-qr:active .m-nav-qr-btn{transform:scale(0.92)}
+.m-nav-qr-btn{width:52px;height:52px;border-radius:50%;background:linear-gradient(135deg,#0ea5e9 0%,#3b82f6 50%,#6366f1 100%);box-shadow:0 6px 18px rgba(14,165,233,0.45);border:3.5px solid var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;color:#fff;transition:transform 0.12s ease,box-shadow 0.15s ease}
+.m-nav-qr-btn svg{width:22px;height:22px;stroke-width:2.2}
+.m-nav-qr-btn span{font-size:8.5px;font-weight:800;letter-spacing:0.5px;line-height:1;margin-top:1px;color:#fff}
 .wrap{padding:10px 12px}
 .top{padding:8px 12px;gap:8px}
 .logo{font-size:15px;gap:6px}
@@ -848,7 +928,7 @@ function renderAdmin(){
  const it=(on,ic,l,act,dv,x,badge)=>'<button class="ni '+(on?'on ':'')+(x||'')+'" title="'+esc(l)+'" data-act="'+act+'"'+(dv?' data-v="'+dv+'"':'')+'>'+ico(ic)+'<span>'+l+'</span>'+(badge||'')+'</button>';
 
  const evContextBar=(rk()>=2&&S.aev&&S.aev.length)?`
- <div class="ev-context-bar" style="background:var(--card-sub,rgba(255,255,255,.03));border:1px solid var(--bd);border-radius:12px;padding:8px 14px;margin-bottom:14px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
+ <div class="ev-context-bar ${S.view==='dash'?'d-only':''}" style="background:var(--card-sub,rgba(255,255,255,.03));border:1px solid var(--bd);border-radius:12px;padding:8px 14px;margin-bottom:14px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
    <div style="display:flex;align-items:center;gap:8px;flex:1;min-width:250px">
      <span style="font-size:16px">🎯</span>
      <div style="flex:1;max-width:360px">
@@ -885,7 +965,18 @@ function renderAdmin(){
   return sep+gTitle+btns;
  }).join('')+'<div class="sb-sep"></div>'+it(0,ICN.user,t('asuser'),'mode','user')+'</nav>'
  +'<div class="sb-bot"><div class="uc" data-act="openProfileModal" style="cursor:pointer" title="Klik untuk edit profil">'+avt(S.user)+'<div class="sb-txt"><b>'+esc(S.user.name)+'</b><small>'+t('r_'+S.user.role)+'</small></div></div><div class="sb-full">'+ctl()+'<button class="btn sm" data-act="aiSettingsModal" style="width:100%;margin-top:8px;display:flex;align-items:center;justify-content:center;gap:6px;font-size:12px;font-weight:700;background:rgba(139,92,246,.12);border:1px solid rgba(139,92,246,.35);color:#c7d2fe"><span>✨</span> <span>Pengaturan AI Key</span></button></div><div class="sb-mini"><button class="ib" data-act="themecycle" title="'+t('theme')+'">'+IC[TH]+'</button><button class="ib" data-act="langtoggle">'+L.toUpperCase()+'</button></div>'+it(0,ICN.out,t('logout'),'logout','','dg')+'</div></aside><div class="sb-bg" data-act="sbclose"></div>'
- +'<div class="mw"><header class="mbar"><button class="ib" data-act="sbopen">'+ico(ICN.menu)+'</button><b>'+pageTitle+'</b><span class="sp"></span>'+avt(S.user)+'</header><section class="card main"><h2 class="ptitle">'+pageTitle+'</h2>'+evContextBar+'<div id="ac">'+skel(1)+'</div></section></div></div>';adminView()}
+ const mbarHtml = (S.view==='dash')
+  ? '<header class="mbar"><div class="m-brand"><i>'+ico(ICN.ticket)+'</i><span>ambiltiketnya<b>.online</b></span></div><span class="sp"></span><div class="m-top-actions"><button class="ib" data-act="themecycle" title="Ubah Tema">'+IC[TH]+'</button><button class="ib" data-act="langtoggle" title="Bahasa">'+L.toUpperCase()+'</button><button class="ib" data-act="sbopen" title="Menu Lengkap">'+ico(ICN.menu)+'</button></div></header>'
+  : '<header class="mbar"><button class="ib" data-act="view" data-v="dash" title="Kembali ke Beranda">'+ico(ICN.left)+'</button><b style="font:700 15px Outfit;color:var(--tx);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:180px">'+pageTitle+'</b><span class="sp"></span><div class="m-top-actions"><button class="ib" data-act="themecycle" title="Ubah Tema">'+IC[TH]+'</button><button class="ib" data-act="sbopen" title="Menu Lengkap">'+ico(ICN.menu)+'</button></div></header>';
+
+ const mBottomNavHtml = '<nav class="m-bottom-nav">'
+  + '<button class="m-nav-item '+(S.view==='dash'?'active':'')+'" data-act="view" data-v="dash"><div class="m-nav-ic">'+ico(ICN.dash)+'</div><span>Beranda</span></button>'
+  + '<button class="m-nav-item '+(S.view==='orders'?'active':'')+'" data-act="view" data-v="orders"><div class="m-nav-ic">'+ico(ICN.orders)+'</div><span>'+(isRsvp?'Peserta':'Pesanan')+'</span></button>'
+  + '<div class="m-nav-center-wrap"><button class="m-nav-qr" data-act="scOpen" title="Scan Tiket"><div class="m-nav-qr-btn">'+ico(ICN.scan)+'<span>SCAN</span></div></button></div>'
+  + '<button class="m-nav-item '+(S.view==='analytics'?'active':'')+'" data-act="view" data-v="analytics"><div class="m-nav-ic">'+ico(ICN.analytics)+'</div><span>Laporan</span></button>'
+  + '<button class="m-nav-item" data-act="openProfileModal"><div class="m-nav-ic">'+ico(ICN.user)+'</div><span>Akun</span></button>'
+  + '</nav>';
+ +'<div class="mw">'+mbarHtml+'<section class="card main"><h2 class="ptitle">'+pageTitle+'</h2>'+evContextBar+'<div id="ac">'+skel(1)+'</div></section></div>'+mBottomNavHtml+'</div>';adminView()}
 async function adminView(){
   const c=$('#ac');
   try{
@@ -903,10 +994,99 @@ async function adminView(){
 async function dash(c){try{S.st=await api('stats')}catch(e){return fail(e)}paintDash()}
 function paintDash(){const c=$('#ac'),sel=S.sel||'',r=S.st.filter(x=>!sel||x.id===sel),sm=k=>r.reduce((a,x)=>a+x[k],0),bk=sm('booked'),ck=sm('checked'),q=sm('quota'),ac=r.filter(x=>x.is_active).length,mx=Math.max(1,...r.map(x=>x.booked));
  const st=(ic,v,l,s,p,col)=>`<div class="card stat"><div><b>${v}</b><small>${l}</small><br><small>${s}</small></div><div class="ring" style="--p:${p};--c:${col}"><span>${p}%</span></div></div>`;
- c.innerHTML=`<div class="bar2"><select data-ch="sel">${'<option value="">'+t('all_ev')+'</option>'+S.st.map(x=>`<option value="${x.id}" ${x.id===sel?'selected':''}>${esc(x.name)}</option>`).join('')}</select></div>
-<div class="stats">${st('',bk,t('booked'),t('ofq')+' '+q,pc(bk,q),'var(--ac)')}${st('',ck,t('checked'),t('ofb')+' ('+bk+')',pc(ck,bk),'var(--ok)')}${st('',sm('pending'),t('pend'),'',pc(sm('pending'),q),'var(--wn)')}${st('',ac+'/'+r.length,t('act'),t('rev')+': Rp '+sm('revenue').toLocaleString('id-ID'),pc(ac,r.length),'#ec4899')}</div>
-<div class="charts"><div class="card" style="padding:16px"><h3>${t('chart')}</h3><div class="lgd"><span><i style="background:var(--ac)"></i>${t('booked')}</span><span><i style="background:var(--ok)"></i>${t('checked')}</span></div><div class="bars">${r.map(x=>`<div class="bc"><div class="vl">${x.booked} / ${x.checked}</div><div class="pr"><i style="height:${x.booked/mx*100}%" title="${x.booked}"></i><i style="height:${x.checked/mx*100}%" title="${x.checked}"></i></div><div class="bl" title="${esc(x.name)}">${esc(x.name)}</div></div>`).join('')}</div></div>
-<div class="card" style="padding:16px"><h3>${t('ratio')}</h3><div class="donut" style="--p:${pc(ck,bk)}"><span>${bk}<br><small class="muted" style="font:12px 'Plus Jakarta Sans'">${t('tix')}</small></span></div><div class="row"><span>&#128994; ${t('didin')}</span><b>${ck}</b></div><div class="row"><span>&#128995; ${t('notin')}</span><b>${bk-ck}</b></div></div></div>`}
+ const pctBooked = pc(bk, q);
+ const pctCheckin = pc(ck, bk);
+ const isRsvp = isCurRsvpMode();
+
+ const menuItems = [
+  {id:'scan', label:'Validasi QR', act:'scOpen', ic:ICN.scan, grad:'linear-gradient(135deg,#0284c7,#2563eb)', shadow:'rgba(37,99,235,.35)', rk:1},
+  {id:'orders', label:isRsvp?'Data Tamu':'Pesanan', act:'view', v:'orders', ic:ICN.orders, grad:'linear-gradient(135deg,#4f46e5,#7c3aed)', shadow:'rgba(124,58,237,.35)', rk:2},
+  {id:'inv', label:'Undangan', act:'view', v:'inv', ic:ICN.inv, grad:'linear-gradient(135deg,#f59e0b,#d97706)', shadow:'rgba(245,158,11,.35)', rk:2, badge:(S.waitList&&S.waitList.length?S.waitList.length:0)},
+  {id:'doorprize', label:'Doorprize', act:'view', v:'doorprize', ic:ICN.doorprize, grad:'linear-gradient(135deg,#ec4899,#e11d48)', shadow:'rgba(236,72,153,.35)', rk:2},
+  {id:'analytics', label:'Laporan AI', act:'view', v:'analytics', ic:ICN.analytics, grad:'linear-gradient(135deg,#8b5cf6,#6d28d9)', shadow:'rgba(139,92,246,.35)', rk:2},
+  {id:'events', label:'Acara', act:'view', v:'events', ic:ICN.events, grad:'linear-gradient(135deg,#10b981,#059669)', shadow:'rgba(16,185,129,.35)', rk:2},
+  {id:'users', label:'Panitia', act:'view', v:'users', ic:ICN.users, grad:'linear-gradient(135deg,#06b6d4,#0284c7)', shadow:'rgba(6,182,212,.35)', rk:3},
+  {id:'organizers', label:'Portal EO', act:'view', v:'organizers', ic:ICN.organizers, grad:'linear-gradient(135deg,#64748b,#475569)', shadow:'rgba(100,116,139,.35)', rk:3}
+ ].filter(m => rk() >= m.rk);
+
+ const menuGridHtml = menuItems.map(m => `
+  <div class="m-menu-item" data-act="${m.act}" ${m.v ? `data-v="${m.v}"` : ''}>
+    <div class="m-menu-ic" style="background:${m.grad};box-shadow:0 4px 14px ${m.shadow}">
+      ${ico(m.ic)}
+      ${m.badge ? `<span class="m-menu-badge">${m.badge}</span>` : ''}
+    </div>
+    <span>${m.label}</span>
+  </div>
+ `).join('');
+
+ c.innerHTML = `
+  <!-- Mobile App Greeting (myBCA style) -->
+  <div class="m-only m-greeting-box">
+    <div class="m-greeting-head">
+      <span class="m-greeting-badge">${(t('r_'+S.user.role)||S.user.role||'Admin').toUpperCase()}</span>
+    </div>
+    <h2 class="m-greeting-title">HALO, ${(esc(S.user.name)||'PENGGUNA').toUpperCase()}</h2>
+  </div>
+
+  <!-- Mobile Hero Active Card (myBCA Account Card Style) -->
+  <div class="m-only m-hero-card">
+    <div class="m-hero-top">
+      <div class="m-hero-badge">🎯 ${sel ? 'ACARA DIPILIH' : 'RINGKASAN GLOBAL'}</div>
+      <select class="m-hero-select" data-ch="sel" title="Pilih Fokus Acara">
+        <option value="">🌐 Semua Acara</option>
+        ${S.st.map(x=>`<option value="${x.id}" ${x.id===sel?'selected':''}>${esc(x.name)}</option>`).join('')}
+      </select>
+    </div>
+    <div class="m-hero-mid">
+      <div class="m-hero-lbl">Tiket Dipesan / Kuota</div>
+      <div class="m-hero-val">${bk.toLocaleString('id-ID')} <small>/ ${q.toLocaleString('id-ID')} (${pctBooked}%)</small></div>
+      <div class="m-hero-bar"><div class="m-hero-bar-fill" style="width:${Math.min(100, pctBooked)}%"></div></div>
+    </div>
+    <div class="m-hero-bot">
+      <div class="m-hero-stat"><span>Check-in:</span> <b>${ck} (${pctCheckin}%)</b></div>
+      <div class="m-hero-stat"><span>Pendapatan:</span> <b>Rp ${sm('revenue').toLocaleString('id-ID')}</b></div>
+    </div>
+  </div>
+
+  <!-- Mobile Banner Promo / Alert Strip -->
+  <div class="m-only m-banner-strip" data-act="scOpen">
+    <div class="m-banner-content">
+      <span class="m-banner-icon">⚡</span>
+      <div class="m-banner-txt">
+        <b>Gate Check-in Multi-Point Siap</b>
+        <small>Validasi QR kamera cepat online & offline</small>
+      </div>
+    </div>
+    <span class="m-banner-pill">SCAN →</span>
+  </div>
+
+  <!-- Mobile 4-Column Circular Main Menu (myBCA style) -->
+  <div class="m-only m-menu-section">
+    <div class="m-menu-hdr">
+      <h3>Menu Utama</h3>
+      <button class="m-menu-subtle" data-act="sbopen">Menu Lengkap ›</button>
+    </div>
+    <div class="m-menu-grid">
+      ${menuGridHtml}
+    </div>
+  </div>
+
+  <!-- Section Title on Mobile -->
+  <div class="m-only m-section-title">
+    <h3>Statistik & Aktivitas</h3>
+  </div>
+
+  <!-- Desktop Event Filter (Hidden on Mobile) -->
+  <div class="bar2 d-only"><select data-ch="sel">${'<option value="">'+t('all_ev')+'</option>'+S.st.map(x=>`<option value="${x.id}" ${x.id===sel?'selected':''}>${esc(x.name)}</option>`).join('')}</select></div>
+
+  <!-- Stats Grid -->
+  <div class="stats">${st('',bk,t('booked'),t('ofq')+' '+q,pctBooked,'var(--ac)')}${st('',ck,t('checked'),t('ofb')+' ('+bk+')',pctCheckin,'var(--ok)')}${st('',sm('pending'),t('pend'),'',pc(sm('pending'),q),'var(--wn)')}${st('',ac+'/'+r.length,t('act'),t('rev')+': Rp '+sm('revenue').toLocaleString('id-ID'),pc(ac,r.length),'#ec4899')}</div>
+
+  <!-- Charts -->
+  <div class="charts"><div class="card" style="padding:16px"><h3>${t('chart')}</h3><div class="lgd"><span><i style="background:var(--ac)"></i>${t('booked')}</span><span><i style="background:var(--ok)"></i>${t('checked')}</span></div><div class="bars">${r.map(x=>`<div class="bc"><div class="vl">${x.booked} / ${x.checked}</div><div class="pr"><i style="height:${x.booked/mx*100}%" title="${x.booked}"></i><i style="height:${x.checked/mx*100}%" title="${x.checked}"></i></div><div class="bl" title="${esc(x.name)}">${esc(x.name)}</div></div>`).join('')}</div></div>
+<div class="card" style="padding:16px"><h3>${t('ratio')}</h3><div class="donut" style="--p:${pctCheckin}"><span>${bk}<br><small class="muted" style="font:12px 'Plus Jakarta Sans'">${t('tix')}</small></span></div><div class="row"><span>&#128994; ${t('didin')}</span><b>${ck}</b></div><div class="row"><span>&#128995; ${t('notin')}</span><b>${bk-ck}</b></div></div></div>
+ `;
+}
 
 /* ===== ANALYTICS & EXPORT ===== */
 async function analyticsView(c){c.innerHTML='<div class="card" style="padding:20px;text-align:center"><div style="display:inline-block;animation:spin 1s linear infinite;font-size:24px">⏳</div><p class="muted" style="margin-top:10px">'+t('loading')+'</p></div>';try{const [evs,ords]=await Promise.all([S.aev||api('adminEvents'),api('ordersAll',{})]);S.aev=evs;S.anOrds=ords.rows;if(!S.anSelEv&&getCurEvId())S.anSelEv=getCurEvId();paintAnalytics()}catch(e){fail(e)}}
@@ -10185,7 +10365,7 @@ document.addEventListener('input',e=>{
 });
 document.addEventListener('keydown',e=>{if(e.key==='Enter'&&e.target&&e.target.id==='cipw'){const b=document.querySelector('[data-act=cisubmit]');b&&b.click()}});
 document.addEventListener('change',async e=>{const el=e.target,k=el.dataset.ch;if(!k)return;
- if(k==='ordsz'){ls.s('ordsz',el.value);S.ordPage=1;paintOrders()}else if(k==='usrsz'){ls.s('usrsz',el.value);S.usrPage=1;paintUsers()}else if(k==='sel'){S.sel=el.value;paintDash()}else if(k==='tgl'){
+ if(k==='ordsz'){ls.s('ordsz',el.value);S.ordPage=1;paintOrders()}else if(k==='usrsz'){ls.s('usrsz',el.value);S.usrPage=1;paintUsers()}else if(k==='sel'){S.sel=el.value;setCurEvId(el.value);paintDash()}else if(k==='tgl'){
   const span = el.closest('div') && el.closest('div').querySelector('span');
   if(span){
     span.textContent = el.checked ? 'AKTIF' : 'NONAKTIF';
